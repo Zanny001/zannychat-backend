@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: zannychat-backend
+    runtime: node
+    plan: free
+    buildCommand: yarn install
+    startCommand: yarn start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
+  - type: cron
+    name: zannychat-reconciliation
+    runtime: node
+    plan: starter
+    schedule: "0 3 * * *"
+    buildCommand: yarn install
+    startCommand: yarn reconcile
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
