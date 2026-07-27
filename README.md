@@ -49,8 +49,11 @@ cd zannychat-backend
 cp .env.example .env
 # fill in SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env
 
-npm install
-npm start
+# this project's own deploy uses Yarn (see the yarn.lock, and
+# render.yaml's buildCommand/startCommand) — npm install / npm start
+# work identically if you prefer it locally.
+yarn install
+yarn start
 ```
 
 Check it came up:
@@ -59,7 +62,30 @@ Check it came up:
 curl http://localhost:3000/health
 ```
 
+A healthy response looks like:
+
+```json
+{
+  "status": "ok",
+  "service": "zannychat-backend",
+  "supabaseConfigured": true,
+  "supabaseReachable": true,
+  "supabaseError": null,
+  "time": "2026-07-27T12:00:00.000Z"
+}
+```
+
+`supabaseConfigured` just means the env vars are non-empty;
+`supabaseReachable` means the service ran a real query against
+Supabase and it worked — that's the one that actually proves the
+deployment is wired correctly, not just that two strings were pasted
+into Render's dashboard.
+
 ## 3. Deploy to Render
+
+**Current status of this specific project:** this is deployed at
+`https://zannychat-backend.onrender.com` with `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` already set on the service.
 
 **Option A — Blueprint (recommended):** push this folder to a Git repo,
 then in Render choose **New → Blueprint** and point it at the repo.
@@ -68,8 +94,8 @@ job; Render will prompt you for the env vars marked `sync: false`.
 
 **Option B — manual:** create a new **Web Service** on Render, point it
 at the repo, set:
-- Build command: `npm install`
-- Start command: `node src/index.js`
+- Build command: `yarn install`
+- Start command: `yarn start`
 - Add the env vars from `.env.example`
 
 Either way, once it's live, note the service URL — you'll point the
@@ -78,29 +104,31 @@ frontend's webhook/payment provider (Stripe) at
 
 ## 4. Wire the frontend to this backend
 
-Nothing else changes in the app — just fill in its `.env`:
+The frontend already calls this backend's endpoints
+(`src/services/api.js` → `createConversation`, `fetchWalletBalance`,
+and `checkBackendHealth` for the Settings → Connections panel) — that
+part doesn't need any more work. What activates it is `.env`:
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_BACKEND_URL=https://zannychat-backend.onrender.com
 ```
 
-`src/services/supabaseClient.js` in the frontend detects those vars and
-every screen switches from mock data to live Supabase data immediately.
-
-The two endpoints this backend adds (`POST /conversations`,
-`GET/POST /wallet/*`) aren't called by the frontend yet — it currently
-fakes conversation creation locally and shows the Wallet tab as a static
-preview. Pointing `NewChatScreen`'s `startChat` at
-`POST {BACKEND_URL}/conversations` and the Wallet screen at
-`GET {BACKEND_URL}/wallet/balance` is the natural next step once this
-backend is deployed.
+`src/services/supabaseClient.js` and `backendClient.js` in the frontend
+detect those vars independently, but `createConversation` and
+`fetchWalletBalance` both require *both* to be set — every authenticated
+route here checks a Supabase session token (`requireAuth` in
+`src/middleware/requireAuth.js`), so a backend URL with no session to
+attach a token from can't do anything useful yet. `/health` is the one
+route that needs neither, which is exactly why it's what the frontend's
+diagnostics panel checks first.
 
 ## API reference
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/health` | none | Render health check |
+| GET | `/health` | none | Render health check + live Supabase connectivity check |
 | POST | `/conversations` | Bearer token | Create a conversation + add both participants |
 | GET | `/wallet/balance` | Bearer token | Current user's ledger balance |
 | POST | `/wallet/transfer` | Bearer token | Internal transfer between two wallets (demo money only) |

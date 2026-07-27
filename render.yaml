@@ -15,6 +15,9 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
 
+  # Cron jobs can't use the free plan on Render — this runs on the
+  # cheapest paid tier, billed only for the seconds it actually runs.
+  # Delete this service if the reconciliation job isn't needed yet.
   - type: cron
     name: zannychat-reconciliation
     runtime: node
