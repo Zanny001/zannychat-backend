@@ -35,12 +35,19 @@ This Express service exists specifically for the things that must
    This creates `profiles`, `conversations`, `conversation_participants`,
    `messages`, `wallets`, and `ledger_entries`, all with RLS policies,
    and turns on Realtime for `messages`.
-3. From **Project Settings → API**, grab:
-   - the **Project URL** and **anon key** → these go in the
+3. Then run `supabase/migrations/0002_media_and_profile.sql` — adds
+   `avatar_url` to profiles, adds attachment columns to `messages`
+   (`media_url`, `media_type`, `media_name`, `media_size`,
+   `shared_user_id`), and creates the `avatars` and `chat-media` Storage
+   buckets with their own RLS policies. **This is a separate step even
+   if you already ran 0001** — migrations don't rerun themselves.
+4. From **Project Settings → API**, grab:
+   - the **Project URL** and **anon key** (or the newer
+     `sb_publishable_...` key — same thing, new name) → these go in the
      *frontend's* `.env` (`EXPO_PUBLIC_SUPABASE_URL` /
      `EXPO_PUBLIC_SUPABASE_ANON_KEY`).
-   - the **service_role key** → this goes ONLY in this backend's `.env`,
-     never in the app.
+   - the **service_role key** (or `sb_secret_...`) → this goes ONLY in
+     this backend's `.env`, never in the app.
 
 ## 2. Run the backend locally
 
@@ -132,11 +139,20 @@ diagnostics panel checks first.
 | POST | `/conversations` | Bearer token | Create a conversation + add both participants |
 | GET | `/wallet/balance` | Bearer token | Current user's ledger balance |
 | POST | `/wallet/transfer` | Bearer token | Internal transfer between two wallets (demo money only) |
+| POST | `/ai/smart-replies` | Bearer token | 3 suggested replies to the latest message (501 until `ANTHROPIC_API_KEY` is set) |
+| POST | `/ai/summarize` | Bearer token | Bullet-point summary of a conversation |
+| POST | `/ai/translate` | Bearer token | Translate arbitrary text — no frontend UI wired to it yet |
 | POST | `/webhooks/stripe` | Stripe signature | Payment webhook receiver (501 until Stripe keys are set) |
 
 "Bearer token" = the Supabase access token the frontend already holds
 after sign-in (`supabase.auth.getSession()`), sent as
 `Authorization: Bearer <token>`.
+
+Every `/ai/*` route checks the caller is actually a participant in the
+conversation it's asked about before spending any tokens — see
+`assertParticipant` in `src/routes/ai.js`. That check uses the
+service-role client (it has to, to bypass RLS and look), so it's the
+one place in this codebase doing by hand what RLS does everywhere else.
 
 ## What's intentionally a stub
 
@@ -145,27 +161,32 @@ after sign-in (`supabase.auth.getSession()`), sent as
   `src/routes/webhooks.js` for exactly where that logic goes.
 - **Reconciliation job**: runs on schedule and logs, but has no payment
   provider to reconcile against yet.
-- **AI worker (Phase 3)**: not built. When it's time, it's a third
-  Render service (background worker) that reads from `messages` and
-  writes summaries/translations back — this backend's structure
-  (service-role Supabase client, route-per-concern) extends to that
-  without changes to what's here.
+- **`/ai/translate`**: built and working, but the frontend doesn't call
+  it from anywhere yet (no per-message "translate" button in the chat
+  UI). `/ai/smart-replies` and `/ai/summarize` are both wired end to
+  end — set `ANTHROPIC_API_KEY` on Render and they work immediately,
+  no redeploy of the frontend needed.
 
 ## Project structure
 
 ```
 src/
   index.js                Express app + route mounting
-  config/supabaseAdmin.js  Service-role Supabase client (server-only)
+  config/
+    supabaseAdmin.js       Service-role Supabase client (server-only)
+    aiClient.js              Thin fetch wrapper around Anthropic's Messages API
   middleware/requireAuth.js Verifies the frontend's Supabase session token
   routes/
     health.js
     conversations.js
     wallet.js
+    ai.js                    smart-replies, summarize, translate
     webhooks.js
   jobs/
     reconciliation.js       Run manually or via Render Cron
 supabase/
-  migrations/0001_init.sql  Full schema, RLS policies, Realtime setup
+  migrations/
+    0001_init.sql          Core schema, RLS policies, Realtime setup
+    0002_media_and_profile.sql  Avatars, chat attachments, Storage buckets + RLS
 render.yaml                 Blueprint: web service + cron job
 ```

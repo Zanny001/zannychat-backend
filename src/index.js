@@ -6,6 +6,7 @@ const healthRouter = require('./routes/health');
 const conversationsRouter = require('./routes/conversations');
 const walletRouter = require('./routes/wallet');
 const webhooksRouter = require('./routes/webhooks');
+const aiRouter = require('./routes/ai');
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use('/health', healthRouter);
 app.use('/conversations', conversationsRouter);
 app.use('/wallet', walletRouter);
+app.use('/ai', aiRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
