@@ -1,9 +1,16 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
+const { aiLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { askClaude, isAiConfigured } = require('../config/aiClient');
 
 const router = express.Router();
+
+// Every route in this router spends real Anthropic tokens, so the
+// per-user throttle (auth first, so it keys on the user id) is part of
+// the route definition itself — the Oct 2026 audit found unlimited AI
+// calls were the most exploitable gap in the app.
+router.use(requireAuth, aiLimiter);
 
 // Every route here spends real API tokens on someone's behalf, so
 // before doing anything else each one confirms the caller is actually
@@ -42,7 +49,7 @@ function transcriptFor(messages, userId) {
 // Returns up to 3 short suggested replies to the most recent message —
 // only useful (and only called by the frontend) when that message
 // isn't the user's own.
-router.post('/smart-replies', requireAuth, async (req, res) => {
+router.post('/smart-replies', async (req, res) => {
   if (!isAiConfigured()) return res.status(501).json({ error: 'AI features are not configured on this backend yet' });
 
   const { conversationId } = req.body || {};
@@ -81,7 +88,7 @@ router.post('/smart-replies', requireAuth, async (req, res) => {
 
 // POST /ai/summarize { conversationId }
 // Returns a short bullet-point summary of the conversation so far.
-router.post('/summarize', requireAuth, async (req, res) => {
+router.post('/summarize', async (req, res) => {
   if (!isAiConfigured()) return res.status(501).json({ error: 'AI features are not configured on this backend yet' });
 
   const { conversationId } = req.body || {};
@@ -114,7 +121,7 @@ router.post('/summarize', requireAuth, async (req, res) => {
 // POST /ai/translate { text, targetLanguage }
 // Standalone — doesn't need a conversationId, just the text to
 // translate, so the frontend can use it on any single message.
-router.post('/translate', requireAuth, async (req, res) => {
+router.post('/translate', async (req, res) => {
   if (!isAiConfigured()) return res.status(501).json({ error: 'AI features are not configured on this backend yet' });
 
   const { text, targetLanguage } = req.body || {};

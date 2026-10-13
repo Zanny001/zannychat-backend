@@ -1,4 +1,53 @@
+
+# Dependencies
+node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+build/
+coverage/
+
+# Runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+
+
+# Local environment and dependencies
 node_modules/
 .env
-*.log
-.DS_Store
+.env.*
+!.env.example
+
+# Supabase temporary state
+/supabase/.temp/
+
+# Nested project copies
+/zannychat-backend/
+/zannychat-backend-github/

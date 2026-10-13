@@ -2,6 +2,7 @@ const express = require('express');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 
 const router = express.Router();
+const { safeHealthDiagnostic } = require('../utils/healthDiagnostics');
 
 // This used to only report whether SUPABASE_URL/SERVICE_ROLE_KEY were
 // present at startup — true even if they're just wrong. Now it makes
@@ -19,9 +20,9 @@ router.get('/', async (req, res) => {
     try {
       const { error } = await supabaseAdmin.from('profiles').select('id').limit(1);
       supabaseReachable = !error;
-      if (error) supabaseError = error.message;
+      if (error) supabaseError = error;
     } catch (err) {
-      supabaseError = err.message;
+      supabaseError = err;
     }
   }
 
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
     service: 'zannychat-backend',
     supabaseConfigured: Boolean(supabaseAdmin),
     supabaseReachable,
-    supabaseError,
+    supabaseError: safeHealthDiagnostic(supabaseError, supabaseReachable, Boolean(supabaseAdmin)),
     time: new Date().toISOString(),
   });
 });

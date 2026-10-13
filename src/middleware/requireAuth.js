@@ -20,6 +20,15 @@ async function requireAuth(req, res, next) {
   }
 
   req.user = data.user;
+  // getUser() has already validated the JWT with Supabase. Read only the
+  // auth_time claim from that verified token so destructive routes can require
+  // a recent password re-authentication rather than trusting a client flag.
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    req.authTime = Number.isFinite(payload.auth_time) ? payload.auth_time : null;
+  } catch (_) {
+    req.authTime = null;
+  }
   next();
 }
 
