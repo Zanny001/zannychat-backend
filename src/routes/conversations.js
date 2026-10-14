@@ -45,6 +45,48 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ error: 'Cannot start a conversation with this user' });
   }
 
+  // Reuse an existing direct conversation shared by these two users.
+  // This avoids splitting new messages across duplicate conversation IDs.
+  const { data: membershipRows, error: membershipError } = await supabaseAdmin
+    .from('conversation_participants')
+    .select('conversation_id, user_id')
+    .in('user_id', [req.user.id, participantId]);
+
+  if (membershipError) {
+    return res.status(500).json({ error: membershipError.message });
+  }
+
+  const membersByConversation = new Map();
+  for (const row of membershipRows || []) {
+    if (!membersByConversation.has(row.conversation_id)) {
+      membersByConversation.set(row.conversation_id, new Set());
+    }
+    membersByConversation.get(row.conversation_id).add(row.user_id);
+  }
+
+  const sharedIds = [...membersByConversation.entries()]
+    .filter(([, users]) => users.has(req.user.id) && users.has(participantId))
+    .map(([id]) => id);
+
+  if (sharedIds.length > 0) {
+    const { data: existingConversation, error: existingError } = await supabaseAdmin
+      .from('conversations')
+      .select('*')
+      .in('id', sharedIds)
+      .eq('is_group', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) {
+      return res.status(500).json({ error: existingError.message });
+    }
+
+    if (existingConversation) {
+      return res.status(200).json(existingConversation);
+    }
+  }
+
   const { data: conversation, error: convError } = await supabaseAdmin
     .from('conversations')
     .insert({})

@@ -10,33 +10,40 @@
 
 const opsLog = [];
 let resultsByTable = {};
+let resultsByOperation = {};
 
 function resetMockSupabase() {
   opsLog.length = 0;
   resultsByTable = {};
+  resultsByOperation = {};
 }
 
 function setTableResult(table, result) {
   resultsByTable[table] = result;
 }
 
+function setOperationResult(table, operation, result) {
+  resultsByOperation[`${table}.${operation}`] = result;
+}
+
 function makeBuilder(table) {
-  const result = resultsByTable[table] || { data: null, error: null };
+  const resultFor = (operation) => resultsByOperation[`${table}.${operation}`] || resultsByTable[table] || { data: null, error: null };
+  let lastOperation = 'select';
   const builder = {
     select: () => (opsLog.push(`${table}.select`), builder),
-    insert: () => (opsLog.push(`${table}.insert`), builder),
-    update: () => (opsLog.push(`${table}.update`), builder),
-    upsert: () => (opsLog.push(`${table}.upsert`), builder),
-    delete: () => (opsLog.push(`${table}.delete`), builder),
+    insert: () => (lastOperation = 'insert', opsLog.push(`${table}.insert`), builder),
+    update: () => (lastOperation = 'update', opsLog.push(`${table}.update`), builder),
+    upsert: () => (lastOperation = 'upsert', opsLog.push(`${table}.upsert`), builder),
+    delete: () => (lastOperation = 'delete', opsLog.push(`${table}.delete`), builder),
     eq: () => builder,
     neq: () => builder,
     in: () => builder,
     or: () => builder,
     order: () => builder,
     limit: () => builder,
-    single: () => Promise.resolve(result),
-    maybeSingle: () => Promise.resolve(result),
-    then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+    single: () => Promise.resolve(resultFor(lastOperation)),
+    maybeSingle: () => Promise.resolve(resultFor(lastOperation)),
+    then: (resolve, reject) => Promise.resolve(resultFor(lastOperation)).then(resolve, reject),
   };
   return builder;
 }
@@ -54,4 +61,4 @@ function makeAuth(user = { id: 'user-1', email: 'one@example.com' }) {
   };
 }
 
-module.exports = { makeBuilder, makeAuth, resetMockSupabase, setTableResult, opsLog };
+module.exports = { makeBuilder, makeAuth, resetMockSupabase, setTableResult, setOperationResult, opsLog };

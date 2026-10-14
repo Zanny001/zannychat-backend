@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { resetMockSupabase, setTableResult, opsLog } = require('./helpers/mockSupabase');
+const { resetMockSupabase, setTableResult, setOperationResult, opsLog } = require('./helpers/mockSupabase');
 
 jest.mock('../src/config/supabaseAdmin', () => {
   const helpers = require('./helpers/mockSupabase');
@@ -51,6 +51,31 @@ describe('POST /conversations', () => {
     expect(opsLog.filter((op) => op.endsWith('.insert'))).toHaveLength(0);
   });
 
+  test('reuses an existing direct conversation instead of creating a duplicate', async () => {
+    setTableResult('blocked_users', { data: [], error: null });
+    setTableResult('conversation_participants', {
+      data: [
+        { conversation_id: 'existing-conv', user_id: '11111111-1111-4111-8111-111111111111' },
+        { conversation_id: 'existing-conv', user_id: '22222222-2222-4222-8222-222222222222' },
+      ],
+      error: null,
+    });
+    setTableResult('conversations', {
+      data: { id: 'existing-conv', is_group: false },
+      error: null,
+    });
+
+    const res = await request(app)
+      .post('/conversations')
+      .set('Authorization', 'Bearer good-token')
+      .send({ participantId: '22222222-2222-4222-8222-222222222222' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('existing-conv');
+    expect(opsLog).not.toContain('conversations.insert');
+    expect(opsLog).not.toContain('conversation_participants.insert');
+  });
+
   test('creates the conversation and both participant rows on the happy path', async () => {
     setTableResult('blocked_users', { data: [], error: null });
     setTableResult('conversations', { data: { id: 'conv-1' }, error: null });
@@ -69,8 +94,12 @@ describe('POST /conversations', () => {
 
   test('rolls back the conversation row when participant insertion fails', async () => {
     setTableResult('blocked_users', { data: [], error: null });
+    setTableResult('conversation_participants', { data: [], error: null });
     setTableResult('conversations', { data: { id: 'conv-1' }, error: null });
-    setTableResult('conversation_participants', { data: null, error: { message: 'db exploded' } });
+    setOperationResult('conversation_participants', 'insert', {
+      data: null,
+      error: { message: 'db exploded' },
+    });
 
     const res = await request(app)
       .post('/conversations')
