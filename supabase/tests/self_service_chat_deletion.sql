@@ -1,0 +1,15 @@
+-- Manual/staging verification checklist for migration 0014.
+-- Run with two authenticated test users and one direct + one group conversation.
+-- Assertions to verify through Supabase SQL/API as authenticated users:
+-- 1. User A can delete only A's conversation_participants row.
+-- 2. User A cannot delete User B's row (DELETE affects zero rows / RLS denies).
+-- 3. User A cannot DELETE from public.conversations or public.messages.
+-- 4. Removing A from a group leaves the group, messages, and B's membership intact.
+-- 5. Removing A from a direct chat hides it from A but preserves the conversation
+--    and message history for B. Verify the UI removes it from A's list and does not
+--    falsely report success if the database request fails.
+-- 6. Verify the product's intended behavior for re-opening/re-creating a direct chat
+--    after one participant has hidden the prior conversation.
+--
+-- This file intentionally does not mutate production data. Use disposable
+-- staging fixtures for these checks.

@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
     )
     .limit(1);
 
-  if (blockError) return res.status(500).json({ error: blockError.message });
+  if (blockError) return res.status(500).json({ error: 'Unable to check conversation permissions' });
   if (blockRows && blockRows.length > 0) {
     return res.status(403).json({ error: 'Cannot start a conversation with this user' });
   }
@@ -53,7 +53,7 @@ router.post('/', async (req, res) => {
     .in('user_id', [req.user.id, participantId]);
 
   if (membershipError) {
-    return res.status(500).json({ error: membershipError.message });
+    return res.status(500).json({ error: 'Unable to check existing conversations' });
   }
 
   const membersByConversation = new Map();
@@ -79,7 +79,7 @@ router.post('/', async (req, res) => {
       .maybeSingle();
 
     if (existingError) {
-      return res.status(500).json({ error: existingError.message });
+      return res.status(500).json({ error: 'Unable to load existing conversation' });
     }
 
     if (existingConversation) {
@@ -93,7 +93,7 @@ router.post('/', async (req, res) => {
     .select()
     .single();
 
-  if (convError) return res.status(500).json({ error: convError.message });
+  if (convError) return res.status(500).json({ error: 'Unable to create conversation' });
 
   const { error: participantsError } = await supabaseAdmin.from('conversation_participants').insert([
     { conversation_id: conversation.id, user_id: req.user.id },
@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
     // Roll back the orphaned conversation row rather than leaving a
     // conversation with no participants behind.
     await supabaseAdmin.from('conversations').delete().eq('id', conversation.id);
-    return res.status(500).json({ error: participantsError.message });
+    return res.status(500).json({ error: 'Unable to add conversation participants' });
   }
 
   res.status(201).json(conversation);
@@ -132,7 +132,7 @@ router.post('/group', async (req, res) => {
     .select()
     .single();
 
-  if (convError) return res.status(500).json({ error: convError.message });
+  if (convError) return res.status(500).json({ error: 'Unable to create conversation' });
 
   const rows = [req.user.id, ...uniqueOtherIds].map((userId) => ({
     conversation_id: conversation.id,
@@ -143,7 +143,7 @@ router.post('/group', async (req, res) => {
 
   if (participantsError) {
     await supabaseAdmin.from('conversations').delete().eq('id', conversation.id);
-    return res.status(500).json({ error: participantsError.message });
+    return res.status(500).json({ error: 'Unable to add conversation participants' });
   }
 
   res.status(201).json(conversation);

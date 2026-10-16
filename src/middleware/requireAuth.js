@@ -14,7 +14,16 @@ async function requireAuth(req, res, next) {
     return res.status(500).json({ error: 'Backend is not configured (missing Supabase env vars)' });
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  let data;
+  let error;
+  try {
+    ({ data, error } = await supabaseAdmin.auth.getUser(token));
+  } catch (authProviderError) {
+    // Distinguish an unavailable auth provider from a rejected credential.
+    // Never send provider exception details to the client.
+    console.error('[auth] Token verification provider failed');
+    return res.status(503).json({ error: 'Authentication service temporarily unavailable' });
+  }
   if (error || !data?.user) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }

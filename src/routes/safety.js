@@ -49,7 +49,10 @@ router.post('/block', async (req, res) => {
     .from('blocked_users')
     .upsert({ blocker_id: req.user.id, blocked_id: userId }, { onConflict: 'blocker_id,blocked_id' });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[safety] database operation failed:', error.message);
+    return res.status(500).json({ error: 'Unable to complete safety request' });
+  }
   res.status(201).json({ blocked: true });
 });
 
@@ -67,7 +70,10 @@ router.post('/unblock', async (req, res) => {
     .eq('blocker_id', req.user.id)
     .eq('blocked_id', userId);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[safety] database operation failed:', error.message);
+    return res.status(500).json({ error: 'Unable to complete safety request' });
+  }
   res.json({ blocked: false });
 });
 
@@ -83,7 +89,10 @@ router.get('/blocked', async (req, res) => {
     .eq('blocker_id', req.user.id)
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[safety] database operation failed:', error.message);
+    return res.status(500).json({ error: 'Unable to complete safety request' });
+  }
   res.json({
     blocked: (data || []).map((row) => ({
       userId: row.blocked_id,
@@ -117,7 +126,10 @@ router.post('/report', async (req, res) => {
     reason: typeof reason === 'string' ? reason : '',
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[safety] database operation failed:', error.message);
+    return res.status(500).json({ error: 'Unable to complete safety request' });
+  }
   res.status(201).json({ received: true });
 });
 

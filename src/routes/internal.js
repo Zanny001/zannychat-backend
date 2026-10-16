@@ -98,7 +98,7 @@ router.post('/new-message', requireInternalSecret, async (req, res) => {
     // this endpoint exists purely as a side effect of that insert, not
     // something the sender is waiting on.
     console.error('[webhooks/new-message] failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Unable to process message notification' });
   }
 });
 

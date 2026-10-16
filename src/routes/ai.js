@@ -24,7 +24,10 @@ async function assertParticipant(conversationId, userId) {
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('[ai] conversation membership lookup failed:', error.message);
+    throw new Error('AI conversation lookup failed');
+  }
   return Boolean(data);
 }
 
@@ -35,7 +38,10 @@ async function fetchRecentMessages(conversationId, limit = 20) {
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('[ai] message lookup failed:', error.message);
+    throw new Error('AI message lookup failed');
+  }
   return data.reverse(); // chronological order for the model
 }
 
@@ -77,12 +83,14 @@ router.post('/smart-replies', async (req, res) => {
     try {
       suggestions = JSON.parse(raw.trim());
     } catch (parseErr) {
-      return res.status(502).json({ error: "AI response wasn't valid JSON", raw });
+      console.warn('[ai/smart-replies] provider returned invalid JSON');
+      return res.status(502).json({ error: "AI response wasn't valid JSON" });
     }
 
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[ai] request failed:', err.message);
+    res.status(500).json({ error: 'Unable to complete AI request' });
   }
 });
 
@@ -114,7 +122,8 @@ router.post('/summarize', async (req, res) => {
 
     res.json({ summary: summary.trim() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[ai] request failed:', err.message);
+    res.status(500).json({ error: 'Unable to complete AI request' });
   }
 });
 
@@ -135,7 +144,8 @@ router.post('/translate', async (req, res) => {
     });
     res.json({ translated: translated.trim() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[ai] request failed:', err.message);
+    res.status(500).json({ error: 'Unable to complete AI request' });
   }
 });
 

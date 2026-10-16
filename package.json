@@ -7,7 +7,11 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "jest --runInBand",
-    "test:health-unit": "node --test tests/healthDiagnostics.test.cjs tests/safetyValidation.test.cjs tests/conversationValidation.test.cjs tests/networkSafety.unit.cjs"
+    "test:health-unit": "node --test tests/healthDiagnostics.test.cjs tests/safetyValidation.test.cjs tests/conversationValidation.test.cjs tests/networkSafety.unit.cjs",
+    "test:chat-deletion-static": "node --test tests/chatDeletionMigration.test.cjs",
+    "test:conversation-error-disclosure": "node --test tests/conversationErrorDisclosure.test.cjs",
+    "test:route-error-disclosure": "node --test tests/routeErrorDisclosure.test.cjs",
+    "test:removed-wallet-feature": "node --test tests/removedWalletFeature.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
