@@ -18,6 +18,18 @@ router.use(requireAuth, conversationsLimiter);
 router.post('/', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend is not configured' });
 
+  const perfStart = Date.now();
+  let perfLast = perfStart;
+  const perfLog = (step) => {
+    const now = Date.now();
+    console.log('[Perf][Conversations]', {
+      step,
+      stepMs: now - perfLast,
+      totalMs: now - perfStart,
+    });
+    perfLast = now;
+  };
+
   const { participantId } = req.body || {};
   if (!participantId) {
     return res.status(400).json({ error: 'participantId is required' });
@@ -39,6 +51,7 @@ router.post('/', async (req, res) => {
         `and(blocker_id.eq.${participantId},blocked_id.eq.${req.user.id})`
     )
     .limit(1);
+  perfLog('block_check');
 
   if (blockError) return res.status(500).json({ error: 'Unable to check conversation permissions' });
   if (blockRows && blockRows.length > 0) {
@@ -51,6 +64,7 @@ router.post('/', async (req, res) => {
     .from('conversation_participants')
     .select('conversation_id, user_id')
     .in('user_id', [req.user.id, participantId]);
+  perfLog('membership_lookup');
 
   if (membershipError) {
     return res.status(500).json({ error: 'Unable to check existing conversations' });
@@ -77,6 +91,7 @@ router.post('/', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+    perfLog('existing_conversation_lookup');
 
     if (existingError) {
       return res.status(500).json({ error: 'Unable to load existing conversation' });
@@ -92,6 +107,7 @@ router.post('/', async (req, res) => {
     .insert({})
     .select()
     .single();
+  perfLog('conversation_insert');
 
   if (convError) return res.status(500).json({ error: 'Unable to create conversation' });
 
@@ -99,6 +115,7 @@ router.post('/', async (req, res) => {
     { conversation_id: conversation.id, user_id: req.user.id },
     { conversation_id: conversation.id, user_id: participantId },
   ]);
+  perfLog('participant_insert');
 
   if (participantsError) {
     // Roll back the orphaned conversation row rather than leaving a
