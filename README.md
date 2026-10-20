@@ -1,3 +1,7 @@
+## Current source version: 1.2.35
+
+Shared conversation pins are introduced in migration `0041_shared_pinned_messages.sql`. See `../SHARED_PINS_1.2.84.md` in the delivery bundle for staging validation requirements.
+
 # ZannyChat — Backend
 
 This is the server side of ZannyChat: a Supabase schema plus a small
@@ -324,3 +328,30 @@ tests/
   linkPreview.test.js      SSRF host blocklist
 render.yaml               Blueprint: web service
 ```
+
+
+### Push receipt tracking (backend 1.2.17)
+
+After applying migration `0030_push_receipt_tracking.sql`, configure a trusted scheduler to POST to `/webhooks/push-receipts` every 10 minutes or more frequently, with `Authorization: Bearer <INTERNAL_WEBHOOK_SECRET>`. Expo tickets are checked after 15 minutes; missing receipts remain pending for later retry. See `PUSH_RECEIPT_TRACKING_1.2.17.md`. Do not expose the shared secret in the app client.
+
+
+### Channel moderator roles (1.2.24)
+Apply migration `0036_channel_moderators.sql` after the channel post migrations. Channel owners can appoint subscribed members as moderators. Moderators may pin/unpin and delete posts and remove comments, but cannot publish/edit posts or delete the channel. Test with separate owner, moderator, subscriber, and unrelated accounts before deployment.
+
+
+### Channel metadata settings (1.2.25)
+Channel owners can edit the channel name and description using `PATCH /channels/:channelId`. The API validates field lengths and checks owner identity; no migration is needed.
+
+
+### Channel post reports (1.2.26)
+
+Subscribers can report channel posts using a bounded reason set. Each account may file one report per post. Channel owners and active moderators can view open reports and mark them reviewed or dismissed. Migration `0037_channel_post_reports.sql` creates the protected report table; apply it after migrations `0033`–`0036`. Direct client table access is revoked; authenticated API routes mediate writes and moderation. Hosted integration and multi-account tests remain required.
+
+### Release 1.2.30 — channel directory search
+`GET /channels?q=...` supports bounded title/description search while retaining the directory's private-channel ownership/subscription filters. No migration is required. See the root `CHANNEL_SEARCH_1.2.78.md` delivery note.
+
+### Release 1.2.33 — group rename and invite history
+The group metadata PATCH endpoint optionally accepts a bounded group name while preserving compatibility with clients that only update topic/description. `GET /conversations/:conversationId/invites` returns at most 50 invite status records to current group admins only; raw tokens and token hashes are never returned. No migration is required. Live database/API integration and device validation remain pending.
+
+### Release 1.2.34 — group announcement mode
+Apply `0040_group_announcement_mode.sql` after all prior migrations. Group admins can toggle announcement mode in Group Management; the database's message INSERT RLS policy enforces that only admins may send while it is enabled. Existing conversations default to normal member messaging. Test with separate admin and non-admin accounts in staging before production.

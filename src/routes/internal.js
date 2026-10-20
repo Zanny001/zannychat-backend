@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { sendPushToUser } = require('../config/pushClient');
+const { checkPendingPushReceipts } = require('../config/pushReceiptClient');
 
 const router = express.Router();
 
@@ -42,6 +43,18 @@ function previewFor(text, mediaType) {
   if (mediaType === 'contact') return '👤 Contact';
   return 'New message';
 }
+
+// Called by a trusted scheduler (or an operator) using the same internal
+// secret. Expo receipts are only usually available after ~15 minutes.
+router.post('/push-receipts', requireInternalSecret, async (req, res) => {
+  try {
+    const summary = await checkPendingPushReceipts();
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    console.error('[webhooks/push-receipts] failed:', err.message);
+    res.status(500).json({ error: 'Unable to check push receipts' });
+  }
+});
 
 router.post('/new-message', requireInternalSecret, async (req, res) => {
   const { conversationId, senderId, text, mediaType } = req.body || {};
@@ -91,8 +104,11 @@ router.post('/new-message', requireInternalSecret, async (req, res) => {
       )
     );
 
-    const sent = results.filter((r) => r.status === 'fulfilled').reduce((sum, r) => sum + (r.value?.sent || 0), 0);
-    res.json({ recipients: recipients.length, sent });
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const sent = fulfilled.reduce((sum, r) => sum + (r.value?.sent || 0), 0);
+    const failed = fulfilled.reduce((sum, r) => sum + (r.value?.failed || 0), 0);
+    const failedRecipients = results.filter((r) => r.status === 'rejected').length;
+    res.json({ recipients: recipients.length, sent, failed, failedRecipients });
   } catch (err) {
     // Errors here should never surface to whoever sent the message —
     // this endpoint exists purely as a side effect of that insert, not

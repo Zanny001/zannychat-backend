@@ -7,7 +7,8 @@ update public.messages
 set media_url = 'storage://chat-media/' || substring(
   media_url from '/storage/v1/object/public/chat-media/([^?#]+)$'
 )
-where media_url ~ '/storage/v1/object/public/chat-media/[0-9a-fA-F-]{36}/[^?#]+$'
+where media_url ~ '^https?://vithpppgyjmazxvogvno\.supabase\.co/storage/v1/object/public/chat-media/[0-9a-fA-F-]{36}/[^?#]+$'
+  and lower(split_part(media_url, '/', 3)) = 'vithpppgyjmazxvogvno.supabase.co'
   -- Only rewrite URLs whose object path belongs to this message's own
   -- conversation. This avoids converting arbitrary URLs or mismatched paths
   -- into trusted local Storage markers.

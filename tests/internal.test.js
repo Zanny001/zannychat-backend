@@ -78,7 +78,7 @@ describe('POST /webhooks/new-message', () => {
       .send({ conversationId: 'conv-1', senderId: 'user-1', text: 'hello' });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ recipients: 1, sent: 1 });
+    expect(res.body).toEqual({ recipients: 1, sent: 1, failed: 0, failedRecipients: 0 });
     // Only user-2 should receive a push: user-3 blocked the sender,
     // user-4 muted the conversation, user-1 is the sender.
     expect(mockSendPushToUser).toHaveBeenCalledTimes(1);
