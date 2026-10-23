@@ -341,8 +341,35 @@ router.post('/:channelId/posts', async (req, res) => {
   if (!channel) return res.status(404).json({ error: 'Channel not found' });
   if (!(await requireChannelAccess(res, channel, req.user.id))) return;
   if (channel.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the channel owner can publish posts' });
-  const { data: post, error } = await supabaseAdmin.from('channel_posts').insert({ channel_id: channel.id, author_id: req.user.id, body }).select('id, channel_id, author_id, body, created_at, edited_at, is_pinned').single();
-  if (error) return res.status(500).json({ error: 'Unable to publish channel post' });
+  const requestId = typeof req.body?.clientRequestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.body.clientRequestId)
+    ? req.body.clientRequestId.toLowerCase() : null;
+  const selectedColumns = 'id, channel_id, author_id, body, created_at, edited_at, is_pinned';
+  if (requestId) {
+    const { data: existing, error: lookupError } = await supabaseAdmin.from('channel_posts')
+      .select(selectedColumns).eq('channel_id', channel.id).eq('author_id', req.user.id)
+      .eq('client_request_id', requestId).maybeSingle();
+    if (lookupError) return res.status(500).json({ error: 'Unable to verify channel post retry' });
+    if (existing) {
+      if (existing.body !== body) return res.status(409).json({ error: 'This publish request ID was already used for different content' });
+      return res.status(200).json({ post: existing, deduplicated: true });
+    }
+  }
+  const payload = { channel_id: channel.id, author_id: req.user.id, body };
+  if (requestId) payload.client_request_id = requestId;
+  const { data: post, error } = await supabaseAdmin.from('channel_posts').insert(payload).select(selectedColumns).single();
+  if (error) {
+    // A concurrent retry may win the unique-index race after the lookup above.
+    if (requestId && error.code === '23505') {
+      const { data: existing, error: lookupError } = await supabaseAdmin.from('channel_posts')
+        .select(selectedColumns).eq('channel_id', channel.id).eq('author_id', req.user.id)
+        .eq('client_request_id', requestId).maybeSingle();
+      if (!lookupError && existing) {
+        if (existing.body !== body) return res.status(409).json({ error: 'This publish request ID was already used for different content' });
+        return res.status(200).json({ post: existing, deduplicated: true });
+      }
+    }
+    return res.status(500).json({ error: 'Unable to publish channel post' });
+  }
   return res.status(201).json({ post });
 });
 
