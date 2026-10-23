@@ -54,12 +54,12 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: status === 403 ? 'Origin not allowed' : 'Internal server error' });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 // Only listen when run directly (`node src/index.js`) — requiring this
 // module from a test (supertest drives app in-process) must not open a
 // real port.
 if (require.main === module) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`ZannyChat backend listening on port ${PORT}`);
   });
 }
