@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { conversationsLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { validateDirectParticipantId, validateGroupInput } = require('../utils/conversationValidation');
+const { isScheduledMessageTimeAllowed, parseScheduledMessageDate } = require('../utils/scheduledMessageDate.cjs');
 
 const router = express.Router();
 
@@ -400,11 +401,11 @@ router.post('/scheduled-messages', async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend is not configured' });
   const conversationId = typeof req.body?.conversationId === 'string' ? req.body.conversationId.trim() : '';
   const messageText = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
-  const scheduledFor = typeof req.body?.scheduledFor === 'string' ? Date.parse(req.body.scheduledFor) : NaN;
+  const scheduledFor = parseScheduledMessageDate(req.body?.scheduledFor);
   const now = Date.now();
   if (!conversationId || conversationId.length > 100) return res.status(400).json({ error: 'A valid conversationId is required' });
   if (!messageText || messageText.length > 4000) return res.status(400).json({ error: 'Message text must be 1–4000 characters' });
-  if (!Number.isFinite(scheduledFor) || scheduledFor < now + 60_000 || scheduledFor > now + 30 * 24 * 60 * 60 * 1000) {
+  if (!isScheduledMessageTimeAllowed(req.body?.scheduledFor, now)) {
     return res.status(400).json({ error: 'scheduledFor must be between 1 minute and 30 days from now' });
   }
   const { data: membership, error: membershipError } = await supabaseAdmin.from('conversation_participants')

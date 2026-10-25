@@ -1,9 +1,10 @@
 require('dotenv').config();
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { getScheduledMessageBatchSize } = require('../utils/scheduledMessageBatch');
 
 async function deliverScheduledMessages() {
   if (!supabaseAdmin) throw new Error('Supabase is not configured');
-  const { data, error } = await supabaseAdmin.rpc('deliver_due_scheduled_messages', { p_limit: 100 });
+  const { data, error } = await supabaseAdmin.rpc('deliver_due_scheduled_messages', { p_limit: getScheduledMessageBatchSize() });
   if (error) throw new Error('Scheduled-message delivery failed');
   const delivered = Number(data);
   if (!Number.isInteger(delivered) || delivered < 0) throw new Error('Scheduled-message worker returned an invalid count');

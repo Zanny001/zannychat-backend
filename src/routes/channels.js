@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { requireAuth } = require('../middleware/requireAuth');
 const { conversationsLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { normalizeChannelPostCursorTimestamp } = require('../utils/channelPostCursor');
 
 const router = express.Router();
 router.use(requireAuth, conversationsLimiter);
@@ -267,10 +268,12 @@ router.get('/:channelId/posts', async (req, res) => {
   const beforeCreatedAt = typeof req.query.beforeCreatedAt === 'string' ? req.query.beforeCreatedAt : '';
   const beforeId = typeof req.query.beforeId === 'string' ? req.query.beforeId : '';
   if (beforeCreatedAt || beforeId) {
-    const parsedCursorDate = new Date(beforeCreatedAt);
+    const cursorTimestamp = normalizeChannelPostCursorTimestamp(beforeCreatedAt);
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(beforeId);
-    if (!beforeCreatedAt || Number.isNaN(parsedCursorDate.getTime()) || !isUuid) return res.status(400).json({ error: 'Invalid channel post cursor' });
-    query = query.or(`created_at.lt.${parsedCursorDate.toISOString()},and(created_at.eq.${parsedCursorDate.toISOString()},id.lt.${beforeId})`);
+    if (!cursorTimestamp || !isUuid) return res.status(400).json({ error: 'Invalid channel post cursor' });
+    // Use the validated timestamp verbatim so PostgreSQL microseconds are not
+    // truncated by JavaScript Date's millisecond precision.
+    query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${beforeId})`);
   }
   const { data: fetchedPosts, error } = await query;
   if (error) return res.status(500).json({ error: 'Unable to load channel posts' });
@@ -285,28 +288,23 @@ router.get('/:channelId/posts', async (req, res) => {
   const { error: viewWriteError } = await supabaseAdmin.from('channel_post_views')
     .upsert(postIds.map((postId) => ({ post_id: postId, user_id: req.user.id })), { onConflict: 'post_id,user_id', ignoreDuplicates: true });
   if (viewWriteError) return res.status(500).json({ error: 'Unable to record channel post views' });
-  const [{ data: reactions, error: reactionError }, { data: commentRows, error: commentsError }, { data: viewRows, error: viewsError }] = await Promise.all([
-    supabaseAdmin.from('channel_post_reactions').select('post_id, user_id, emoji').in('post_id', postIds),
-    supabaseAdmin.from('channel_post_comments').select('post_id').in('post_id', postIds),
-    supabaseAdmin.from('channel_post_views').select('post_id').in('post_id', postIds),
-  ]);
-  if (reactionError) return res.status(500).json({ error: 'Unable to load channel reactions' });
-  if (commentsError) return res.status(500).json({ error: 'Unable to load channel comment counts' });
-  if (viewsError) return res.status(500).json({ error: 'Unable to load channel post views' });
-  const grouped = new Map();
-  for (const row of reactions || []) {
-    if (!grouped.has(row.post_id)) grouped.set(row.post_id, []);
-    grouped.get(row.post_id).push(row);
-  }
-  const commentCounts = new Map();
-  for (const row of commentRows || []) commentCounts.set(row.post_id, (commentCounts.get(row.post_id) || 0) + 1);
-  const viewCounts = new Map();
-  for (const row of viewRows || []) viewCounts.set(row.post_id, (viewCounts.get(row.post_id) || 0) + 1);
+  // Aggregate on the database: loading raw reaction/comment/view rows grows with
+  // channel popularity and can silently undercount at the PostgREST row cap.
+  const { data: postStats, error: statsError } = await supabaseAdmin.rpc('get_channel_post_stats', {
+    p_post_ids: postIds,
+    p_user_id: req.user.id,
+  });
+  if (statsError) return res.status(500).json({ error: 'Unable to load channel post statistics' });
+  const statsByPostId = new Map((postStats || []).map((stats) => [stats.post_id, stats]));
   return res.json({ channel, nextCursor, hasMore, posts: (posts || []).map((post) => {
-    const rows = grouped.get(post.id) || [];
-    const counts = {};
-    for (const row of rows) counts[row.emoji] = (counts[row.emoji] || 0) + 1;
-    return { ...post, reactionCounts: counts, myReaction: rows.find((row) => row.user_id === req.user.id)?.emoji || null, commentCount: commentCounts.get(post.id) || 0, viewCount: viewCounts.get(post.id) || 0 };
+    const stats = statsByPostId.get(post.id);
+    return {
+      ...post,
+      reactionCounts: stats?.reaction_counts && typeof stats.reaction_counts === 'object' ? stats.reaction_counts : {},
+      myReaction: typeof stats?.my_reaction === 'string' ? stats.my_reaction : null,
+      commentCount: Number.isSafeInteger(Number(stats?.comment_count)) ? Number(stats.comment_count) : 0,
+      viewCount: Number.isSafeInteger(Number(stats?.view_count)) ? Number(stats.view_count) : 0,
+    };
   }) });
 });
 
@@ -381,9 +379,31 @@ router.get('/:channelId/posts/:postId/comments', async (req, res) => {
   const { data: accessChannel, error: accessError } = await supabaseAdmin.from('channels').select('id, owner_id, is_private').eq('id', post.channel_id).maybeSingle();
   if (accessError) return res.status(500).json({ error: 'Unable to check channel access' });
   if (!(await requireChannelAccess(res, accessChannel, req.user.id))) return;
-  const { data: rows, error } = await supabaseAdmin.from('channel_post_comments').select('id, post_id, user_id, body, created_at, updated_at').eq('post_id', post.id).order('created_at', { ascending: true }).limit(100);
+  const pageSize = 100;
+  let query = supabaseAdmin.from('channel_post_comments')
+    .select('id, post_id, user_id, body, created_at, updated_at')
+    .eq('post_id', post.id)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(pageSize + 1);
+  const beforeCreatedAt = typeof req.query.beforeCreatedAt === 'string' ? req.query.beforeCreatedAt : '';
+  const beforeId = typeof req.query.beforeId === 'string' ? req.query.beforeId : '';
+  if (beforeCreatedAt || beforeId) {
+    const cursorTimestamp = normalizeChannelPostCursorTimestamp(beforeCreatedAt);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(beforeId);
+    if (!cursorTimestamp || !isUuid) return res.status(400).json({ error: 'Invalid channel comment cursor' });
+    query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${beforeId})`);
+  }
+  const { data: fetchedRows, error } = await query;
   if (error) return res.status(500).json({ error: 'Unable to load channel comments' });
-  const userIds = [...new Set((rows || []).map((row) => row.user_id))];
+  const hasMore = (fetchedRows || []).length > pageSize;
+  const pageRows = (fetchedRows || []).slice(0, pageSize);
+  const nextRow = hasMore ? pageRows[pageRows.length - 1] : null;
+  const nextCursor = nextRow ? { created_at: nextRow.created_at, id: nextRow.id } : null;
+  // Return the newest page in chronological display order; older pages use its
+  // last (oldest) row as a stable timestamp + ID cursor.
+  const rows = pageRows.reverse();
+  const userIds = [...new Set(rows.map((row) => row.user_id))];
   let profiles = [];
   if (userIds.length) {
     const { data, error: profileError } = await supabaseAdmin.from('profiles').select('id, name').in('id', userIds);
@@ -391,7 +411,21 @@ router.get('/:channelId/posts/:postId/comments', async (req, res) => {
     profiles = data || [];
   }
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
-  return res.json({ comments: (rows || []).map((row) => ({ ...row, authorName: names.get(row.user_id) || 'ZannyChat user', mine: row.user_id === req.user.id })) });
+  const commentIds = rows.map((row) => row.id);
+  let reactionRows = [];
+  if (commentIds.length) {
+    const { data, error: reactionError } = await supabaseAdmin.from('channel_comment_reactions').select('comment_id, user_id, emoji').in('comment_id', commentIds);
+    if (reactionError) return res.status(500).json({ error: 'Unable to load comment reactions' });
+    reactionRows = data || [];
+  }
+  const reactionsByComment = new Map();
+  for (const reaction of reactionRows) {
+    if (!reactionsByComment.has(reaction.comment_id)) reactionsByComment.set(reaction.comment_id, { counts: {}, mine: null });
+    const state = reactionsByComment.get(reaction.comment_id);
+    state.counts[reaction.emoji] = (state.counts[reaction.emoji] || 0) + 1;
+    if (reaction.user_id === req.user.id) state.mine = reaction.emoji;
+  }
+  return res.json({ comments: rows.map((row) => { const state = reactionsByComment.get(row.id); return { ...row, authorName: names.get(row.user_id) || 'ZannyChat user', mine: row.user_id === req.user.id, reactionCounts: state?.counts || {}, myReaction: state?.mine || null }; }), nextCursor, hasMore });
 });
 
 router.post('/:channelId/posts/:postId/comments', async (req, res) => {
@@ -414,6 +448,71 @@ router.post('/:channelId/posts/:postId/comments', async (req, res) => {
   const { data: comment, error } = await supabaseAdmin.from('channel_post_comments').insert({ post_id: post.id, user_id: req.user.id, body }).select('id, post_id, user_id, body, created_at, updated_at').single();
   if (error) return res.status(500).json({ error: 'Unable to publish comment' });
   return res.status(201).json({ comment: { ...comment, authorName: 'You', mine: true } });
+});
+
+router.patch('/:channelId/posts/:postId/comments/:commentId', async (req, res) => {
+  if (!supabaseAdmin) return unavailable(res);
+  if (typeof req.body?.body !== 'string' || !req.body.body.trim() || req.body.body.trim().length > 1000) return res.status(400).json({ error: 'Comment must be 1–1000 characters' });
+  const { data: post, error: postError } = await supabaseAdmin.from('channel_posts').select('id, channel_id').eq('id', req.params.postId).eq('channel_id', req.params.channelId).maybeSingle();
+  if (postError) return res.status(500).json({ error: 'Unable to check channel post' });
+  if (!post) return res.status(404).json({ error: 'Channel post not found' });
+  const { data: channel, error: channelError } = await supabaseAdmin.from('channels').select('id, owner_id, is_private').eq('id', post.channel_id).maybeSingle();
+  if (channelError) return res.status(500).json({ error: 'Unable to check channel access' });
+  if (!(await requireChannelAccess(res, channel, req.user.id))) return;
+  // Editing is a participation action, not merely a read action. Public channel
+  // visibility must not let a former/unsubscribed member continue modifying comments.
+  if (channel.owner_id !== req.user.id) {
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
+      .from('channel_subscriptions').select('channel_id')
+      .eq('channel_id', channel.id).eq('user_id', req.user.id).maybeSingle();
+    if (subscriptionError) return res.status(500).json({ error: 'Unable to check comment edit permissions' });
+    if (!subscription) return res.status(403).json({ error: 'Subscribe to the channel before editing comments' });
+  }
+  const { data: existing, error: commentError } = await supabaseAdmin.from('channel_post_comments').select('id, user_id').eq('id', req.params.commentId).eq('post_id', post.id).maybeSingle();
+  if (commentError) return res.status(500).json({ error: 'Unable to check comment permissions' });
+  if (!existing) return res.status(404).json({ error: 'Comment not found' });
+  if (existing.user_id !== req.user.id) return res.status(403).json({ error: 'Only the comment author can edit this comment' });
+  const { data: updated, error } = await supabaseAdmin.from('channel_post_comments').update({ body: req.body.body.trim(), updated_at: new Date().toISOString() }).eq('id', existing.id).eq('user_id', req.user.id).select('id, post_id, user_id, body, created_at, updated_at').maybeSingle();
+  if (error) return res.status(500).json({ error: 'Unable to edit comment' });
+  if (!updated) return res.status(404).json({ error: 'Comment not found' });
+  return res.json({ comment: { ...updated, authorName: 'You', mine: true } });
+});
+
+router.put('/:channelId/posts/:postId/comments/:commentId/reaction', async (req, res) => {
+  if (!supabaseAdmin) return unavailable(res);
+  const allowed = new Set(['👍', '❤️', '😂', '😮', '👏']);
+  const emoji = req.body?.emoji === null ? null : req.body?.emoji;
+  if (emoji !== null && !allowed.has(emoji)) return res.status(400).json({ error: 'Unsupported comment reaction' });
+  const { data: post, error: postError } = await supabaseAdmin.from('channel_posts').select('id, channel_id').eq('id', req.params.postId).eq('channel_id', req.params.channelId).maybeSingle();
+  if (postError) return res.status(500).json({ error: 'Unable to check channel post' });
+  if (!post) return res.status(404).json({ error: 'Channel post not found' });
+  const { data: channel, error: channelError } = await supabaseAdmin.from('channels').select('id, owner_id, is_private').eq('id', post.channel_id).maybeSingle();
+  if (channelError) return res.status(500).json({ error: 'Unable to check channel access' });
+  if (!(await requireChannelAccess(res, channel, req.user.id))) return;
+  // Match comment creation policy: only channel owners and subscribers may react.
+  // Public visibility of a channel does not automatically grant participation rights.
+  if (channel.owner_id !== req.user.id) {
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
+      .from('channel_subscriptions').select('channel_id')
+      .eq('channel_id', channel.id).eq('user_id', req.user.id).maybeSingle();
+    if (subscriptionError) return res.status(500).json({ error: 'Unable to check comment reaction permissions' });
+    if (!subscription) return res.status(403).json({ error: 'Subscribe to the channel before reacting to comments' });
+  }
+  const { data: comment, error: commentError } = await supabaseAdmin.from('channel_post_comments').select('id').eq('id', req.params.commentId).eq('post_id', post.id).maybeSingle();
+  if (commentError) return res.status(500).json({ error: 'Unable to check comment' });
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (emoji === null) {
+    const { error } = await supabaseAdmin.from('channel_comment_reactions').delete().eq('comment_id', comment.id).eq('user_id', req.user.id);
+    if (error) return res.status(500).json({ error: 'Unable to remove comment reaction' });
+  } else {
+    const { data: existing, error: existingError } = await supabaseAdmin.from('channel_comment_reactions').select('emoji').eq('comment_id', comment.id).eq('user_id', req.user.id).maybeSingle();
+    if (existingError) return res.status(500).json({ error: 'Unable to check comment reaction' });
+    const result = existing?.emoji === emoji
+      ? await supabaseAdmin.from('channel_comment_reactions').delete().eq('comment_id', comment.id).eq('user_id', req.user.id)
+      : await supabaseAdmin.from('channel_comment_reactions').upsert({ comment_id: comment.id, user_id: req.user.id, emoji, updated_at: new Date().toISOString() }, { onConflict: 'comment_id,user_id' });
+    if (result.error) return res.status(500).json({ error: 'Unable to save comment reaction' });
+  }
+  return res.json({ saved: true });
 });
 
 router.delete('/:channelId/posts/:postId/comments/:commentId', async (req, res) => {
@@ -457,6 +556,30 @@ router.post('/:channelId/posts/:postId/reports', async (req, res) => {
   return res.status(201).json({ report });
 });
 
+router.post('/:channelId/posts/:postId/comments/:commentId/reports', async (req, res) => {
+  if (!supabaseAdmin) return unavailable(res);
+  const reason = req.body?.reason;
+  const details = text(req.body?.details, 500);
+  if (!CHANNEL_REPORT_REASONS.has(reason)) return res.status(400).json({ error: 'Choose a supported report reason' });
+  if (typeof req.body?.details === 'string' && req.body.details.trim().length > 500) return res.status(400).json({ error: 'Report details must be 500 characters or fewer' });
+  const { data: post, error: postError } = await supabaseAdmin.from('channel_posts').select('id, channel_id').eq('id', req.params.postId).eq('channel_id', req.params.channelId).maybeSingle();
+  if (postError) return res.status(500).json({ error: 'Unable to check channel post' });
+  if (!post) return res.status(404).json({ error: 'Channel post not found' });
+  const { data: channel, error: channelError } = await supabaseAdmin.from('channels').select('id, owner_id, is_private').eq('id', post.channel_id).maybeSingle();
+  if (channelError) return res.status(500).json({ error: 'Unable to check channel access' });
+  if (!(await requireChannelAccess(res, channel, req.user.id))) return;
+  const { data: comment, error: commentError } = await supabaseAdmin.from('channel_post_comments').select('id, user_id').eq('id', req.params.commentId).eq('post_id', post.id).maybeSingle();
+  if (commentError) return res.status(500).json({ error: 'Unable to check channel comment' });
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (comment.user_id === req.user.id) return res.status(400).json({ error: 'You cannot report your own comment' });
+  const { data: existing, error: existingError } = await supabaseAdmin.from('channel_post_reports').select('id, status').eq('comment_id', comment.id).eq('reporter_id', req.user.id).maybeSingle();
+  if (existingError) return res.status(500).json({ error: 'Unable to check previous report' });
+  if (existing) return res.status(409).json({ error: 'You have already reported this comment' });
+  const { data: report, error } = await supabaseAdmin.from('channel_post_reports').insert({ post_id: null, comment_id: comment.id, channel_id: post.channel_id, reporter_id: req.user.id, reason, details: details || null }).select('id, comment_id, reason, details, status, created_at').single();
+  if (error) return res.status(500).json({ error: 'Unable to submit comment report' });
+  return res.status(201).json({ report });
+});
+
 router.get('/:channelId/reports', async (req, res) => {
   if (!supabaseAdmin) return unavailable(res);
   const { data: channel, error: channelError } = await supabaseAdmin.from('channels').select('id, owner_id, is_private').eq('id', req.params.channelId).maybeSingle();
@@ -465,18 +588,34 @@ router.get('/:channelId/reports', async (req, res) => {
   let canModerate = false;
   try { canModerate = await canModerateChannel(channel, req.user.id); } catch (_) { return res.status(500).json({ error: 'Unable to check channel permissions' }); }
   if (!canModerate) return res.status(403).json({ error: 'Only channel owners and moderators can review reports' });
-  const { data: rows, error } = await supabaseAdmin.from('channel_post_reports').select('id, post_id, reporter_id, reason, details, status, created_at, reviewed_at').eq('channel_id', channel.id).eq('status', 'open').order('created_at', { ascending: true }).limit(100);
+  const pageSize = 50;
+  const cursorCreatedAt = typeof req.query?.cursorCreatedAt === 'string' ? req.query.cursorCreatedAt : '';
+  const cursorId = typeof req.query?.cursorId === 'string' ? req.query.cursorId : '';
+  const hasCursor = Boolean(cursorCreatedAt || cursorId);
+  if (hasCursor && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(cursorCreatedAt) || !Number.isFinite(Date.parse(cursorCreatedAt)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursorId))) {
+    return res.status(400).json({ error: 'Invalid report pagination cursor' });
+  }
+  let reportQuery = supabaseAdmin.from('channel_post_reports').select('id, post_id, comment_id, reporter_id, reason, details, status, created_at, reviewed_at').eq('channel_id', channel.id).eq('status', 'open').order('created_at', { ascending: true }).order('id', { ascending: true }).limit(pageSize + 1);
+  if (hasCursor) reportQuery = reportQuery.or(`created_at.gt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.gt.${cursorId})`);
+  const { data: fetchedRows, error } = await reportQuery;
   if (error) return res.status(500).json({ error: 'Unable to load channel reports' });
-  const postIds = [...new Set((rows || []).map((row) => row.post_id))];
+  const hasMore = (fetchedRows || []).length > pageSize;
+  const rows = (fetchedRows || []).slice(0, pageSize);
+  const lastRow = rows[rows.length - 1];
+  const nextCursor = hasMore && lastRow ? { createdAt: lastRow.created_at, id: lastRow.id } : null;
+  const postIds = [...new Set((rows || []).map((row) => row.post_id).filter(Boolean))];
+  const commentIds = [...new Set((rows || []).map((row) => row.comment_id).filter(Boolean))];
   const userIds = [...new Set((rows || []).map((row) => row.reporter_id))];
-  const [{ data: posts, error: postsError }, { data: profiles, error: profilesError }] = await Promise.all([
+  const [{ data: posts, error: postsError }, { data: comments, error: commentsError }, { data: profiles, error: profilesError }] = await Promise.all([
     postIds.length ? supabaseAdmin.from('channel_posts').select('id, body, author_id').in('id', postIds) : Promise.resolve({ data: [], error: null }),
+    commentIds.length ? supabaseAdmin.from('channel_post_comments').select('id, body, user_id').in('id', commentIds) : Promise.resolve({ data: [], error: null }),
     userIds.length ? supabaseAdmin.from('profiles').select('id, name').in('id', userIds) : Promise.resolve({ data: [], error: null }),
   ]);
-  if (postsError || profilesError) return res.status(500).json({ error: 'Unable to load report context' });
+  if (postsError || commentsError || profilesError) return res.status(500).json({ error: 'Unable to load report context' });
   const postMap = new Map((posts || []).map((row) => [row.id, row]));
+  const commentMap = new Map((comments || []).map((row) => [row.id, row]));
   const names = new Map((profiles || []).map((row) => [row.id, row.name]));
-  return res.json({ reports: (rows || []).map((row) => ({ ...row, postBody: postMap.get(row.post_id)?.body || '[Post deleted]', reporterName: names.get(row.reporter_id) || 'ZannyChat user' })) });
+  return res.json({ reports: (rows || []).map((row) => ({ ...row, reportType: row.comment_id ? 'comment' : 'post', postBody: row.comment_id ? (commentMap.get(row.comment_id)?.body || '[Comment deleted]') : (postMap.get(row.post_id)?.body || '[Post deleted]'), reporterName: names.get(row.reporter_id) || 'ZannyChat user' })), hasMore, nextCursor });
 });
 
 router.patch('/:channelId/reports/:reportId', async (req, res) => {

@@ -8,7 +8,8 @@ const screen = fs.readFileSync(path.join(__dirname, '../../zannychat-frontend-ma
 
 test('channel post views count distinct authenticated users and tolerate repeated loads', () => {
   assert.match(route, /from\('channel_post_views'\)[\s\S]*?onConflict: 'post_id,user_id', ignoreDuplicates: true/);
-  assert.match(route, /viewCount: viewCounts\.get\(post\.id\) \|\| 0/);
+  assert.match(route, /viewCount: Number\.isSafeInteger\(Number\(stats\?\.view_count\)\)/);
+  assert.match(route, /rpc\('get_channel_post_stats'/);
   assert.match(migration, /primary key \(post_id, user_id\)/);
   assert.match(migration, /revoke all on public\.channel_post_views from anon, authenticated/);
 });

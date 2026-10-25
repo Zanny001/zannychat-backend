@@ -36,6 +36,7 @@ test('authenticated API exposes list, schedule and owner-only cancellation paths
 });
 
 test('dedicated worker invokes the atomic database delivery function', () => {
-  assert.match(worker, /rpc\('deliver_due_scheduled_messages', \{ p_limit: 100 \}\)/);
+  assert.match(worker, /rpc\('deliver_due_scheduled_messages', \{ p_limit: getScheduledMessageBatchSize\(\) \}\)/);
+  assert.match(worker, /utils\/scheduledMessageBatch/);
   assert.match(worker, /if \(!supabaseAdmin\) throw new Error/);
 });

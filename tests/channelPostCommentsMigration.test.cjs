@@ -16,7 +16,8 @@ test('channel comments are RLS protected and service-role mediated', () => {
   assert.match(migration, /revoke all on public\.channel_post_comments from anon, authenticated/i);
   assert.match(migration, /grant select, insert, update, delete on public\.channel_post_comments to service_role/i);
   assert.match(route, /router\.post\('\/:channelId\/posts\/:postId\/comments'/);
-  assert.match(route, /commentCount: commentCounts\.get\(post\.id\) \|\| 0/);
+  assert.match(route, /rpc\('get_channel_post_stats'/);
+  assert.match(route, /commentCount: Number\.isSafeInteger\(Number\(stats\?\.comment_count\)\)/);
   assert.match(route, /Subscribe to the channel before commenting/);
   assert.match(route, /Only the comment author, channel owner, or moderator can delete this comment/);
 });

@@ -1,6 +1,6 @@
 {
   "name": "zannychat-backend",
-  "version": "1.2.44",
+  "version": "1.2.69",
   "private": true,
   "main": "src/index.js",
   "scripts": {
@@ -39,7 +39,9 @@
     "test:private-channels": "node --test tests/privateChannelsAndInvites.test.cjs tests/channelPostPagination.test.cjs tests/channelPostReportsMigration.test.cjs",
     "test:group-metadata": "node --test tests/groupMetadataMigration.test.cjs",
     "jobs:scheduled-messages": "node src/jobs/scheduledMessages.js",
-    "test:selected-status-audiences": "node --test tests/selectedStatusAudiencesMigration.test.cjs"
+    "test:selected-status-audiences": "node --test tests/selectedStatusAudiencesMigration.test.cjs",
+    "test:call-signaling": "node --test tests/callSignalingMigration.test.cjs tests/turnCredentials.test.cjs tests/callSessionLeaseMigration.test.cjs tests/callTerminalCleanupHardeningMigration.test.cjs",
+    "test:security-headers": "node --test tests/securityHeaders.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

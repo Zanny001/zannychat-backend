@@ -69,6 +69,7 @@ const safetyLimiter = makeLimiter({
 });
 
 module.exports = {
+  makeLimiter,
   keyForRequest, // exported for tests
   conversationsLimiter,
   aiLimiter,
