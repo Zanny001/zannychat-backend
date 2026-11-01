@@ -355,3 +355,8 @@ The group metadata PATCH endpoint optionally accepts a bounded group name while 
 
 ### Release 1.2.34 — group announcement mode
 Apply `0040_group_announcement_mode.sql` after all prior migrations. Group admins can toggle announcement mode in Group Management; the database's message INSERT RLS policy enforces that only admins may send while it is enabled. Existing conversations default to normal member messaging. Test with separate admin and non-admin accounts in staging before production.
+
+
+## Audio/video calling (release 1.2.234)
+
+See the repository-level `AUDIO_VIDEO_CALLS_1.2.234.md` for signaling architecture, backend TURN variables, native build prerequisites, migration order, and outstanding release gates. Calls require a custom native development build; Expo Go is not supported for the WebRTC native module.
