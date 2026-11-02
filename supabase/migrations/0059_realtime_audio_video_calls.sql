@@ -132,6 +132,20 @@ create table if not exists public.call_signals (
   constraint call_signal_distinct_users check (sender_id <> recipient_id),
   constraint call_signal_payload_size check (octet_length(payload::text) <= 16384)
 );
+-- ZANNYCHAT_CALL_TABLE_LEAST_PRIVILEGE_GRANTS
+-- Remove default privileges before granting the minimum client access.
+revoke all privileges on table public.call_sessions
+  from public, anon, authenticated;
+grant select, insert, update on table public.call_sessions
+  to authenticated;
+grant all privileges on table public.call_sessions to service_role;
+
+revoke all privileges on table public.call_signals
+  from public, anon, authenticated;
+grant select, insert on table public.call_signals
+  to authenticated;
+grant all privileges on table public.call_signals to service_role;
+
 create index if not exists call_signals_call_created_idx on public.call_signals(call_id, created_at);
 alter table public.call_signals enable row level security;
 
