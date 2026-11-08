@@ -132,8 +132,7 @@ create table if not exists public.call_signals (
   constraint call_signal_distinct_users check (sender_id <> recipient_id),
   constraint call_signal_payload_size check (octet_length(payload::text) <= 16384)
 );
--- ZANNYCHAT_CALL_TABLE_LEAST_PRIVILEGE_GRANTS
--- Remove default privileges before granting the minimum client access.
+-- Explicit least-privilege table grants; RLS policies provide row-level authorization.
 revoke all privileges on table public.call_sessions
   from public, anon, authenticated;
 grant select, insert, update on table public.call_sessions

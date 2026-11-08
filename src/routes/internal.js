@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const { checkPendingPushReceipts } = require('../config/pushReceiptClient');
+const { runMessageAttachmentCleanup } = require('../jobs/messageAttachmentCleanup');
+const { runCallInvitationNotifications } = require('../jobs/callInvitationNotifications');
 
 const router = express.Router();
 
@@ -43,6 +45,33 @@ function previewFor(text, mediaType) {
   if (mediaType === 'contact') return '👤 Contact';
   return 'New message';
 }
+
+// Deliver persisted call invitations to registered devices. Re-running this
+// endpoint is safe: the queue is claimed with SKIP LOCKED and completed rows
+// are not sent again. Schedule it periodically to recover transient pg_net/push failures.
+router.post('/call-notifications', requireInternalSecret, async (req, res) => {
+  try {
+    const limit = Number.isInteger(req.body?.limit) ? Math.max(1, Math.min(100, req.body.limit)) : 20;
+    const summary = await runCallInvitationNotifications({ limit });
+    return res.json({ ok: true, ...summary });
+  } catch (err) {
+    console.error('[webhooks/call-notifications] worker failed');
+    return res.status(500).json({ error: 'Unable to deliver call invitations' });
+  }
+});
+
+// Retryable message-media cleanup. The worker rechecks references and uses
+// Supabase Storage API; it never deletes storage.objects rows directly.
+router.post('/attachment-cleanup', requireInternalSecret, async (req, res) => {
+  try {
+    const limit = Number.isInteger(req.body?.limit) ? Math.max(1, Math.min(100, req.body.limit)) : 20;
+    const summary = await runMessageAttachmentCleanup({ limit });
+    return res.json({ ok: true, ...summary });
+  } catch (err) {
+    console.error('[webhooks/attachment-cleanup] worker failed');
+    return res.status(500).json({ error: 'Unable to process attachment cleanup queue' });
+  }
+});
 
 // Called by a trusted scheduler (or an operator) using the same internal
 // secret. Expo receipts are only usually available after ~15 minutes.

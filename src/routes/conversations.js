@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { conversationsLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { validateDirectParticipantId, validateGroupInput } = require('../utils/conversationValidation');
+const { evaluateGroupInvitePrivacy } = require('../utils/groupInvitePrivacy.cjs');
 const { isScheduledMessageTimeAllowed, parseScheduledMessageDate } = require('../utils/scheduledMessageDate.cjs');
 
 const router = express.Router();
@@ -144,6 +145,30 @@ router.post('/group', async (req, res) => {
     return res.status(400).json({ error: validation.error });
   }
   const uniqueOtherIds = validation.participantIds;
+
+  // Group membership is an invitation. Enforce each recipient's saved
+  // preference on the trusted backend (the app's service-role path bypasses
+  // client RLS), and reject invitations across a block in either direction.
+  const [detailsResult, membershipResult, blocksResult] = await Promise.all([
+    supabaseAdmin.from('profile_details').select('user_id,group_invite_permission').in('user_id', uniqueOtherIds),
+    supabaseAdmin.from('conversation_participants').select('conversation_id,user_id').in('user_id', [req.user.id, ...uniqueOtherIds]),
+    supabaseAdmin.from('blocked_users').select('blocker_id,blocked_id').or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`),
+  ]);
+  // During a rolling deployment the additive profile_details migration may
+  // not yet be present. In that one compatibility case, preserve the legacy
+  // default (everyone); every other database error fails closed.
+  const detailsUnavailableOnOldSchema = detailsResult.error?.code === '42P01';
+  if ((detailsResult.error && !detailsUnavailableOnOldSchema) || membershipResult.error || blocksResult.error) {
+    return res.status(500).json({ error: 'Unable to check group invitation permissions' });
+  }
+  const privacy = evaluateGroupInvitePrivacy({
+    inviterId: req.user.id,
+    inviteeIds: uniqueOtherIds,
+    profileDetails: detailsUnavailableOnOldSchema ? [] : (detailsResult.data || []),
+    membershipRows: membershipResult.data || [],
+    blockedRows: blocksResult.data || [],
+  });
+  if (!privacy.allowed) return res.status(403).json({ error: privacy.reason });
 
   const { data: conversation, error: convError } = await supabaseAdmin
     .from('conversations')

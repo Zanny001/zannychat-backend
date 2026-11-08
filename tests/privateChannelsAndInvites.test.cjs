@@ -3,10 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
+const frontendRoot = process.env.ZANNYCHAT_FRONTEND_ROOT || path.resolve(root, '../zannychat-front-github');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/0038_private_channels_and_invites.sql'), 'utf8');
 const route = fs.readFileSync(path.join(root, 'src/routes/channels.js'), 'utf8');
-const frontendApi = fs.readFileSync(path.join(root, '../zannychat-front/src/services/api.js'), 'utf8');
-const screen = fs.readFileSync(path.join(root, '../zannychat-front/src/screens/ChannelsScreen.js'), 'utf8');
+const frontendApi = fs.readFileSync(path.join(frontendRoot, 'src/services/api.js'), 'utf8');
+const screen = fs.readFileSync(path.join(frontendRoot, 'src/screens/ChannelsScreen.js'), 'utf8');
 
 test('private channel visibility defaults to public for backward compatibility', () => {
   assert.match(migration, /add column if not exists is_private boolean not null default false/i);

@@ -36,3 +36,31 @@ test('SDP and ICE payloads are capped, participant-bound, rate-limited, and clea
   assert.match(sql, /delete from public\.call_signals where call_id = new\.id/);
   assert.match(sql, /alter publication supabase_realtime add table public\.call_sessions/);
 });
+
+test('call tables enforce explicit least-privilege SQL grants alongside RLS', () => {
+  assert.match(
+    sql,
+    /revoke all privileges on table public\.call_sessions\s+from public, anon, authenticated;/i
+  );
+  assert.match(
+    sql,
+    /grant select, insert, update on table public\.call_sessions\s+to authenticated;/i
+  );
+  assert.match(
+    sql,
+    /grant all privileges on table public\.call_sessions to service_role;/i
+  );
+
+  assert.match(
+    sql,
+    /revoke all privileges on table public\.call_signals\s+from public, anon, authenticated;/i
+  );
+  assert.match(
+    sql,
+    /grant select, insert on table public\.call_signals\s+to authenticated;/i
+  );
+  assert.match(
+    sql,
+    /grant all privileges on table public\.call_signals to service_role;/i
+  );
+});

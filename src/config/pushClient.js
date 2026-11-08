@@ -24,6 +24,7 @@ async function sendPushToUser(userId, { title, body, data }) {
       title,
       body,
       data: data || {},
+      ...(data?.type === 'incoming_call' ? { channelId: 'calls', priority: 'high', collapseId: data.callId } : {}),
     }));
 
   if (messages.length === 0) return { sent: 0, failed: 0 };
