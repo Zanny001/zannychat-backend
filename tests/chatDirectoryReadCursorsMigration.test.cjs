@@ -17,7 +17,7 @@ test('restores exact zero-argument and QR-target contact directory RPC signature
 });
 
 test('contact directory enforces profile visibility and bidirectional blocks', () => {
-  assert.match(sql, /profile_visibility/i);
+  assert.match(sql, /public\.profiles/i);
   assert.match(sql, /public\.conversation_participants/i);
   assert.match(sql, /public\.blocked_users/i);
   assert.match(sql, /b\.blocker_id = auth\.uid\(\).*b\.blocked_id = p\.id/s);
