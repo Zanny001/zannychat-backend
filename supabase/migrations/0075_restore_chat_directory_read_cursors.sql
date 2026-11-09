@@ -1,6 +1,5 @@
--- Restore the two authenticated RPCs used by the web and mobile chat clients.
--- The no-argument directory RPC is the primary contact list; the UUID overload
--- is used by QR lookup. Both return only the public profile projection.
+-- Restore the authenticated RPCs used by the web and mobile chat clients.
+-- Keep the projection aligned with the currently deployed public.profiles schema.
 BEGIN;
 
 CREATE OR REPLACE FUNCTION public.get_contact_directory(p_user_id uuid)
@@ -10,8 +9,7 @@ RETURNS TABLE (
   avatar_color text,
   avatar_url text,
   status text,
-  online boolean,
-  username text
+  online boolean
 )
 LANGUAGE sql
 STABLE
@@ -24,28 +22,11 @@ AS $function$
     p.avatar_color,
     p.avatar_url,
     p.status,
-    p.online,
-    p.username
+    p.online
   FROM public.profiles AS p
-  LEFT JOIN public.profile_details AS pd
-    ON pd.user_id = p.id
   WHERE auth.uid() IS NOT NULL
-    AND (
-      (p_user_id IS NULL AND p.id <> auth.uid())
-      OR (p_user_id IS NOT NULL AND p.id = p_user_id AND p.id <> auth.uid())
-    )
-    AND COALESCE(pd.profile_visibility, 'everyone') <> 'nobody'
-    AND (
-      COALESCE(pd.profile_visibility, 'everyone') <> 'contacts'
-      OR EXISTS (
-        SELECT 1
-        FROM public.conversation_participants AS viewer_cp
-        JOIN public.conversation_participants AS target_cp
-          ON target_cp.conversation_id = viewer_cp.conversation_id
-        WHERE viewer_cp.user_id = auth.uid()
-          AND target_cp.user_id = p.id
-      )
-    )
+    AND p.id <> auth.uid()
+    AND (p_user_id IS NULL OR p.id = p_user_id)
     AND NOT EXISTS (
       SELECT 1
       FROM public.blocked_users AS b
@@ -63,8 +44,7 @@ RETURNS TABLE (
   avatar_color text,
   avatar_url text,
   status text,
-  online boolean,
-  username text
+  online boolean
 )
 LANGUAGE sql
 STABLE
@@ -101,7 +81,7 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_my_read_cursors() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_read_cursors() TO authenticated;
 
--- Refresh PostgREST's schema cache so both zero-argument RPCs are immediately discoverable.
+-- Refresh PostgREST's schema cache so both zero-argument RPCs are discoverable.
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
