@@ -1,8 +1,12 @@
 -- Restore the authenticated RPCs used by the web and mobile chat clients.
--- Keep the projection aligned with the currently deployed public.profiles schema.
+-- The older 0069 migration returns a different TABLE shape. Drop both contact
+-- directory signatures before recreating them with the deployed projection.
 BEGIN;
 
-CREATE OR REPLACE FUNCTION public.get_contact_directory(p_user_id uuid)
+DROP FUNCTION IF EXISTS public.get_contact_directory();
+DROP FUNCTION IF EXISTS public.get_contact_directory(uuid);
+
+CREATE FUNCTION public.get_contact_directory(p_user_id uuid)
 RETURNS TABLE (
   id uuid,
   name text,
@@ -37,7 +41,7 @@ AS $function$
 $function$;
 
 -- PostgREST needs a true zero-argument signature for rpc('get_contact_directory').
-CREATE OR REPLACE FUNCTION public.get_contact_directory()
+CREATE FUNCTION public.get_contact_directory()
 RETURNS TABLE (
   id uuid,
   name text,
@@ -57,8 +61,8 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.get_contact_directory() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_contact_directory(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_contact_directory() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_contact_directory(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_contact_directory() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_contact_directory(uuid) TO authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.get_my_read_cursors()
 RETURNS TABLE (
