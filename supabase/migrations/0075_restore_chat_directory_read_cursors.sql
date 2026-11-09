@@ -1,0 +1,104 @@
+-- Restore the two authenticated RPCs used by the web and mobile chat clients.
+-- The no-argument directory RPC is the primary contact list; the UUID overload
+-- is used by QR lookup. Both return only the public profile projection.
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_contact_directory(p_user_id uuid)
+RETURNS TABLE (
+  id uuid,
+  name text,
+  avatar_color text,
+  avatar_url text,
+  status text,
+  online boolean,
+  username text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT
+    p.id,
+    p.name,
+    p.avatar_color,
+    p.avatar_url,
+    p.status,
+    p.online,
+    p.username
+  FROM public.profiles AS p
+  LEFT JOIN public.profile_details AS pd
+    ON pd.user_id = p.id
+  WHERE auth.uid() IS NOT NULL
+    AND (
+      (p_user_id IS NULL AND p.id <> auth.uid())
+      OR (p_user_id IS NOT NULL AND p.id = p_user_id AND p.id <> auth.uid())
+    )
+    AND COALESCE(pd.profile_visibility, 'everyone') <> 'nobody'
+    AND (
+      COALESCE(pd.profile_visibility, 'everyone') <> 'contacts'
+      OR EXISTS (
+        SELECT 1
+        FROM public.conversation_participants AS viewer_cp
+        JOIN public.conversation_participants AS target_cp
+          ON target_cp.conversation_id = viewer_cp.conversation_id
+        WHERE viewer_cp.user_id = auth.uid()
+          AND target_cp.user_id = p.id
+      )
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.blocked_users AS b
+      WHERE (b.blocker_id = auth.uid() AND b.blocked_id = p.id)
+         OR (b.blocker_id = p.id AND b.blocked_id = auth.uid())
+    )
+  ORDER BY p.name ASC, p.id ASC;
+$function$;
+
+-- PostgREST needs a true zero-argument signature for rpc('get_contact_directory').
+CREATE OR REPLACE FUNCTION public.get_contact_directory()
+RETURNS TABLE (
+  id uuid,
+  name text,
+  avatar_color text,
+  avatar_url text,
+  status text,
+  online boolean,
+  username text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT *
+  FROM public.get_contact_directory(NULL::uuid);
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_contact_directory() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_contact_directory(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_contact_directory() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_contact_directory(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_my_read_cursors()
+RETURNS TABLE (
+  conversation_id uuid,
+  last_read_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT cp.conversation_id, cp.last_read_at
+  FROM public.conversation_participants AS cp
+  WHERE auth.uid() IS NOT NULL
+    AND cp.user_id = auth.uid()
+    AND cp.last_read_at IS NOT NULL
+  ORDER BY cp.conversation_id;
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_my_read_cursors() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_read_cursors() TO authenticated;
+
+COMMIT;
