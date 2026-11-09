@@ -47,7 +47,8 @@
     "test:attachment-cleanup": "node --test tests/messageAttachmentCleanup.test.cjs",
     "test:profile-privacy": "node --test tests/profilePrivacyAndCleanupMigration.test.cjs",
     "test:call-notifications": "node --test tests/callInvitationNotifications.test.cjs",
-    "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs"
+    "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs",
+    "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
