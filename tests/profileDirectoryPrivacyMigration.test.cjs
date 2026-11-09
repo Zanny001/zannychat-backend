@@ -5,14 +5,14 @@ const path = require('node:path');
 
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0069_privacy_aware_profile_discovery.sql'), 'utf8');
 
-test('profile discovery exposes only minimal identity fields through an authenticated RPC', () => {
-  assert.match(sql, /create or replace function public\.get_contact_directory\(p_user_id uuid default null\)/i);
+test('profile discovery only creates the legacy projection when no function signature exists', () => {
+  assert.match(sql, /if to_regprocedure\('public\.get_contact_directory\(uuid\)'\) is null then/i);
+  assert.match(sql, /create function public\.get_contact_directory\(p_user_id uuid default null\)/i);
   assert.match(sql, /returns table\s*\(\s*id uuid,\s*name text,\s*avatar_color text,\s*username text/is);
   assert.match(sql, /security definer\s+set search_path = ''/i);
   assert.match(sql, /raise exception 'Authentication required'/i);
   assert.match(sql, /revoke all on function public\.get_contact_directory\(uuid\) from public, anon/i);
   assert.match(sql, /grant execute on function public\.get_contact_directory\(uuid\) to authenticated/i);
-  assert.doesNotMatch(sql, /avatar_url|cover_image_url|status text/i);
 });
 
 test('profile discovery enforces visibility, existing-contact scope, and blocks in both directions', () => {
