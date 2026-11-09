@@ -4,19 +4,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0067_harden_message_retraction_content.sql'), 'utf8');
 
-test('global retraction clears text, media metadata and shared-contact references', () => {
-  assert.match(sql, /text = ''/);
-  assert.match(sql, /media_url = null/);
-  assert.match(sql, /media_type = null/);
-  assert.match(sql, /media_name = null/);
-  assert.match(sql, /media_size = null/);
-  assert.match(sql, /media_duration = null/);
-  assert.match(sql, /shared_user_id = null/);
+function deletionBody(source) {
+  const start = source.search(/create\s+or\s+replace\s+function\s+public\.delete_message\s*\(/i);
+  assert.notEqual(start, -1, 'delete_message function must exist');
+  const end = source.indexOf('$function$;', start);
+  assert.notEqual(end, -1, 'delete_message body must terminate');
+  return source.slice(start, end);
+}
+
+test('global retraction clears every message payload field', () => {
+  const body = deletionBody(sql);
+  for (const column of ['text = \'\'', 'media_url = null', 'media_type = null', 'media_name = null', 'media_size = null', 'media_duration = null', 'shared_user_id = null']) {
+    assert.ok(body.toLowerCase().includes(column), `expected ${column}`);
+  }
 });
 
-test('retraction remains sender-authorized and preserves per-viewer deletion behavior', () => {
-  assert.match(sql, /if p_mode = 'me' then/);
-  assert.match(sql, /message_hidden_for/);
-  assert.match(sql, /v_message\.sender_id <> v_user_id/);
-  assert.match(sql, /grant execute on function public\.delete_message\(uuid, text\) to authenticated/);
+test('retraction enforces authentication, participant membership, sender ownership, and no repeat delete', () => {
+  const body = deletionBody(sql);
+  assert.match(body, /set search_path = ''/i);
+  assert.match(body, /p_mode is null or p_mode not in/i);
+  assert.match(body, /v_message\.sender_id is distinct from v_user_id/i);
+  assert.match(body, /v_message\.deleted_at is not null/i);
+  assert.match(sql, /grant execute on function public\.delete_message\(uuid, text\) to authenticated/i);
+  assert.match(sql, /revoke all on function public\.delete_message\(uuid, text\) from public, anon, authenticated/i);
 });
