@@ -48,6 +48,7 @@ $function$;
 -- Preserve the existing least-privilege RPC grants and refresh PostgREST.
 REVOKE ALL ON FUNCTION public.get_contact_directory(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_contact_directory(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_contact_directory(uuid) TO service_role;
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;

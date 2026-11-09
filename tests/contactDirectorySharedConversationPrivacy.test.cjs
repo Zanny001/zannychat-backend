@@ -33,9 +33,10 @@ test('bidirectional blocks still suppress directory and QR results', () => {
   assert.match(body, /b\.blocker_id\s*=\s*p\.id\s+and\s+b\.blocked_id\s*=\s*auth\.uid\(\)/i);
 });
 
-test('RPC stays authenticated-only and uses a fixed search path', () => {
+test('RPC preserves authenticated and service-role access with a fixed search path', () => {
   assert.match(migration, /security\s+definer/i);
   assert.match(migration, /set\s+search_path\s*=\s*''/i);
   assert.match(migration, /revoke\s+all\s+on\s+function\s+public\.get_contact_directory\(uuid\)\s+from\s+public,\s*anon/i);
   assert.match(migration, /grant\s+execute\s+on\s+function\s+public\.get_contact_directory\(uuid\)\s+to\s+authenticated/i);
+  assert.match(migration, /grant\s+execute\s+on\s+function\s+public\.get_contact_directory\(uuid\)\s+to\s+service_role/i);
 });
