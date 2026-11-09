@@ -7,7 +7,7 @@ const migrationsDir = path.join(__dirname, '..', 'supabase', 'migrations');
 const readMigration = (name) => fs.readFileSync(path.join(migrationsDir, name), 'utf8');
 
 test('foreign-key index migration only adds indexes for uncovered public foreign keys', () => {
-  const sql = readMigration('20261109200000_index_uncovered_foreign_keys.sql');
+  const sql = readMigration('20261109224226_index_uncovered_foreign_keys.sql');
   assert.match(sql, /contype\s*=\s*'f'/i);
   assert.match(sql, /ns\.nspname\s*=\s*'public'/i);
   assert.match(sql, /indisvalid/i);
@@ -17,7 +17,7 @@ test('foreign-key index migration only adds indexes for uncovered public foreign
 });
 
 test('status audience policy consolidation preserves owner writes and recipient visibility', () => {
-  const sql = readMigration('20261109201000_merge_status_audience_recipient_select_policies.sql');
+  const sql = readMigration('20261109224248_merge_status_audience_recipient_select_policies.sql');
   assert.match(sql, /DROP POLICY IF EXISTS "Recipients can identify active statuses shared with them"/);
   assert.match(sql, /DROP POLICY IF EXISTS "Status owner manages audience recipients"/);
   assert.match(sql, /FOR SELECT[\s\S]*owner_id = \(SELECT auth\.uid\(\)\)[\s\S]*can_view_status/);
@@ -27,7 +27,7 @@ test('status audience policy consolidation preserves owner writes and recipient 
 });
 
 test('RLS initplan migration only hoists auth.uid calls and does not relax predicates', () => {
-  const sql = readMigration('20261109202000_optimize_auth_rls_initplans.sql');
+  const sql = readMigration('20261109224348_optimize_auth_rls_initplans.sql');
   assert.equal((sql.match(/ALTER POLICY/g) || []).length, 19);
   assert.equal((sql.match(/\(SELECT auth\.uid\(\)\)/g) || []).length >= 19, true);
   assert.doesNotMatch(sql, /DROP POLICY|CREATE POLICY|DISABLE ROW LEVEL SECURITY|GRANT |REVOKE /i);
