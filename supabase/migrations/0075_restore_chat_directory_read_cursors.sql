@@ -101,4 +101,7 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_my_read_cursors() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_read_cursors() TO authenticated;
 
+-- Refresh PostgREST's schema cache so both zero-argument RPCs are immediately discoverable.
+NOTIFY pgrst, 'reload schema';
+
 COMMIT;
