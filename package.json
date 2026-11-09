@@ -49,7 +49,8 @@
     "test:call-notifications": "node --test tests/callInvitationNotifications.test.cjs",
     "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs",
     "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs",
-    "test:contact-directory-privacy": "node --test tests/contactDirectorySharedConversationPrivacy.test.cjs"
+    "test:contact-directory-privacy": "node --test tests/contactDirectorySharedConversationPrivacy.test.cjs",
+    "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
