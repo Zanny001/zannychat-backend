@@ -1,59 +1,60 @@
--- Follow-up to 0065/0066: scrub every message payload field that can reveal
--- attachment/contact metadata when a sender retracts a message for everyone.
--- The media_url transition still fires 0066's reference-safe cleanup queue trigger.
-create or replace function public.delete_message(p_message_id uuid, p_mode text)
-returns void
-language plpgsql
-security definer
-set search_path = pg_catalog, public
-as $$
-declare
+-- Follow-up to 0065/0066: keep the deletion RPC aligned with the hardened
+-- production implementation while preserving the 0066 reference-safe cleanup trigger.
+CREATE OR REPLACE FUNCTION public.delete_message(p_message_id uuid, p_mode text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
   v_user_id uuid := auth.uid();
-  v_message public.messages%rowtype;
-begin
-  if v_user_id is null then
-    raise exception 'Authentication required' using errcode = '42501';
-  end if;
-  if p_mode not in ('me', 'everyone') then
-    raise exception 'Invalid deletion mode' using errcode = '22023';
-  end if;
+  v_message public.messages%ROWTYPE;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+  END IF;
+  IF p_mode IS NULL OR p_mode NOT IN ('me', 'everyone') THEN
+    RAISE EXCEPTION 'Invalid deletion mode' USING ERRCODE = '22023';
+  END IF;
 
-  select * into v_message
-  from public.messages
-  where id = p_message_id
-    and exists (
-      select 1 from public.conversation_participants cp
-      where cp.conversation_id = messages.conversation_id
-        and cp.user_id = v_user_id
+  SELECT m.* INTO v_message
+  FROM public.messages AS m
+  WHERE m.id = p_message_id
+    AND EXISTS (
+      SELECT 1 FROM public.conversation_participants AS cp
+      WHERE cp.conversation_id = m.conversation_id AND cp.user_id = v_user_id
     )
-  for update;
+  FOR UPDATE OF m;
 
-  if not found then
-    raise exception 'Message not found' using errcode = 'P0002';
-  end if;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Message not found' USING ERRCODE = 'P0002';
+  END IF;
+  IF p_mode = 'me' THEN
+    INSERT INTO public.message_hidden_for(message_id, user_id)
+    VALUES (p_message_id, v_user_id)
+    ON CONFLICT (message_id, user_id) DO NOTHING;
+    RETURN;
+  END IF;
+  IF v_message.sender_id IS DISTINCT FROM v_user_id THEN
+    RAISE EXCEPTION 'Only the sender can delete a message for everyone' USING ERRCODE = '42501';
+  END IF;
+  IF v_message.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Message has already been deleted' USING ERRCODE = '22023';
+  END IF;
 
-  if p_mode = 'me' then
-    insert into public.message_hidden_for(message_id, user_id)
-    values (p_message_id, v_user_id)
-    on conflict (message_id, user_id) do nothing;
-    return;
-  end if;
-
-  if v_message.sender_id <> v_user_id then
-    raise exception 'Only the sender can delete a message for everyone' using errcode = '42501';
-  end if;
-
-  update public.messages
-  set deleted_at = coalesce(deleted_at, now()),
+  UPDATE public.messages
+  SET deleted_at = pg_catalog.now(),
       text = '',
-      media_url = null,
-      media_type = null,
-      media_name = null,
-      media_size = null,
-      media_duration = null,
-      shared_user_id = null
-  where id = p_message_id;
-end;
-$$;
-revoke all on function public.delete_message(uuid, text) from public, anon;
-grant execute on function public.delete_message(uuid, text) to authenticated;
+      media_url = NULL,
+      media_type = NULL,
+      media_name = NULL,
+      media_size = NULL,
+      media_duration = NULL,
+      shared_user_id = NULL
+  WHERE id = p_message_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.delete_message(uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_message(uuid, text) TO authenticated;
+REVOKE UPDATE (deleted_at) ON public.messages FROM authenticated;
