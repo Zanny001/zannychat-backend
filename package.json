@@ -48,7 +48,7 @@
     "test:profile-privacy": "node --test tests/profilePrivacyAndCleanupMigration.test.cjs",
     "test:call-notifications": "node --test tests/callInvitationNotifications.test.cjs tests/callInvitationNotifyRoute.test.cjs tests/callInvitationDeliveryMigration.test.cjs tests/callVoipPushClient.test.cjs tests/callVoipTokensMigration.test.cjs tests/callEventToken.test.cjs tests/nativeCallEventTransitionMigration.test.cjs",
     "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs",
-    "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs",
+    "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs tests/definerSearchPathHardeningMigration.test.cjs tests/securityDefinerInventoryAudit.test.cjs",
     "test:contact-directory-privacy": "node --test tests/contactDirectorySharedConversationPrivacy.test.cjs",
     "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs",
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
