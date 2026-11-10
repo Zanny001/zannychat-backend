@@ -78,6 +78,7 @@ router.post('/', async (req, res) => {
   try {
     const id = randomUUID();
     const roomName = 'zlive_' + id.replace(/-/g, '');
+    const token = issueToken(req.user, roomName, config, true);
     const { data: stream, error } = await supabaseAdmin.rpc('create_live_stream', {
       p_stream_id: id,
       p_creator_id: req.user.id,
@@ -88,7 +89,7 @@ router.post('/', async (req, res) => {
     if (error) throw error;
     return res.status(201).json({
       stream, livekitUrl: config.url,
-      token: issueToken(req.user, roomName, config, true),
+      token,
     });
   } catch (error) {
     if (error?.code === '23505') return res.status(409).json({ error: 'You already have an active LIVE stream' });
@@ -111,6 +112,7 @@ router.post('/:streamId/join', async (req, res) => {
     if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
       return res.status(403).json({ error: 'This LIVE stream is unavailable' });
     }
+    const token = issueToken(req.user, stream.room_name, config, stream.creator_id === req.user.id);
     const { data: role, error: joinError } = await supabaseAdmin.rpc('join_live_stream', {
       p_stream_id: streamId, p_user_id: req.user.id,
     });
