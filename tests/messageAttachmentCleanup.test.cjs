@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { safeObjectPath, retryDelay, runMessageAttachmentCleanup } = require('../src/jobs/messageAttachmentCleanup');
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0066_profile_privacy_and_attachment_cleanup.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 process.env.SUPABASE_URL = 'https://project.supabase.co';
 
 test('cleanup parser accepts only chat-media objects owned by this project', () => {
