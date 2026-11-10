@@ -131,9 +131,10 @@ router.get('/history', async (req, res) => {
       const invitationExpired = participant.status === 'invited'
         && participant.invited_at
         && Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000;
+      const neverJoined = !participant.joined_at && ['invited','left'].includes(participant.status);
       const status = participant.status === 'declined' ? 'declined'
-        : participant.status === 'invited' && (room.status === 'ended' || invitationExpired) ? 'missed'
-        : room.status === 'ended' ? 'ended'
+        : neverJoined && (room.status === 'ended' || invitationExpired) ? 'missed'
+        : participant.status === 'left' || room.status === 'ended' ? 'ended'
         : participant.status === 'joined' ? 'active' : 'ringing';
       const finishAt = participant.left_at || room.ended_at;
       const durationSeconds = participant.joined_at && finishAt
