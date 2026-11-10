@@ -19,7 +19,7 @@ DECLARE
   v_room public.group_call_rooms%rowtype;
   v_invited_count integer := COALESCE(cardinality(p_invited_user_ids), 0);
   v_invitee uuid;
-  v_stale_room_id uuid;
+  v_stale_room record;
   v_now timestamptz := now();
 BEGIN
   IF p_call_type IS NULL OR p_call_type NOT IN ('audio','video')
@@ -57,8 +57,8 @@ BEGIN
     END IF;
   END LOOP;
 
-  FOR v_stale_room_id IN
-    SELECT r.id
+  FOR v_stale_room IN
+    SELECT r.id, r.host_user_id
       FROM public.group_call_rooms r
      WHERE r.conversation_id = p_conversation_id
        AND r.status IN ('ringing','active')
@@ -67,19 +67,17 @@ BEGIN
   LOOP
     IF NOT EXISTS (
       SELECT 1 FROM public.group_call_participants p
-       WHERE p.room_id = v_stale_room_id
-         AND p.user_id <> (
-           SELECT r.host_user_id FROM public.group_call_rooms r WHERE r.id = v_stale_room_id
-         )
+       WHERE p.room_id = v_stale_room.id
+         AND p.user_id <> v_stale_room.host_user_id
          AND p.status = 'joined'
     ) THEN
       UPDATE public.group_call_rooms
          SET status = 'ended', ended_at = COALESCE(ended_at, v_now)
-       WHERE id = v_stale_room_id AND status IN ('ringing','active');
+       WHERE id = v_stale_room.id AND status IN ('ringing','active');
 
       UPDATE public.group_call_participants
          SET status = 'left', left_at = COALESCE(left_at, v_now)
-       WHERE room_id = v_stale_room_id AND status = 'invited';
+       WHERE room_id = v_stale_room.id AND status = 'invited';
     END IF;
   END LOOP;
 
