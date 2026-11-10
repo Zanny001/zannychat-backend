@@ -6,7 +6,7 @@ const { createHmac } = require('node:crypto');
 const { createLiveKitToken } = require('../src/services/livekitToken');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110220000_creator_live_streams.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
 
 test('LIVE audience tokens are subscribe-only while creator tokens can publish', () => {
   const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
