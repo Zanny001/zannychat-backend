@@ -287,7 +287,7 @@ router.post('/:streamId/guest-requests', async (req, res) => {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (!stream.allow_guests) return res.status(409).json({ error: 'Guest participation is disabled for this LIVE stream' });
-    if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before requesting guest access' });
+    const participant = await requireJoined(streamId, req.user.id);\n    if (!participant || participant.role !== 'viewer') return res.status(403).json({ error: 'Only a joined viewer can request guest access' });
     if (stream.creator_id === req.user.id) return res.status(400).json({ error: 'The creator is already a publisher' });
     if (await hasBlockBetween(stream.creator_id, req.user.id)) return res.status(403).json({ error: 'Guest access is unavailable' });
     const { error } = await supabaseAdmin.from('live_stream_invites').upsert({
