@@ -103,22 +103,15 @@ router.post('/:roomId/join', async (req, res) => {
     if (!room || !['ringing','active'].includes(room.status)) return res.status(404).json({ error: 'Group call is no longer active' });
     const group = await getGroupMembership(room.conversation_id, req.user.id);
     if (group.error) return res.status(group.status).json({ error: group.error });
-    const { data: current, error: currentError } = await supabaseAdmin.from('group_call_participants')
-      .select('user_id,status').eq('room_id', roomId);
-    if (currentError) throw currentError;
-    const joined = (current || []).filter((participant) => participant.status === 'joined');
-    if (!joined.some((participant) => participant.user_id === req.user.id) && joined.length >= room.max_participants) {
-      return res.status(409).json({ error: 'This group call is full' });
+    const { error: joinError } = await supabaseAdmin.rpc('join_group_call_room', {
+      p_room_id: roomId, p_user_id: req.user.id,
+    });
+    if (joinError) {
+      if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This group call is full' });
+      if (joinError.code === '42501') return res.status(403).json({ error: 'You are not a member of this group' });
+      if (joinError.code === 'P0001') return res.status(404).json({ error: 'Group call is no longer active' });
+      throw joinError;
     }
-    const now = new Date().toISOString();
-    const { error: participantError } = await supabaseAdmin.from('group_call_participants').upsert({
-      room_id: roomId, user_id: req.user.id,
-      role: req.user.id === room.host_user_id ? 'host' : 'member',
-      status: 'joined', joined_at: now, left_at: null,
-    }, { onConflict: 'room_id,user_id' });
-    if (participantError) throw participantError;
-    if (room.status === 'ringing') await supabaseAdmin.from('group_call_rooms')
-      .update({ status: 'active', started_at: now }).eq('id', roomId).eq('status', 'ringing');
     return res.json({ room, livekitUrl: config.url, token: tokenFor(req.user, room.room_name, config) });
   } catch (error) {
     console.error('[group-calls] join failed:', error?.message || error);
