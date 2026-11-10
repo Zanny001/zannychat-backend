@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { retryDelay, runCallInvitationNotifications } = require('../src/jobs/callInvitationNotifications');
+const { getCallEventTokenActor } = require('../src/services/callEventToken');
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0066_profile_privacy_and_attachment_cleanup.sql'), 'utf8');
 const targetedSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
 
@@ -122,6 +123,8 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
       throw new Error('Unexpected table ' + table);
     },
   };
+  const previousSigning = process.env.CALL_EVENT_SIGNING_SECRET;
+  process.env.CALL_EVENT_SIGNING_SECRET = 'call-invitation-worker-test-secret';
   const result = await runCallInvitationNotifications({
     admin,
     now: () => new Date('2026-11-05T08:00:00.000Z'),
@@ -129,6 +132,8 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
       assert.equal(userId, 'callee');
       assert.equal(event.serverCallId, 'voip-call');
       assert.equal(event.hasVideo, true);
+      assert.ok(event.metadata.serverEventToken);
+      assert.equal(getCallEventTokenActor('voip-call', event.metadata.serverEventToken, Date.parse('2026-11-05T08:00:00.000Z')), 'callee');
       return { sent: 1, failed: 0 };
     },
     sendPush: async () => { expoSent += 1; return { sent: 1, failed: 0 }; },
@@ -137,6 +142,8 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
   assert.equal(result.sent, 0);
   assert.equal(expoSent, 0);
   assert.ok(updates.some((item) => item.id === 'voip-call' && item.values.status === 'delivered'));
+  if (previousSigning === undefined) delete process.env.CALL_EVENT_SIGNING_SECRET;
+  else process.env.CALL_EVENT_SIGNING_SECRET = previousSigning;
 });
 
 
