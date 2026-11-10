@@ -128,8 +128,11 @@ router.get('/history', async (req, res) => {
     const calls = (participants || []).map((participant) => {
       const room = roomsById[participant.room_id];
       if (!room) return null;
+      const invitationExpired = participant.status === 'invited'
+        && participant.invited_at
+        && Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000;
       const status = participant.status === 'declined' ? 'declined'
-        : participant.status === 'invited' && room.status === 'ended' ? 'missed'
+        : participant.status === 'invited' && (room.status === 'ended' || invitationExpired) ? 'missed'
         : room.status === 'ended' ? 'ended'
         : participant.status === 'joined' ? 'active' : 'ringing';
       const finishAt = participant.left_at || room.ended_at;
