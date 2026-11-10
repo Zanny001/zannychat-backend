@@ -18,12 +18,12 @@ test('reviewed SECURITY DEFINER routines are conditionally pinned to an empty se
     'public.set_pinned_message_snapshot()',
     'public.deliver_due_scheduled_messages(integer)',
   ];
-  const normalized = migration.replace(/\\s+/g, ' ').toLowerCase();
+  const normalized = migration.replace(/\s+/g, ' ').toLowerCase();
   for (const signature of expected) {
-    assert.ok(normalized.includes(signature.toLowerCase()), `missing reviewed signature ${signature}`);
+    assert.ok(normalized.includes(signature.toLowerCase()), \`missing reviewed signature \${signature}\`);
   }
-  assert.match(migration, /to_regprocedure\\(v_signature\\)/i);
-  assert.match(migration, /if v_function is not null then[\\s\\S]*?alter function/i);
+  assert.match(migration, /to_regprocedure\(v_signature\)/i);
+  assert.match(migration, /if v_function is not null then[\s\S]*?alter function/i);
   assert.match(migration, /set search_path = %l/i);
 });
 
