@@ -360,3 +360,26 @@ Apply `0040_group_announcement_mode.sql` after all prior migrations. Group admin
 ## Audio/video calling (release 1.2.234)
 
 See the repository-level `AUDIO_VIDEO_CALLS_1.2.234.md` for signaling architecture, backend TURN variables, native build prerequisites, migration order, and outstanding release gates. Calls require a custom native development build; Expo Go is not supported for the WebRTC native module.
+
+
+## Group calls and Creator LIVE (release 1.2.241)
+
+Group audio/video calls and Creator LIVE use a LiveKit SFU. Configure these **server-only** variables on Render and local development:
+
+- `LIVEKIT_URL` — reachable `wss://` SFU endpoint.
+- `LIVEKIT_API_KEY` — LiveKit API key.
+- `LIVEKIT_API_SECRET` — LiveKit API secret. Never expose this in an Expo or `EXPO_PUBLIC_*` variable.
+
+The Render blueprint declares all three with `sync: false`, so Render prompts for their values rather than storing secrets in this repository. Without all three values, media routes fail closed with HTTP 503.
+
+Group-call API routes are mounted at `/group-calls`. Rooms support 2–16 group members. Room/invitation creation, admission, participant departure, and host/admin termination are database-serialized. Each unanswered invitation expires after two minutes without ending a call that already has other joined participants. Stale host-only rooms are closed before a new call is created.
+
+Creator LIVE routes are mounted at `/live`. Public broadcasts support subscribe-only audience tokens, comments, reactions, abuse reports, creator-appointed moderators, comment hiding, and report review/resolution. Creator tokens may publish; audience tokens cannot publish media. Follower-only/private broadcasts and guest participation are not enabled in this release.
+
+Relevant checks:
+
+- `npm run test:group-calls`
+- `npm run test:live-streams`
+- `npm run test:group-live-admission`
+
+New SQL migrations are reviewed and applied through the approved release process; adding a migration to this branch does not apply it to the production Supabase project.
