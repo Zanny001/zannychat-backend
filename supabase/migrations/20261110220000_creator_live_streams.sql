@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public.live_streams (
   ended_at timestamptz
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS live_stream_one_active_per_creator
+  ON public.live_streams(creator_id) WHERE status = 'live';
 CREATE INDEX IF NOT EXISTS live_streams_discover_idx
   ON public.live_streams(status, visibility, started_at DESC);
 CREATE INDEX IF NOT EXISTS live_streams_creator_recent_idx
