@@ -1,4 +1,4 @@
-## Current source version: 1.2.35
+## Current source version: 1.2.241
 
 Shared conversation pins are introduced in migration `0041_shared_pinned_messages.sql`. See `../SHARED_PINS_1.2.84.md` in the delivery bundle for staging validation requirements.
 
