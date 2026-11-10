@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110230000_atomic_group_live_admission.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070203_atomic_group_live_admission.sql'), 'utf8');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
