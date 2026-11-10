@@ -30,7 +30,7 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes('stream.creator_id !== req.user.id'));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
   assert.ok(route.includes('issueToken(req.user, stream.room_name, config, canPublish)'));
-  assert.ok(route.includes("role, canModerate"));
+  assert.ok(route.includes("role, canPublish, canModerate"));
 });
 
 test('LIVE schema stores audience, moderation, reactions and abuse reports with client access revoked', () => {
