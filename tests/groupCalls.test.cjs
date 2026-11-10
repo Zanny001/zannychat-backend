@@ -7,6 +7,7 @@ const { createLiveKitToken, getLiveKitConfig } = require('../src/services/liveki
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110210000_group_call_rooms.sql'), 'utf8');
+const pushClient = fs.readFileSync(path.join(__dirname, '../src/config/pushClient.js'), 'utf8');
 
 test('LiveKit access tokens are short-lived, room-scoped, and signed with the server secret', () => {
   const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
@@ -39,6 +40,9 @@ test('group call endpoints require authenticated group membership and enforce ho
   assert.ok(route.includes(".from('conversation_participants')"));
   assert.ok(route.includes('room.host_user_id !== req.user.id && !group.membership.is_admin'));
   assert.ok(route.includes('This group call is full'));
+  assert.ok(route.includes("type: 'group_call_invite'"));
+  assert.ok(route.includes('sendPushToUser'));
+  assert.ok(pushClient.includes("['incoming_call', 'group_call_invite'].includes(data?.type)"));
 });
 
 test('group call database state is backend-only and limits active rooms per group', () => {
