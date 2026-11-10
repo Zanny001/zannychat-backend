@@ -7,12 +7,7 @@ BEGIN
   IF to_regprocedure('public.get_contact_directory(uuid)') IS NULL THEN
     EXECUTE $create$
       CREATE FUNCTION public.get_contact_directory(p_user_id uuid DEFAULT NULL)
-      RETURNS TABLE (
-        id uuid,
-        name text,
-        avatar_color text,
-        username text
-      )
+      RETURNS TABLE (id uuid, name text, avatar_color text, username text)
       LANGUAGE plpgsql
       STABLE
       SECURITY DEFINER
@@ -24,7 +19,6 @@ BEGIN
         IF v_viewer IS NULL THEN
           RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
         END IF;
-
         IF p_user_id IS NOT NULL AND p_user_id = v_viewer THEN
           RAISE EXCEPTION 'Cannot discover your own profile' USING ERRCODE = '22023';
         END IF;
@@ -43,13 +37,11 @@ BEGIN
               FROM public.conversation_participants AS mine
               JOIN public.conversation_participants AS theirs
                 ON theirs.conversation_id = mine.conversation_id
-              WHERE mine.user_id = v_viewer
-                AND theirs.user_id = p.id
+              WHERE mine.user_id = v_viewer AND theirs.user_id = p.id
             )
           )
           AND NOT EXISTS (
-            SELECT 1
-            FROM public.blocked_users AS b
+            SELECT 1 FROM public.blocked_users AS b
             WHERE (b.blocker_id = v_viewer AND b.blocked_id = p.id)
                OR (b.blocker_id = p.id AND b.blocked_id = v_viewer)
           )
