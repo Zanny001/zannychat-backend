@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070203_atomic_group_live_admission.sql'), 'utf8');
 const expiryMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110180000_expire_group_call_invitations.sql'), 'utf8');
+const liveBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110230000_live_block_admission.sql'), 'utf8');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
@@ -38,4 +39,13 @@ test('only the creator can hide LIVE comments', () => {
   assert.ok(liveRoute.includes("router.post('/:streamId/comments/:commentId/hide'"));
   assert.ok(liveRoute.includes('stream.creator_id !== req.user.id'));
   assert.ok(liveRoute.includes("update({ moderation_status: 'hidden' })"));
+});
+
+test('LIVE admission rechecks block relationships inside the locked stream transaction', () => {
+  assert.ok(liveBlockMigration.includes('FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)'));
+  assert.ok(liveBlockMigration.includes('FOR UPDATE'));
+  assert.ok(liveBlockMigration.includes('public.blocked_users'));
+  assert.ok(liveBlockMigration.includes('b.blocker_id = v_stream.creator_id'));
+  assert.ok(liveBlockMigration.includes('b.blocker_id = p_user_id'));
+  assert.ok(liveBlockMigration.includes('TO service_role'));
 });
