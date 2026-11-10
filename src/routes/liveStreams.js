@@ -52,6 +52,14 @@ async function requireJoined(streamId, userId) {
   return data?.status === 'joined' ? data : null;
 }
 
+async function canModerateLive(stream, userId) {
+  if (stream.creator_id === userId) return true;
+  const { data, error } = await supabaseAdmin.from('live_stream_moderators')
+    .select('user_id').eq('stream_id', stream.id).eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 router.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_streams')
@@ -201,7 +209,7 @@ router.post('/:streamId/comments/:commentId/hide', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
-    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can moderate LIVE comments' });
+    if (!await canModerateLive(stream, req.user.id)) return res.status(403).json({ error: 'Only the creator or an appointed LIVE moderator can moderate comments' });
     const { data, error } = await supabaseAdmin.from('live_stream_comments')
       .update({ moderation_status: 'hidden' })
       .eq('id', commentId).eq('stream_id', streamId)
@@ -235,6 +243,88 @@ router.post('/:streamId/react', async (req, res) => {
   } catch (error) {
     console.error('[live] reaction failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not send LIVE reaction' });
+  }
+});
+
+
+router.post('/:streamId/moderators', async (req, res) => {
+  const streamId = req.params.streamId;
+  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  if (!validId(streamId) || !validId(userId)) return res.status(400).json({ error: 'Invalid LIVE moderator reference' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can appoint LIVE moderators' });
+    if (userId === stream.creator_id) return res.status(400).json({ error: 'The creator is already the stream administrator' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'viewer') return res.status(400).json({ error: 'Only a joined viewer can be appointed as a LIVE moderator' });
+    const { error } = await supabaseAdmin.from('live_stream_moderators').upsert({
+      stream_id: streamId, user_id: userId, appointed_by: req.user.id,
+    }, { onConflict: 'stream_id,user_id', ignoreDuplicates: true });
+    if (error) throw error;
+    return res.json({ userId, moderator: true });
+  } catch (error) {
+    console.error('[live] moderator appointment failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not appoint LIVE moderator' });
+  }
+});
+
+router.delete('/:streamId/moderators/:userId', async (req, res) => {
+  const { streamId, userId } = req.params;
+  if (!validId(streamId) || !validId(userId)) return res.status(400).json({ error: 'Invalid LIVE moderator reference' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can remove LIVE moderators' });
+    const { error } = await supabaseAdmin.from('live_stream_moderators')
+      .delete().eq('stream_id', streamId).eq('user_id', userId);
+    if (error) throw error;
+    return res.json({ userId, moderator: false });
+  } catch (error) {
+    console.error('[live] moderator removal failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not remove LIVE moderator' });
+  }
+});
+
+router.get('/:streamId/reports', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (!await canModerateLive(stream, req.user.id)) return res.status(403).json({ error: 'Only the creator or appointed LIVE moderators can review reports' });
+    const { data, error } = await supabaseAdmin.from('live_stream_reports')
+      .select('id,stream_id,reporter_id,reason,details,status,created_at,reviewed_by,reviewed_at')
+      .eq('stream_id', streamId)
+      .order('created_at', { ascending: true }).limit(100);
+    if (error) throw error;
+    return res.json({ reports: data || [] });
+  } catch (error) {
+    console.error('[live] report queue failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load LIVE reports' });
+  }
+});
+
+router.patch('/:streamId/reports/:reportId', async (req, res) => {
+  const { streamId, reportId } = req.params;
+  const status = req.body?.status;
+  if (!validId(streamId) || !validId(reportId)) return res.status(400).json({ error: 'Invalid LIVE report reference' });
+  if (!['reviewing','resolved','dismissed'].includes(status)) return res.status(400).json({ error: 'Invalid LIVE report status' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (!await canModerateLive(stream, req.user.id)) return res.status(403).json({ error: 'Only the creator or appointed LIVE moderators can review reports' });
+    const reviewedAt = status === 'reviewing' ? null : new Date().toISOString();
+    const { data, error } = await supabaseAdmin.from('live_stream_reports').update({
+      status, reviewed_by: req.user.id, reviewed_at: reviewedAt,
+    }).eq('stream_id', streamId).eq('id', reportId)
+      .select('id,status,reviewed_by,reviewed_at').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'LIVE report not found' });
+    return res.json({ report: data });
+  } catch (error) {
+    console.error('[live] report review failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not update LIVE report' });
   }
 });
 
