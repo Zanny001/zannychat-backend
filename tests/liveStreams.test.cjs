@@ -134,6 +134,9 @@ test('LIVE follower-only and private admission is enforced inside the locked dat
   assert.ok(accessMigration.includes('public.live_stream_invites'));
   assert.ok(route.includes("router.post('/:streamId/invites'"));
   assert.ok(route.includes("router.get('/invitations'"));
+  assert.ok(route.includes("router.get('/invite-candidates'"));
+  assert.ok(route.includes("from('conversation_participants')"));
+  assert.ok(route.includes('blockedIds.has(userId)'));
   assert.ok(route.includes("router.get('/following/streams'"));
 });
 
