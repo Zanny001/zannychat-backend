@@ -41,3 +41,23 @@ test('LIVE schema stores audience, moderation, reactions and abuse reports with 
   assert.ok(migration.includes('REVOKE ALL ON public.live_streams'));
   assert.ok(migration.includes('TO service_role'));
 });
+
+const lifecycleMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110220000_atomic_live_lifecycle.sql'), 'utf8');
+
+test('LIVE creation atomically inserts the stream and creator participant', () => {
+  assert.ok(lifecycleMigration.includes('FUNCTION public.create_live_stream('));
+  assert.ok(lifecycleMigration.includes('INSERT INTO public.live_streams'));
+  assert.ok(lifecycleMigration.includes('INSERT INTO public.live_stream_participants'));
+  assert.ok(lifecycleMigration.includes('TO service_role'));
+  assert.ok(route.includes("rpc('create_live_stream'"));
+  assert.equal(route.includes(".from('live_stream_participants').insert({"), false);
+});
+
+test('LIVE ending locks the stream and atomically closes all joined participants', () => {
+  assert.ok(lifecycleMigration.includes('FUNCTION public.end_live_stream(p_stream_id uuid, p_creator_id uuid)'));
+  assert.ok(lifecycleMigration.includes('FOR UPDATE'));
+  assert.ok(lifecycleMigration.includes('v_stream.creator_id <> p_creator_id'));
+  assert.ok(lifecycleMigration.includes("SET status = 'ended', ended_at = v_now"));
+  assert.ok(lifecycleMigration.includes("SET status = 'left', left_at = COALESCE(left_at, v_now)"));
+  assert.ok(route.includes("rpc('end_live_stream'"));
+});
