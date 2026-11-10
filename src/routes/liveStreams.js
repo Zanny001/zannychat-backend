@@ -140,7 +140,10 @@ router.post('/:streamId/leave', async (req, res) => {
     const { data: left, error } = await supabaseAdmin.rpc('leave_live_stream', {
       p_stream_id: streamId, p_user_id: req.user.id,
     });
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42501') return res.status(403).json({ error: 'The creator must end this LIVE stream' });
+      throw error;
+    }
     return res.json({ left: left === true });
   } catch (error) {
     console.error('[live] leave failed:', error?.message || error);
