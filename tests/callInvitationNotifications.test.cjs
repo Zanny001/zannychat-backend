@@ -98,3 +98,10 @@ test('scoped claim migration limits claims and keeps execution service-role-only
   assert.ok(targetedSql.includes('FOR UPDATE SKIP LOCKED'));
   assert.ok(targetedSql.includes('GRANT EXECUTE ON FUNCTION public.claim_call_invitation_notifications(integer, uuid) TO service_role'));
 });
+
+
+test('Expo call pushes request the actionable incoming-call notification category', () => {
+  const pushClient = fs.readFileSync(path.join(__dirname, '../src/config/pushClient.js'), 'utf8');
+  assert.ok(pushClient.includes("categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined"));
+  assert.ok(pushClient.includes("sound: data?.type === 'incoming_call' ? 'call-ring.wav' : 'default'"));
+});
