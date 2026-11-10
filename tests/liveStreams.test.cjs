@@ -95,6 +95,7 @@ test('LIVE report queue and resolution are restricted to creator-appointed moder
   assert.ok(route.includes("router.patch('/:streamId/reports/:reportId'"));
   assert.ok(route.includes('canModerateLive(stream, req.user.id)'));
   assert.ok(route.includes("['reviewing','resolved','dismissed'].includes(status)"));
+  assert.ok(route.includes(".in('status', ['open','reviewing'])"));
 });
 
 test('appointed LIVE moderators can hide comments but cannot end the stream', () => {
