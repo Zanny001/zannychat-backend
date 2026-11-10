@@ -112,6 +112,9 @@ router.post('/:streamId/join', async (req, res) => {
     if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) {
       return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
     }
+    if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
+      return res.status(403).json({ error: 'This LIVE stream is unavailable' });
+    }
     const { data: role, error: joinError } = await supabaseAdmin.rpc('join_live_stream', {
       p_stream_id: streamId, p_user_id: req.user.id,
     });
