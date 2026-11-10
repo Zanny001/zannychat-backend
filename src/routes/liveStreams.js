@@ -162,7 +162,9 @@ router.get('/', async (req, res) => {
       .eq('status', 'live').eq('visibility', 'public')
       .order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    return res.json({ streams: (data || []).map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id })) });
+    const visible = [];
+    for (const stream of data || []) if (!await hasBlockBetween(stream.creator_id, req.user.id)) visible.push({ ...stream, is_creator: stream.creator_id === req.user.id });
+    return res.json({ streams: visible });
   } catch (error) {
     console.error('[live] discover failed:', error?.message || error);
     return res.status(503).json({ error: 'LIVE discovery is temporarily unavailable' });
