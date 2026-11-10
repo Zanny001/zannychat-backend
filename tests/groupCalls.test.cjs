@@ -123,3 +123,11 @@ test('group call history distinguishes unanswered invitations from participants 
   assert.ok(route.includes("neverJoined && (room.status === 'ended' || invitationExpired) ? 'missed'"));
   assert.ok(route.includes("participant.status === 'left' || room.status === 'ended' ? 'ended'"));
 });
+
+const renderConfig = fs.readFileSync(path.join(__dirname, '../render.yaml'), 'utf8');
+
+test('Render blueprint prompts for server-only LiveKit credentials without storing secrets', () => {
+  for (const key of ['LIVEKIT_URL','LIVEKIT_API_KEY','LIVEKIT_API_SECRET']) {
+    assert.ok(renderConfig.includes(`- key: ${key}\n        sync: false`));
+  }
+});
