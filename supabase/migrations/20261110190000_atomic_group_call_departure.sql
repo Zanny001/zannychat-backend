@@ -10,6 +10,7 @@ AS $$
 DECLARE
   v_room public.group_call_rooms%rowtype;
   v_joined integer;
+  v_updated integer;
 BEGIN
   SELECT * INTO v_room
     FROM public.group_call_rooms
@@ -25,6 +26,10 @@ BEGIN
    WHERE room_id = p_room_id
      AND user_id = p_user_id
      AND status = 'joined';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated = 0 THEN
+    RETURN false;
+  END IF;
 
   SELECT count(*) INTO v_joined
     FROM public.group_call_participants
