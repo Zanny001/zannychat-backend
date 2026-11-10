@@ -38,7 +38,8 @@ test('group call endpoints require authenticated group membership and enforce ho
   assert.ok(route.includes(".from('conversations').select('id,is_group,name')"));
   assert.ok(route.includes('!conversation.is_group'));
   assert.ok(route.includes(".from('conversation_participants')"));
-  assert.ok(route.includes('room.host_user_id !== req.user.id && !group.membership.is_admin'));
+  assert.ok(route.includes("rpc('end_group_call_room'"));
+  assert.ok(route.includes('Only the call host or a group admin can end this call'));
   assert.ok(route.includes('This group call is full'));
   assert.ok(route.includes("type: 'group_call_invite'"));
   assert.ok(route.includes('sendPushToUser'));
