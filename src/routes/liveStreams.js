@@ -135,11 +135,11 @@ router.post('/:streamId/leave', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
-    const { error } = await supabaseAdmin.from('live_stream_participants').update({
-      status: 'left', left_at: new Date().toISOString(),
-    }).eq('stream_id', streamId).eq('user_id', req.user.id).eq('status', 'joined');
+    const { data: left, error } = await supabaseAdmin.rpc('leave_live_stream', {
+      p_stream_id: streamId, p_user_id: req.user.id,
+    });
     if (error) throw error;
-    return res.json({ left: true });
+    return res.json({ left: left === true });
   } catch (error) {
     console.error('[live] leave failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not leave LIVE stream' });
