@@ -37,7 +37,7 @@ test('service-role native reconciliation may persist caller cancellation without
 
 test('native event credentials can only be minted by an active call participant', () => {
   assert.match(callsRoute, /router\.post\('\/:callId\/native-event-token'/);
-  assert.match(callsRoute, /call\.callee_id,status,expires_at/);
+  assert.match(callsRoute, /select\('id,caller_id,callee_id,status,expires_at'\)/);
   assert.match(callsRoute, /!\[call\.caller_id, call\.callee_id\]\.includes\(req\.user\.id\)/);
   assert.match(callsRoute, /createCallEventToken\(callId, Date\.now\(\), req\.user\.id\)/);
   assert.match(callsRoute, /actorId === call\.caller_id \? 'cancelled'/);
