@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070203_atomic_group_live_admission.sql'), 'utf8');
-const expiryMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110180000_expire_group_call_invitations.sql'), 'utf8');
-const liveBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110230000_live_block_admission.sql'), 'utf8');
+const expiryMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192227_expire_group_call_invitations_20261110180000.sql'), 'utf8');
+const liveBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192303_live_block_admission_20261110230000.sql'), 'utf8');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
