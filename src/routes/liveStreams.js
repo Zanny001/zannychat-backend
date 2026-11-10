@@ -297,9 +297,8 @@ router.post('/:streamId/invites', async (req, res) => {
     if (stream.visibility !== 'private') return res.status(409).json({ error: 'Invitations are only required for private LIVE streams' });
     const invitees = userIds.filter((id) => id !== req.user.id);
     if (!invitees.length) return res.status(400).json({ error: 'At least one invitee other than the creator is required' });
-    for (const userId of invitees) {
-      if (await hasBlockBetween(stream.creator_id, userId)) return res.status(403).json({ error: 'A blocked account cannot be invited' });
-    }
+    const blockedInvitees = await getBlockedUserIds(stream.creator_id, invitees);
+    if (blockedInvitees.size) return res.status(403).json({ error: 'A blocked account cannot be invited' });
     const { data: profiles, error: profileError } = await supabaseAdmin.from('profiles')
       .select('id').in('id', invitees);
     if (profileError) throw profileError;
