@@ -14,5 +14,5 @@ test('call notification kick is authenticated, caller-bound, and limited to acti
 });
 
 test('call notification kick only processes its validated call id', () => {
-  assert.match(route, /runCallInvitationNotifications\\(\\{ admin: supabaseAdmin, limit: 1, callId \\}\\)/);
+  assert.match(route, /runCallInvitationNotifications\(\\{ admin: supabaseAdmin, limit: 1, callId \\}\)/);
 });
