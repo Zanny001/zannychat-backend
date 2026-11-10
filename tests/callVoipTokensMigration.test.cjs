@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110200000_call_voip_tokens.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065547_call_voip_tokens.sql'), 'utf8');
 
 test('native VoIP tokens are stored separately and never readable by client roles', () => {
   assert.match(sql, /create table if not exists public\.call_voip_tokens/i);
