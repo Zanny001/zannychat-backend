@@ -57,6 +57,16 @@ BEGIN
     END IF;
   END LOOP;
 
+  IF EXISTS (
+    SELECT 1
+      FROM unnest(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) AS invitee(user_id)
+      JOIN public.blocked_users b
+        ON (b.blocker_id = p_host_user_id AND b.blocked_id = invitee.user_id)
+        OR (b.blocker_id = invitee.user_id AND b.blocked_id = p_host_user_id)
+  ) THEN
+    RAISE EXCEPTION 'blocked group member cannot be invited' USING ERRCODE = '42501';
+  END IF;
+
   FOR v_stale_room IN
     SELECT r.id, r.host_user_id
       FROM public.group_call_rooms r
