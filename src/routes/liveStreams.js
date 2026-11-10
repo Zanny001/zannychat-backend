@@ -107,6 +107,25 @@ router.get('/following', async (req, res) => {
   }
 });
 
+router.get('/following/streams', async (req, res) => {
+  try {
+    const { data: follows, error: followError } = await supabaseAdmin.from('live_creator_follows')
+      .select('creator_id').eq('follower_id', req.user.id).limit(500);
+    if (followError) throw followError;
+    const creatorIds = (follows || []).map((row) => row.creator_id);
+    if (!creatorIds.length) return res.json({ streams: [] });
+    const { data, error } = await supabaseAdmin.from('live_streams')
+      .select('id,creator_id,title,description,visibility,allow_guests,started_at')
+      .eq('status', 'live').in('visibility', ['public','followers'])
+      .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    return res.json({ streams: data || [] });
+  } catch (error) {
+    console.error('[live] followed stream discovery failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load followed creators' });
+  }
+});
+
 router.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_streams')
@@ -200,7 +219,7 @@ router.post('/:streamId/invites', async (req, res) => {
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can invite viewers' });
     if (stream.visibility !== 'private') return res.status(409).json({ error: 'Invitations are only required for private LIVE streams' });
     const invitees = userIds.filter((id) => id !== req.user.id);
-    if (invitees.some((id) => false)) return res.status(400).json({ error: 'Invalid invitee' });
+    if (!invitees.length) return res.status(400).json({ error: 'At least one invitee other than the creator is required' });
     for (const userId of invitees) {
       if (await hasBlockBetween(stream.creator_id, userId)) return res.status(403).json({ error: 'A blocked account cannot be invited' });
     }
@@ -213,7 +232,7 @@ router.post('/:streamId/invites', async (req, res) => {
       stream_id: streamId, user_id: userId, invited_by: req.user.id,
       invitation_type: 'viewer', status: 'pending', requested_by: null,
     }));
-    const { error } = await supabaseAdmin.from('live_stream_invites').upsert(rows, { onConflict: 'stream_id,user_id' });
+    const { error } = await supabaseAdmin.from('live_stream_invites').upsert(rows, { onConflict: 'stream_id,user_id,invitation_type' });
     if (error) throw error;
     return res.json({ invited: invitees.length });
   } catch (error) {
