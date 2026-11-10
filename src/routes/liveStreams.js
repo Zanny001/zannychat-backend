@@ -114,7 +114,16 @@ router.get('/following', async (req, res) => {
       .select('creator_id,created_at').eq('follower_id', req.user.id)
       .order('created_at', { ascending: false }).limit(500);
     if (error) throw error;
-    return res.json({ following: data || [] });
+    const creatorIds = (data || []).map((row) => row.creator_id);
+    const { data: profiles, error: profileError } = creatorIds.length
+      ? await supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id', creatorIds)
+      : { data: [], error: null };
+    if (profileError) throw profileError;
+    const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
+    return res.json({ following: (data || []).map((row) => ({
+      ...row, name: profileById.get(row.creator_id)?.name || 'ZannyChat creator',
+      avatarColor: profileById.get(row.creator_id)?.avatar_color || null,
+    })) });
   } catch (error) {
     console.error('[live] following list failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load followed creators' });
