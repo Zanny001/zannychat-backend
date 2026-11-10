@@ -120,7 +120,8 @@ router.get('/following', async (req, res) => {
       : { data: [], error: null };
     if (profileError) throw profileError;
     const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
-    return res.json({ following: (data || []).map((row) => ({
+    const blockedIds = await getBlockedUserIds(req.user.id, creatorIds);
+    return res.json({ following: (data || []).filter((row) => !blockedIds.has(row.creator_id)).map((row) => ({
       ...row, name: profileById.get(row.creator_id)?.name || 'ZannyChat creator',
       avatarColor: profileById.get(row.creator_id)?.avatar_color || null,
     })) });
