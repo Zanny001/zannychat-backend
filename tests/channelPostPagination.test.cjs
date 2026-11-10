@@ -2,9 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const frontendRoot = process.env.ZANNYCHAT_FRONTEND_ROOT || path.resolve(__dirname, '../../zannychat-front-github');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/channels.js'), 'utf8');
-const api = fs.readFileSync(path.join(__dirname, '../../zannychat-front/src/services/api.js'), 'utf8');
-const screen = fs.readFileSync(path.join(__dirname, '../../zannychat-front/src/screens/ChannelsScreen.js'), 'utf8');
+const api = fs.readFileSync(path.join(frontendRoot, 'src/services/api.js'), 'utf8');
+const screen = fs.readFileSync(path.join(frontendRoot, 'src/screens/ChannelsScreen.js'), 'utf8');
 
 test('channel feed uses a bounded page and stable timestamp/id cursor', () => {
   assert.match(route, /const pageSize = 100/);

@@ -24,12 +24,12 @@ test('compatibility migration reasserts server-controlled 6/12/24/48-hour expiry
   assert.match(source, /SET search_path = ''/i);
 });
 
-test('migration versions are unique and contiguous through 0064', () => {
+test('migration versions are unique and contiguous through the latest migration', () => {
   const files = fs.readdirSync(migrations).filter((n) => /^\d{4}_.+\.sql$/.test(n)).sort();
   const versions = files.map((n) => n.slice(0, 4));
-  assert.equal(files.length, 64);
-  assert.equal(new Set(versions).size, 64);
+  const latest = files.length;
+  assert.equal(new Set(versions).size, latest);
   assert.equal(versions[0], '0001');
-  assert.equal(versions.at(-1), '0064');
+  assert.equal(versions.at(-1), String(latest).padStart(4, '0'));
   for (let i = 0; i < versions.length; i++) assert.equal(Number(versions[i]), i + 1);
 });

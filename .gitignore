@@ -65,3 +65,6 @@ ARRAY[search_path=""]
 node_modules/
 supabase/.temp/
 ARRAY\[search_path=""\]
+
+# Timestamped local backups
+*.bak-*

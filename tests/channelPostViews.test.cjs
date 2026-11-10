@@ -2,9 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const frontendRoot = process.env.ZANNYCHAT_FRONTEND_ROOT || path.resolve(__dirname, '../../zannychat-front-github');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/channels.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0042_channel_post_views.sql'), 'utf8');
-const screen = fs.readFileSync(path.join(__dirname, '../../zannychat-frontend-main/src/screens/ChannelsScreen.js'), 'utf8');
+const screen = fs.readFileSync(path.join(frontendRoot, 'src/screens/ChannelsScreen.js'), 'utf8');
 
 test('channel post views count distinct authenticated users and tolerate repeated loads', () => {
   assert.match(route, /from\('channel_post_views'\)[\s\S]*?onConflict: 'post_id,user_id', ignoreDuplicates: true/);

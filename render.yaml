@@ -16,3 +16,9 @@ services:
         sync: false
       - key: INTERNAL_WEBHOOK_SECRET
         sync: false
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_SHARED_SECRET
+        sync: false
+      - key: TURN_CREDENTIAL_TTL_SECONDS
+        value: '3600'

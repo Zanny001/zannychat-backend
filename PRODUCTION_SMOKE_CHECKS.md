@@ -10,3 +10,11 @@ The backend exposes three public operational endpoints:
 After deploying the backend changes, run `node scripts/smoke-production.mjs` from the backend directory. It only makes public GET requests; it does not sign in, write data, or require credentials. Configure `ZANNYCHAT_FRONTEND_URL` and `ZANNYCHAT_BACKEND_URL` to test staging or alternate deployments.
 
 **Release gate:** do not route production traffic to a revision unless the frontend and backend root/liveness checks pass and readiness confirms `supabaseReachable: true`. The smoke script will intentionally fail while Render is unavailable or Supabase is unreachable. It cannot verify authenticated flows, RLS, push notifications, realtime delivery, media permissions, or physical-device behavior; those require separate staging tests.
+
+
+Current production targets (2026-11-05):
+- Frontend: https://zannychat-app.netlify.app
+- Backend: https://zannychat-backend-1.onrender.com
+- Supabase project URL: https://vithpppgyjmazxvogvno.supabase.co
+
+The smoke script defaults to these frontend/backend hosts. Override with `ZANNYCHAT_FRONTEND_URL` and `ZANNYCHAT_BACKEND_URL` for staging.

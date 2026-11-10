@@ -1,4 +1,4 @@
-name: Deliver Scheduled Messages
+name: Run Scheduled Backend Workers
 
 on:
   schedule:
@@ -6,13 +6,16 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: scheduled-message-delivery
+  group: scheduled-backend-workers
   cancel-in-progress: false
 
 jobs:
   deliver:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - name: Check out repository
@@ -25,10 +28,17 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        id: dependencies
         run: npm ci
 
       - name: Deliver due scheduled messages
+        if: ${{ always() && steps.dependencies.outcome == 'success' }}
         run: npm run jobs:scheduled-messages
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Clean up unreferenced message attachments
+        if: ${{ always() && steps.dependencies.outcome == 'success' }}
+        run: npm run jobs:attachment-cleanup
+
+      - name: Send pending call invitations
+        if: ${{ always() && steps.dependencies.outcome == 'success' }}
+        run: npm run jobs:call-notifications

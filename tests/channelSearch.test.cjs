@@ -4,9 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+const frontendRoot = process.env.ZANNYCHAT_FRONTEND_ROOT || path.resolve(root, '../zannychat-front-github');
 const route = fs.readFileSync(path.join(root, 'src/routes/channels.js'), 'utf8');
-const api = fs.readFileSync(path.resolve(root, '../zannychat-frontend-main/src/services/api.js'), 'utf8');
-const screen = fs.readFileSync(path.resolve(root, '../zannychat-frontend-main/src/screens/ChannelsScreen.js'), 'utf8');
+const api = fs.readFileSync(path.join(frontendRoot, 'src/services/api.js'), 'utf8');
+const screen = fs.readFileSync(path.join(frontendRoot, 'src/screens/ChannelsScreen.js'), 'utf8');
 
 test('channel directory search bounds and sanitizes query text before PostgREST filters', () => {
   assert.ok(route.includes("typeof req.query.q === 'string'"));
