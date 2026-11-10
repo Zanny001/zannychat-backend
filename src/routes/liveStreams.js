@@ -157,6 +157,26 @@ router.post('/:streamId/comment', async (req, res) => {
   }
 });
 
+router.post('/:streamId/comments/:commentId/hide', async (req, res) => {
+  const { streamId, commentId } = req.params;
+  if (!validId(streamId) || !validId(commentId)) return res.status(400).json({ error: 'Invalid LIVE comment reference' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can moderate LIVE comments' });
+    const { data, error } = await supabaseAdmin.from('live_stream_comments')
+      .update({ moderation_status: 'hidden' })
+      .eq('id', commentId).eq('stream_id', streamId)
+      .select('id,moderation_status').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'LIVE comment not found' });
+    return res.json({ hidden: true, comment: data });
+  } catch (error) {
+    console.error('[live] comment moderation failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not moderate LIVE comment' });
+  }
+});
+
 router.post('/:streamId/react', async (req, res) => {
   const streamId = req.params.streamId;
   const reaction = req.body?.reaction;
