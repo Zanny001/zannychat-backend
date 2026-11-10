@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
+const { sendPushToUser } = require('../config/pushClient');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 20, error: 'Group-call actions are rate-limited.' }));
@@ -41,6 +42,7 @@ async function getGroupMembership(conversationId, userId) {
 
 router.post('/', async (req, res) => {
   const conversationId = String(req.body?.conversationId || '');
+  const callType = req.body?.callType === 'video' ? 'video' : 'audio';
   if (!validId(conversationId)) return res.status(400).json({ error: 'Invalid group conversation id' });
   const config = getLiveKitConfig();
   if (!config) return res.status(503).json({ error: 'Group calling is not enabled on this server yet' });
@@ -58,10 +60,11 @@ router.post('/', async (req, res) => {
       conversation_id: conversationId,
       host_user_id: req.user.id,
       room_name: roomName,
+      call_type: callType,
       status: 'active',
       max_participants: Math.min(16, group.members.length),
       started_at: now,
-    }).select('id,conversation_id,host_user_id,room_name,status,max_participants,created_at,started_at').single();
+    }).select('id,conversation_id,host_user_id,room_name,call_type,status,max_participants,created_at,started_at').single();
     if (roomError) {
       if (roomError.code === '23505') return res.status(409).json({ error: 'This group already has an active call' });
       throw roomError;
@@ -78,11 +81,20 @@ router.post('/', async (req, res) => {
       await supabaseAdmin.from('group_call_rooms').update({ status: 'ended', ended_at: now }).eq('id', roomId);
       throw participantError;
     }
+    const invitationResults = await Promise.allSettled(group.members
+      .filter((member) => member.user_id !== req.user.id)
+      .map((member) => sendPushToUser(member.user_id, {
+        title: callType === 'video' ? 'Incoming group video call' : 'Incoming group audio call',
+        body: `${req.user.user_metadata?.name || req.user.email || 'A group member'} started a call in ${group.conversation.name || 'your group'}`,
+        data: { type: 'group_call_invite', groupCallId: roomId, conversationId, callType },
+      })));
+    const pushAccepted = invitationResults.filter((result) => result.status === 'fulfilled' && Number(result.value?.sent) > 0).length;
     return res.status(201).json({
       room,
       livekitUrl: config.url,
       token: tokenFor(req.user, roomName, config),
       invitedCount: Math.max(0, group.members.length - 1),
+      pushAcceptedDevices: pushAccepted,
     });
   } catch (error) {
     console.error('[group-calls] create failed:', error?.message || error);
