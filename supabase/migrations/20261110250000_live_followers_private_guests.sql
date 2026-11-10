@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_invites (
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   invited_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  requested_by uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   invitation_type text NOT NULL CHECK (invitation_type IN ('viewer','guest')),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending','requested','accepted','declined','revoked')),
