@@ -16,7 +16,7 @@ function validId(value) {
 function tokenFor(user, roomName, config) {
   return createLiveKitToken({
     identity: user.id,
-    name: user.name || user.email || 'ZannyChat member',
+    name: user.user_metadata?.name || user.user_metadata?.full_name || 'ZannyChat member',
     room: roomName,
     canPublish: true,
     canSubscribe: true,
@@ -85,7 +85,7 @@ router.post('/', async (req, res) => {
       .filter((member) => member.user_id !== req.user.id)
       .map((member) => sendPushToUser(member.user_id, {
         title: callType === 'video' ? 'Incoming group video call' : 'Incoming group audio call',
-        body: `${req.user.user_metadata?.name || req.user.email || 'A group member'} started a call in ${group.conversation.name || 'your group'}`,
+        body: `${req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A group member'} started a call in ${group.conversation.name || 'your group'}`,
         data: { type: 'group_call_invite', groupCallId: roomId, conversationId, callType },
       })));
     const pushAccepted = invitationResults.filter((result) => result.status === 'fulfilled' && Number(result.value?.sent) > 0).length;
@@ -97,6 +97,7 @@ router.post('/', async (req, res) => {
       pushAcceptedDevices: pushAccepted,
     });
   } catch (error) {
+    if (error?.code === '23505') return res.status(409).json({ error: 'This group already has an active call' });
     console.error('[group-calls] create failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not start this group call' });
   }
