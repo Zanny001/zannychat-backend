@@ -20,8 +20,8 @@ DECLARE
   v_invited_count integer := COALESCE(cardinality(p_invited_user_ids), 0);
   v_now timestamptz := now();
 BEGIN
-  IF p_call_type NOT IN ('audio','video')
-     OR p_max_participants NOT BETWEEN 2 AND 16
+  IF p_call_type IS NULL OR p_call_type NOT IN ('audio','video')
+     OR p_max_participants IS NULL OR p_max_participants NOT BETWEEN 2 AND 16
      OR v_invited_count <> p_max_participants - 1
      OR v_invited_count <> (SELECT count(DISTINCT invitee.user_id) FROM unnest(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) AS invitee(user_id))
      OR p_host_user_id = ANY(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) THEN
