@@ -138,3 +138,42 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
   assert.equal(expoSent, 0);
   assert.ok(updates.some((item) => item.id === 'voip-call' && item.values.status === 'delivered'));
 });
+
+
+test('native VoIP is withheld when a signed terminal-event credential cannot be issued', async () => {
+  const previousSigning = process.env.CALL_EVENT_SIGNING_SECRET;
+  const previousService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.CALL_EVENT_SIGNING_SECRET;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let voipCalls = 0;
+  let expoCalls = 0;
+  const admin = {
+    rpc: async () => ({ data: [{ call_id: 'unsigned-call', attempt_count: 0 }], error: null }),
+    from(table) {
+      if (table === 'call_sessions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: {
+        id: 'unsigned-call', caller_id: 'caller', callee_id: 'callee', conversation_id: 'conv',
+        call_type: 'audio', status: 'ringing', created_at: '2026-11-05T08:00:00.000Z',
+        expires_at: '2026-11-05T08:01:00.000Z',
+      }, error: null }) }) }) };
+      if (table === 'profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'Caller', avatar_url: null }, error: null }) }) }) };
+      if (table === 'call_invitation_notifications') return { update: () => ({ eq: async () => ({ error: null }) }) };
+      throw new Error('Unexpected table ' + table);
+    },
+  };
+  try {
+    const result = await runCallInvitationNotifications({
+      admin,
+      now: () => new Date('2026-11-05T08:00:00.000Z'),
+      sendVoipPush: async () => { voipCalls += 1; return { sent: 1, failed: 0 }; },
+      sendPush: async () => { expoCalls += 1; return { sent: 1, failed: 0 }; },
+    });
+    assert.equal(voipCalls, 0);
+    assert.equal(expoCalls, 1);
+    assert.equal(result.sent, 1);
+  } finally {
+    if (previousSigning === undefined) delete process.env.CALL_EVENT_SIGNING_SECRET;
+    else process.env.CALL_EVENT_SIGNING_SECRET = previousSigning;
+    if (previousService === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previousService;
+  }
+});
