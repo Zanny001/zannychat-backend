@@ -34,3 +34,11 @@ test('service-role native reconciliation may persist caller cancellation without
   assert.match(cancellationMigration, /call identity fields are immutable/);
   assert.match(cancellationMigration, /invalid call state transition/);
 });
+
+test('outgoing native event credentials can only be minted by the active call owner', () => {
+  assert.match(callsRoute, /router\.post\('\/:callId\/native-event-token'/);
+  assert.match(callsRoute, /call\.caller_id !== req\.user\.id/);
+  assert.match(callsRoute, /createCallEventToken\(callId, Date\.now\(\), req\.user\.id\)/);
+  assert.match(callsRoute, /actorId === call\.caller_id \? 'cancelled'/);
+  assert.match(callsRoute, /actorId === call\.caller_id \? call\.callee_id : call\.caller_id/);
+});
