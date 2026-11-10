@@ -52,29 +52,16 @@ test('missing VoIP token schema degrades to Expo fallback', async () => {
 });
 
 
-test('remote call-ended delivery includes APNs VoIP devices and skips safely without APNs credentials', async () => {
-  const names = ['APNS_PRIVATE_KEY', 'APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_BUNDLE_ID'];
-  const old = Object.fromEntries(names.map((name) => [name, process.env[name]]));
-  for (const name of names) delete process.env[name];
-  try {
-    const result = await sendCallEndedToUser(adminWithTokens([
-      { token: 'a'.repeat(64), token_type: 'APNS_VOIP' },
-    ]), 'user-1', 'call-1', 'missed');
-    assert.equal(result.sent, 0);
-    assert.equal(result.failed, 0);
-    assert.equal(result.skipped, 1);
-  } finally {
-    for (const name of names) {
-      if (old[name] === undefined) delete process.env[name];
-      else process.env[name] = old[name];
-    }
-  }
-});
 
-test('call-ended sender supports APNs callEnded envelope and normalized terminal reasons', () => {
+
+test('remote call-ended pushes remain FCM-only and never use APNs VoIP', async () => {
+  const result = await sendCallEndedToUser(adminWithTokens([
+    { token: 'a'.repeat(64), token_type: 'APNS_VOIP' },
+  ]), 'user-1', 'call-1', 'missed');
+  assert.equal(result.sent, 0);
+  assert.equal(result.failed, 0);
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/config/callVoipPushClient.js'), 'utf8');
-  assert.match(source, /sendApnsCallEnded\(row\.token, event\)/);
-  assert.match(source, /\{ callEnded: event \}/);
-  assert.match(source, /status === 'missed'\) return 'unanswered'/);
-  assert.match(source, /status === 'declined'\) return 'declinedElsewhere'/);
+  assert.doesNotMatch(source, /sendApnsCallEnded/);
+  assert.match(source, /messageType: 'callEnded'/);
+  assert.match(source, /row\.token_type === 'FCM'/);
 });
