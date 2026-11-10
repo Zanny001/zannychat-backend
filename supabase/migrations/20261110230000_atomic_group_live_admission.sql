@@ -31,7 +31,10 @@ BEGIN
   SELECT status INTO v_existing_status
     FROM public.group_call_participants
    WHERE room_id = p_room_id AND user_id = p_user_id;
-  IF NOT FOUND OR v_existing_status <> 'joined' THEN
+  IF NOT FOUND OR v_existing_status = 'declined' THEN
+    RAISE EXCEPTION 'user was not invited to this group call' USING ERRCODE = '42501';
+  END IF;
+  IF v_existing_status <> 'joined' THEN
     SELECT count(*) INTO v_joined
       FROM public.group_call_participants
      WHERE room_id = p_room_id AND status = 'joined';
