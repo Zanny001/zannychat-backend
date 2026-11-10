@@ -18,6 +18,7 @@ AS $$
 DECLARE
   v_room public.group_call_rooms%rowtype;
   v_invited_count integer := COALESCE(cardinality(p_invited_user_ids), 0);
+  v_invitee uuid;
   v_now timestamptz := now();
 BEGIN
   IF p_call_type IS NULL OR p_call_type NOT IN ('audio','video')
@@ -28,24 +29,32 @@ BEGIN
     RAISE EXCEPTION 'invalid group call participants or settings' USING ERRCODE = '22023';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM public.conversations c
-    JOIN public.conversation_participants cp ON cp.conversation_id = c.id
-    WHERE c.id = p_conversation_id AND c.is_group = true AND cp.user_id = p_host_user_id
-  ) THEN
+  PERFORM 1 FROM public.conversations c
+   WHERE c.id = p_conversation_id AND c.is_group = true
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'group conversation not found' USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM 1 FROM public.conversation_participants cp
+   WHERE cp.conversation_id = p_conversation_id AND cp.user_id = p_host_user_id
+   FOR SHARE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'host is not a member of this group' USING ERRCODE = '42501';
   END IF;
 
-  IF EXISTS (
-    SELECT 1
+  FOR v_invitee IN
+    SELECT invitee.user_id
       FROM unnest(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) AS invitee(user_id)
-     WHERE NOT EXISTS (
-       SELECT 1 FROM public.conversation_participants cp
-        WHERE cp.conversation_id = p_conversation_id AND cp.user_id = invitee.user_id
-     )
-  ) THEN
-    RAISE EXCEPTION 'an invited user is not a member of this group' USING ERRCODE = '42501';
-  END IF;
+     ORDER BY invitee.user_id
+  LOOP
+    PERFORM 1 FROM public.conversation_participants cp
+     WHERE cp.conversation_id = p_conversation_id AND cp.user_id = v_invitee
+     FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'an invited user is not a member of this group' USING ERRCODE = '42501';
+    END IF;
+  END LOOP;
 
   INSERT INTO public.group_call_rooms(
     id, conversation_id, host_user_id, room_name, call_type,
