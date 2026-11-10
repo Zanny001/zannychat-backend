@@ -77,6 +77,39 @@ BEGIN
 END;
 $$;
 
+
+CREATE OR REPLACE FUNCTION public.leave_live_stream(p_stream_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+  v_stream public.live_streams%rowtype;
+  v_updated integer;
+BEGIN
+  SELECT * INTO v_stream
+    FROM public.live_streams
+   WHERE id = p_stream_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_stream.status <> 'live' THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.live_stream_participants
+     SET status = 'left', left_at = COALESCE(left_at, now())
+   WHERE stream_id = p_stream_id
+     AND user_id = p_user_id
+     AND status = 'joined';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.leave_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.leave_live_stream(uuid, uuid) TO service_role;
+
 REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.end_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text) TO service_role;
