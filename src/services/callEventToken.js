@@ -26,7 +26,7 @@ function createCallEventToken(callId, nowMs = Date.now(), actorId = '') {
 function parseToken(token) {
   if (typeof token !== 'string') return null;
   const parts = token.split('.');
-  if (![2, 3].includes(parts.length) || !/^\\d{10}$/.test(parts[0])) return null;
+  if (![2, 3].includes(parts.length) || !/^\d{10}$/.test(parts[0])) return null;
   const legacy = parts.length === 2;
   const actorId = legacy || parts[1] === '-' ? '' : parts[1];
   const supplied = legacy ? parts[1] : parts[2];
