@@ -141,8 +141,9 @@ router.get('/history', async (req, res) => {
         : participant.status === 'invited' && room.status === 'ended' ? 'missed'
         : room.status === 'ended' ? 'ended'
         : participant.status === 'joined' ? 'active' : 'ringing';
-      const durationSeconds = participant.joined_at && participant.left_at
-        ? Math.max(0, Math.floor((Date.parse(participant.left_at) - Date.parse(participant.joined_at)) / 1000))
+      const finishAt = participant.left_at || room.ended_at;
+      const durationSeconds = participant.joined_at && finishAt
+        ? Math.max(0, Math.floor((Date.parse(finishAt) - Date.parse(participant.joined_at)) / 1000))
         : 0;
       return {
         id: room.id, conversation_id: room.conversation_id,
@@ -203,8 +204,12 @@ router.post('/:roomId/leave', async (req, res) => {
     const { data: joined, error: joinedError } = await supabaseAdmin.from('group_call_participants')
       .select('user_id').eq('room_id', roomId).eq('status', 'joined');
     if (joinedError) throw joinedError;
-    if (!joined?.length) await supabaseAdmin.from('group_call_rooms')
-      .update({ status: 'ended', ended_at: now }).eq('id', roomId).in('status', ['ringing','active']);
+    if (!joined?.length) {
+      await supabaseAdmin.from('group_call_rooms')
+        .update({ status: 'ended', ended_at: now }).eq('id', roomId).in('status', ['ringing','active']);
+      await supabaseAdmin.from('group_call_participants').update({ status: 'left', left_at: now })
+        .eq('room_id', roomId).eq('status', 'joined');
+    }
     return res.json({ left: true, roomEnded: !joined?.length });
   } catch (error) {
     console.error('[group-calls] leave failed:', error?.message || error);
