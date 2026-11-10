@@ -6,7 +6,7 @@ const { createHmac } = require('node:crypto');
 const { createLiveKitToken, getLiveKitConfig } = require('../src/services/livekitToken');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110210000_group_call_rooms.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065856_group_call_rooms.sql'), 'utf8');
 const pushClient = fs.readFileSync(path.join(__dirname, '../src/config/pushClient.js'), 'utf8');
 
 test('LiveKit access tokens are short-lived, room-scoped, and signed with the server secret', () => {
