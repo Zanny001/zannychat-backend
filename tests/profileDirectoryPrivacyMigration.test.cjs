@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0069_privacy_aware_profile_discovery.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110193003_privacy_aware_profile_discovery_0069.sql'), 'utf8');
 
 test('profile discovery only creates the legacy projection when no function signature exists', () => {
   assert.match(sql, /if to_regprocedure\('public\.get_contact_directory\(uuid\)'\) is null then/i);
