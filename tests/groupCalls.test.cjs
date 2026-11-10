@@ -62,6 +62,8 @@ test('group-call departure serializes on the room row and ends the room atomical
   assert.ok(departureMigration.includes('FROM public.group_call_rooms'));
   assert.ok(departureMigration.includes('FOR UPDATE'));
   assert.ok(departureMigration.includes("status = 'joined'"));
+  assert.ok(departureMigration.includes('GET DIAGNOSTICS v_updated = ROW_COUNT'));
+  assert.ok(departureMigration.includes('IF v_updated = 0 THEN'));
   assert.ok(departureMigration.includes("IF v_joined = 0 AND v_room.status IN ('ringing','active')"));
   assert.ok(departureMigration.includes("SET status = 'ended'"));
   assert.ok(departureMigration.includes('TO service_role'));
