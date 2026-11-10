@@ -107,6 +107,30 @@ router.get('/following', async (req, res) => {
   }
 });
 
+router.get('/invite-candidates', async (req, res) => {
+  try {
+    const { data: memberships, error: membershipError } = await supabaseAdmin.from('conversation_participants')
+      .select('conversation_id').eq('user_id', req.user.id).limit(500);
+    if (membershipError) throw membershipError;
+    const conversationIds = [...new Set((memberships || []).map((row) => row.conversation_id))];
+    if (!conversationIds.length) return res.json({ candidates: [] });
+    const { data: participants, error: participantError } = await supabaseAdmin.from('conversation_participants')
+      .select('user_id').in('conversation_id', conversationIds).neq('user_id', req.user.id).limit(500);
+    if (participantError) throw participantError;
+    const candidateIds = [...new Set((participants || []).map((row) => row.user_id))];
+    const visibleIds = [];
+    for (const userId of candidateIds) if (!await hasBlockBetween(req.user.id, userId)) visibleIds.push(userId);
+    if (!visibleIds.length) return res.json({ candidates: [] });
+    const { data: profiles, error: profileError } = await supabaseAdmin.from('profiles')
+      .select('id,name,avatar_color').in('id', visibleIds).order('name', { ascending: true }).limit(100);
+    if (profileError) throw profileError;
+    return res.json({ candidates: profiles || [] });
+  } catch (error) {
+    console.error('[live] invite candidate lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load invite contacts' });
+  }
+});
+
 router.get('/invitations', async (req, res) => {
   try {
     const { data: invites, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
