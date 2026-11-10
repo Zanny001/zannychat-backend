@@ -24,3 +24,11 @@ test('native VoIP token registration and call-end delivery routes are authentica
   assert.ok(route.includes('sendCallEndedToUser'));
   assert.ok(route.includes("['APNS_VOIP', 'FCM']"));
 });
+
+test('native call-end reconciliation is signed and mounted before user authentication middleware', () => {
+  const eventRoute = route.indexOf("router.post('/native-event'");
+  const authMiddleware = route.indexOf('router.use(requireAuth');
+  assert.ok(eventRoute >= 0 && authMiddleware > eventRoute);
+  assert.ok(route.includes('verifyCallEventToken(callId, token)'));
+  assert.ok(route.includes("reason === 'unanswered' ? 'missed' : 'declined'"));
+});

@@ -13,7 +13,6 @@ const router = express.Router();
  router.post('/native-event', makeLimiter({ windowMs: 60 * 1000, max: 20, error: 'Native call events are rate-limited.' }), async (req, res) => {
    const callId = typeof req.body?.callId === 'string' ? req.body.callId.trim() : '';
    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
-   const reason = typeof req.body?.reason === 'string' ? req.body.reason : '';
    if (!/^[0-9a-f-]{36}$/i.test(callId) || !token) return res.status(400).json({ error: 'Invalid native call event' });
    const { verifyCallEventToken } = require('../services/callEventToken');
    if (!verifyCallEventToken(callId, token)) return res.status(403).json({ error: 'Invalid or expired native call event' });
@@ -22,7 +21,7 @@ const router = express.Router();
    if (error) return res.status(503).json({ error: 'Could not inspect call state' });
    if (!call) return res.status(404).json({ error: 'Call not found' });
    if (!['ringing', 'accepted'].includes(call.status)) return res.json({ updated: false, alreadyEnded: true });
-   const nextStatus = call.status === 'ringing' ? (reason === 'unanswered' ? 'missed' : 'declined') : 'ended';
+   const nextStatus = call.status === 'ringing' ? 'declined' : 'ended';
    const { data: updated, error: updateError } = await supabaseAdmin.from('call_sessions')
      .update({ status: nextStatus }).eq('id', callId).in('status', ['ringing', 'accepted'])
      .select('id,status').maybeSingle();
