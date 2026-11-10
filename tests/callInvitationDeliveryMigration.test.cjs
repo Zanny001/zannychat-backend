@@ -21,7 +21,7 @@ test('only the service role can claim queued invitations', () => {
 });
 
 test('call invitation claim overload supports call-scoped delivery', () => {
-  const targeted = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110190000_scope_call_invitation_claims.sql'), 'utf8');
+  const targeted = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
   assert.ok(targeted.includes('p_call_id uuid'));
   assert.ok(targeted.includes('p_call_id IS NULL OR q.call_id = p_call_id'));
   assert.ok(targeted.includes('FOR UPDATE SKIP LOCKED'));
