@@ -23,7 +23,7 @@ BEGIN
   IF p_call_type NOT IN ('audio','video')
      OR p_max_participants NOT BETWEEN 2 AND 16
      OR v_invited_count <> p_max_participants - 1
-     OR v_invited_count <> (SELECT count(DISTINCT invitee_id) FROM unnest(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) invitee_id)
+     OR v_invited_count <> (SELECT count(DISTINCT invitee.user_id) FROM unnest(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) AS invitee(user_id))
      OR p_host_user_id = ANY(COALESCE(p_invited_user_ids, ARRAY[]::uuid[])) THEN
     RAISE EXCEPTION 'invalid group call participants or settings' USING ERRCODE = '22023';
   END IF;
