@@ -56,6 +56,25 @@ BEGIN
     END IF;
   END LOOP;
 
+  WITH stale_rooms AS (
+    UPDATE public.group_call_rooms r
+       SET status = 'ended', ended_at = COALESCE(ended_at, v_now)
+     WHERE r.conversation_id = p_conversation_id
+       AND r.status IN ('ringing','active')
+       AND COALESCE(r.started_at, r.created_at) <= v_now - interval '2 minutes'
+       AND NOT EXISTS (
+         SELECT 1 FROM public.group_call_participants p
+          WHERE p.room_id = r.id
+            AND p.user_id <> r.host_user_id
+            AND p.status = 'joined'
+       )
+     RETURNING r.id
+  )
+  UPDATE public.group_call_participants p
+     SET status = 'left', left_at = COALESCE(left_at, v_now)
+   WHERE p.room_id IN (SELECT id FROM stale_rooms)
+     AND p.status = 'invited';
+
   INSERT INTO public.group_call_rooms(
     id, conversation_id, host_user_id, room_name, call_type,
     status, max_participants, started_at
