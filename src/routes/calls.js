@@ -108,12 +108,16 @@ router.post('/:callId/end-notify', async (req, res) => {
 });
 
 router.delete('/voip-token', async (req, res) => {
+  const removeAll = req.body?.all === true;
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
-  if (!token || token.length > 4096) return res.status(400).json({ error: 'Invalid VoIP push token' });
-  const { error } = await supabaseAdmin.from('call_voip_tokens').delete()
-    .eq('user_id', req.user.id).eq('token', token);
+  if (!removeAll && (!token || token.length > 4096)) {
+    return res.status(400).json({ error: 'Provide a VoIP token or request account-wide cleanup' });
+  }
+  let query = supabaseAdmin.from('call_voip_tokens').delete().eq('user_id', req.user.id);
+  if (!removeAll) query = query.eq('token', token);
+  const { error } = await query;
   if (error) return res.status(503).json({ error: 'Could not remove call notifications' });
-  return res.json({ removed: true });
+  return res.json({ removed: true, scope: removeAll ? 'account' : 'device' });
 });
 
 router.post('/:callId/notify', async (req, res) => {
