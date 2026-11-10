@@ -392,6 +392,9 @@ router.patch('/:streamId/guest-requests/:userId', async (req, res) => {
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can approve guest requests' });
     if (!stream.allow_guests) return res.status(409).json({ error: 'Guest participation is disabled' });
+    if (await hasBlockBetween(stream.creator_id, userId)) return res.status(403).json({ error: 'Guest access is unavailable' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'viewer') return res.status(409).json({ error: 'The requester is no longer a joined viewer' });
     const { data, error } = await supabaseAdmin.from('live_stream_invites')
       .update({ status, invited_by: req.user.id, updated_at: new Date().toISOString() })
       .eq('stream_id', streamId).eq('user_id', userId)
