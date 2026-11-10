@@ -7,6 +7,29 @@ const { sendCallEndedToUser } = require('../config/callVoipPushClient');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 
 const router = express.Router();
+
+ // This signed, call-scoped endpoint is intentionally registered before
+ // requireAuth: Android's native receiver may run while the app is killed.
+ router.post('/native-event', makeLimiter({ windowMs: 60 * 1000, max: 20, error: 'Native call events are rate-limited.' }), async (req, res) => {
+   const callId = typeof req.body?.callId === 'string' ? req.body.callId.trim() : '';
+   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+   if (!/^[0-9a-f-]{36}$/i.test(callId) || !token) return res.status(400).json({ error: 'Invalid native call event' });
+   const { verifyCallEventToken } = require('../services/callEventToken');
+   if (!verifyCallEventToken(callId, token)) return res.status(403).json({ error: 'Invalid or expired native call event' });
+   const { data: call, error } = await supabaseAdmin.from('call_sessions')
+     .select('id,caller_id,status').eq('id', callId).maybeSingle();
+   if (error) return res.status(503).json({ error: 'Could not inspect call state' });
+   if (!call) return res.status(404).json({ error: 'Call not found' });
+   if (!['ringing', 'accepted'].includes(call.status)) return res.json({ updated: false, alreadyEnded: true });
+   const nextStatus = call.status === 'ringing' ? 'declined' : 'ended';
+   const { data: updated, error: updateError } = await supabaseAdmin.from('call_sessions')
+     .update({ status: nextStatus }).eq('id', callId).in('status', ['ringing', 'accepted'])
+     .select('id,status').maybeSingle();
+   if (updateError) return res.status(503).json({ error: 'Could not update call state' });
+   if (updated) await sendCallEndedToUser(supabaseAdmin, call.caller_id, callId, nextStatus);
+   return res.json({ updated: Boolean(updated), status: updated?.status || nextStatus });
+ });
+
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Call setup is rate-limited. Please wait before trying again.' }));
 
 // The caller kicks the durable queue immediately after creating a call.
