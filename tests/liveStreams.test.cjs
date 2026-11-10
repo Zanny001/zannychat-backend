@@ -151,4 +151,7 @@ test('LIVE guest publishing requires creator approval and the stream guest switc
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
   assert.ok(route.includes("p_visibility: visibility"));
   assert.ok(route.includes("p_allow_guests: allowGuests"));
+  assert.ok(route.includes('p_invited_user_ids: inviteeIds'));
+  assert.ok(accessMigration.includes('p_invited_user_ids uuid[]'));
+  assert.ok(accessMigration.includes("invitation_type, status, created_at, updated_at"));
 });
