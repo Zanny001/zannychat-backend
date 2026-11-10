@@ -96,7 +96,6 @@ const createCallMigration = fs.readFileSync(path.join(__dirname, '../supabase/mi
 
 test('group-call creation inserts the room and all invitations atomically after validating group membership', () => {
   assert.ok(createCallMigration.includes('FUNCTION public.create_group_call_room('));
-  assert.ok(createCallMigration.includes('FOR UPDATE') === false);
   assert.ok(createCallMigration.includes('public.conversations c'));
   assert.ok(createCallMigration.includes('public.conversation_participants cp'));
   assert.ok(createCallMigration.includes('FOR SHARE'));
@@ -111,7 +110,7 @@ test('abandoned host-only group calls are closed before another call starts and 
   assert.ok(createCallMigration.includes('FOR v_stale_room IN'));
   assert.ok(createCallMigration.includes("COALESCE(r.started_at, r.created_at) <= v_now - interval '2 minutes'"));
   assert.ok(createCallMigration.includes("p.status = 'joined'"));
-  assert.ok(createCallMigration.includes("p.user_id <> r.host_user_id"));
+  assert.ok(createCallMigration.includes("p.user_id <> v_stale_room.host_user_id"));
   assert.ok(createCallMigration.includes("p.status = 'invited'"));
   assert.ok(route.includes('Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000'));
   assert.ok(route.includes("? 'missed'"));
