@@ -37,6 +37,20 @@ async function hasBlockBetween(userA, userB) {
   return Boolean(first || second);
 }
 
+async function getBlockedUserIds(userId, otherIds) {
+  const ids = [...new Set((otherIds || []).filter((id) => validId(id) && id !== userId))];
+  if (!ids.length) return new Set();
+  const [blockedByUser, blockedUser] = await Promise.all([
+    supabaseAdmin.from('blocked_users').select('blocked_id').eq('blocker_id', userId).in('blocked_id', ids),
+    supabaseAdmin.from('blocked_users').select('blocker_id').eq('blocked_id', userId).in('blocker_id', ids),
+  ]);
+  if (blockedByUser.error || blockedUser.error) throw blockedByUser.error || blockedUser.error;
+  return new Set([
+    ...(blockedByUser.data || []).map((row) => row.blocked_id),
+    ...(blockedUser.data || []).map((row) => row.blocker_id),
+  ]);
+}
+
 async function getStream(streamId) {
   const { data, error } = await supabaseAdmin.from('live_streams')
     .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at')
@@ -119,15 +133,7 @@ router.get('/invite-candidates', async (req, res) => {
     if (participantError) throw participantError;
     const candidateIds = [...new Set((participants || []).map((row) => row.user_id))];
     if (!candidateIds.length) return res.json({ candidates: [] });
-    const [blockedByMe, blockedMe] = await Promise.all([
-      supabaseAdmin.from('blocked_users').select('blocked_id').eq('blocker_id', req.user.id).in('blocked_id', candidateIds),
-      supabaseAdmin.from('blocked_users').select('blocker_id').eq('blocked_id', req.user.id).in('blocker_id', candidateIds),
-    ]);
-    if (blockedByMe.error || blockedMe.error) throw blockedByMe.error || blockedMe.error;
-    const blockedIds = new Set([
-      ...(blockedByMe.data || []).map((row) => row.blocked_id),
-      ...(blockedMe.data || []).map((row) => row.blocker_id),
-    ]);
+    const blockedIds = await getBlockedUserIds(req.user.id, candidateIds);
     const visibleIds = candidateIds.filter((userId) => !blockedIds.has(userId));
     if (!visibleIds.length) return res.json({ candidates: [] });
     const { data: profiles, error: profileError } = await supabaseAdmin.from('profiles')
@@ -155,12 +161,10 @@ router.get('/invitations', async (req, res) => {
       : { data: [], error: null };
     if (streamError) throw streamError;
     const streamById = new Map((streams || []).map((row) => [row.id, row]));
-    const visibleInvitations = [];
-    for (const invite of invites || []) {
-      const stream = streamById.get(invite.stream_id);
-      if (stream && !await hasBlockBetween(stream.creator_id, req.user.id)) visibleInvitations.push({ ...invite, stream });
-    }
-    return res.json({ invitations: visibleInvitations });
+    const inviteRows = (invites || []).map((invite) => ({ ...invite, stream: streamById.get(invite.stream_id) || null }))
+      .filter((invite) => invite.stream);
+    const blockedIds = await getBlockedUserIds(req.user.id, inviteRows.map((invite) => invite.stream.creator_id));
+    return res.json({ invitations: inviteRows.filter((invite) => !blockedIds.has(invite.stream.creator_id)) });
   } catch (error) {
     console.error('[live] invitation list failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE invitations' });
@@ -179,8 +183,9 @@ router.get('/following/streams', async (req, res) => {
       .eq('status', 'live').in('visibility', ['public','followers'])
       .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    const visible = [];
-    for (const stream of data || []) if (!await hasBlockBetween(stream.creator_id, req.user.id)) visible.push({ ...stream, is_creator: stream.creator_id === req.user.id });
+    const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
+    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
+      .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
     return res.json({ streams: visible });
   } catch (error) {
     console.error('[live] followed stream discovery failed:', error?.message || error);
@@ -195,8 +200,9 @@ router.get('/', async (req, res) => {
       .eq('status', 'live').eq('visibility', 'public')
       .order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    const visible = [];
-    for (const stream of data || []) if (!await hasBlockBetween(stream.creator_id, req.user.id)) visible.push({ ...stream, is_creator: stream.creator_id === req.user.id });
+    const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
+    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
+      .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
     return res.json({ streams: visible });
   } catch (error) {
     console.error('[live] discover failed:', error?.message || error);
