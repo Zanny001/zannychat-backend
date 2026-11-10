@@ -10,7 +10,7 @@ Source release:
 - Scheduled background workers: scheduled-message delivery, message attachment cleanup and call-invitation notifications
 - Node.js runtime configured in GitHub Actions: Node 22
 
-This document describes the source implementation and a controlled rollout procedure. It does not claim that production has been updated.
+This document describes the source implementation and a controlled rollout procedure. It records two narrow database-hardening migrations applied to production on 2026-11-10, but does not claim that the backend application has been deployed or that the historical migration ledger has been fully reconciled.
 
 ## 2. Database migration inventory
 
