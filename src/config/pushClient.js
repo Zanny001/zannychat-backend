@@ -20,12 +20,12 @@ async function sendPushToUser(userId, { title, body, data }) {
     .filter((row) => Expo.isExpoPushToken(row.expo_push_token))
     .map((row) => ({
       to: row.expo_push_token,
-      sound: data?.type === 'incoming_call' ? 'call_ring.wav' : 'default',
-      categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined,
+      sound: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'call_ring.wav' : 'default',
+      categoryId: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'incoming-call' : undefined,
       title,
       body,
       data: data || {},
-      ...(data?.type === 'incoming_call' ? { channelId: 'calls', priority: 'high', collapseId: data.callId } : {}),
+      ...(['incoming_call', 'group_call_invite'].includes(data?.type) ? { channelId: 'calls', priority: 'high', collapseId: data.callId || data.groupCallId } : {}),
     }));
 
   if (messages.length === 0) return { sent: 0, failed: 0, noTokens: true };
