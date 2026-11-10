@@ -72,7 +72,7 @@ router.post('/:callId/native-event-token', async (req, res) => {
 router.post('/voip-token', async (req, res) => {
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
   const type = req.body?.type;
-  if (token.length < 16 || token.length > 4096 || !['APNS_VOIP', 'FCM'].includes(type)) {
+  if (token.length < 16 || token.length > 4096 || !['APNS_VOIP', 'APNS_ALERT', 'FCM'].includes(type)) {
     return res.status(400).json({ error: 'Invalid VoIP push token' });
   }
   const platform = type === 'FCM' ? 'android' : 'ios';
