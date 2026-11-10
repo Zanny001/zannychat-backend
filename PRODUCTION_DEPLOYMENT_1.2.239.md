@@ -43,13 +43,18 @@ A dedicated regression test checks these grant and revoke statements.
 
 A read-only query against the linked production Supabase project verified that the effective table privileges currently match this intended access model. This verifies present permissions, not which migration or manual operation established them.
 
-The expected application migration ledger (`supabase_migrations.schema_migrations`) does not exist in the linked production database. The available `auth`, `realtime` and `storage` migration tables are subsystem histories and do not establish application migration history.
+The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110193118. This is a partial ledger, not a complete, independently verified record of every repository migration.
+
+The following local migration versions are absent from the remote ledger snapshot: 0057, 0058, 0060, 0061, 0062, 0063 and 0064. Read-only checks confirmed several corresponding database objects already exist (including phone-discovery objects, the call heartbeat/lease column and RPC, the status-expiry trigger/constraint, and the public-schema CREATE revocations). That establishes current schema state for those objects, but does not prove the exact source migration/version that created them.
+
+Several historical rows (including 0059, 0065, 0067, 0069 and 20261110170000) have no recorded statement array or creator metadata. Their presence proves that those version labels are recorded, but does not independently prove that the recorded SQL exactly matches the repository file. Timestamped replacement migrations for 0065–0073 are recorded separately. The 0071 timestamped source is the corrected variant; the old legacy 0071 file used a different parameter name and a less restrictive function search path and must not be replayed.
 
 Therefore:
-1. Preserve the verified live call-table privileges; no corrective migration is justified by the current evidence.
-2. Keep the restored grants in migration 0059 for fresh installations.
-3. Treat the production application migration history, including whether 0059 was formally recorded as applied, as unverified.
-4. Do not infer migration history from the current privileges or edit migration history to make it appear reconciled.
+1. Preserve the verified live call-table privileges and current durable-call-history behavior.
+2. Keep the exact, corrected timestamped migration sources that correspond to the recorded timestamped versions.
+3. Treat 0057–0058 and 0060–0064 as schema-present but ledger-unreconciled until their provenance is established.
+4. Do not run `supabase db push`, `--include-all`, migration repair, or a reset against production until a reviewed baseline accounts for every pending local version and every remote ledger row.
+5. Do not insert/delete ledger rows merely to make local and remote histories appear aligned.
 
 ### Migration history and production safety
 

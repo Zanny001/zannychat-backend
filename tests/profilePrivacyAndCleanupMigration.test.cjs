@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0066_profile_privacy_and_attachment_cleanup.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 
 test('profile details are owner-private and public projection filters fields by visibility', () => {
   assert.match(sql, /create table if not exists public\.profile_details/);

@@ -13,6 +13,34 @@ const accountRouter = require('./routes/account');
 const channelsRouter = require('./routes/channels');
 const discoveryRouter = require('./routes/discovery');
 const callsRouter = require('./routes/calls');
+const groupCallsRouter = require('./routes/groupCalls');
+const liveStreamsRouter = require('./routes/liveStreams');
+
+// Retry transient call-push failures while the API process is awake. The
+// authenticated /calls/:id/notify route handles immediate delivery; this
+// worker drains due retries and recovers stale processing leases.
+function startCallInvitationWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { runCallInvitationNotifications } = require('./jobs/callInvitationNotifications');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await runCallInvitationNotifications({ admin: supabaseAdmin, limit: 20 });
+    } catch (error) {
+      console.error('[calls] background invitation retry failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 5_000);
+  warmup.unref?.();
+  return timer;
+}
 
 const app = express();
 
@@ -61,6 +89,8 @@ app.use('/account', accountRouter);
 app.use('/channels', channelsRouter);
 app.use('/discovery', discoveryRouter);
 app.use('/calls', callsRouter);
+app.use('/group-calls', groupCallsRouter);
+app.use('/live', liveStreamsRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
 // secret auth. See internal.js / requireInternalSecret.
@@ -84,6 +114,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`ZannyChat backend listening on port ${PORT}`);
+    startCallInvitationWorker();
   });
 }
 

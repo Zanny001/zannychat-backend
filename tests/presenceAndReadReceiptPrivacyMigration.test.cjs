@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0070_presence_and_read_receipt_projection.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110193010_presence_and_read_receipt_projection_0070.sql'), 'utf8');
 
 test('presence is owner-written and server-filtered by contacts, blocks and independent privacy flags', () => {
   assert.match(sql, /create table if not exists public\.user_presence_sessions/);
