@@ -350,10 +350,10 @@ router.patch('/:streamId/reports/:reportId', async (req, res) => {
     const reviewedAt = status === 'reviewing' ? null : new Date().toISOString();
     const { data, error } = await supabaseAdmin.from('live_stream_reports').update({
       status, reviewed_by: req.user.id, reviewed_at: reviewedAt,
-    }).eq('stream_id', streamId).eq('id', reportId)
+    }).eq('stream_id', streamId).eq('id', reportId).in('status', ['open','reviewing'])
       .select('id,status,reviewed_by,reviewed_at').maybeSingle();
     if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'LIVE report not found' });
+    if (!data) return res.status(404).json({ error: 'Open or reviewing LIVE report not found' });
     return res.json({ report: data });
   } catch (error) {
     console.error('[live] report review failed:', error?.message || error);
