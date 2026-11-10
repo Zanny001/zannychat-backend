@@ -103,7 +103,7 @@ test('scoped claim migration limits claims and keeps execution service-role-only
 test('Expo call pushes request the actionable incoming-call notification category', () => {
   const pushClient = fs.readFileSync(path.join(__dirname, '../src/config/pushClient.js'), 'utf8');
   assert.ok(pushClient.includes("categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined"));
-  assert.ok(pushClient.includes("sound: data?.type === 'incoming_call' ? 'call_ring.wav' : 'default'"));
+  assert.ok(pushClient.includes("sound: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'call_ring.wav' : 'default'"));
 });
 
 test('native VoIP delivery is preferred and avoids duplicate Expo notifications', async () => {
