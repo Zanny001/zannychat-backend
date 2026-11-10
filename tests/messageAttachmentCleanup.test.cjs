@@ -76,7 +76,7 @@ test('worker refuses to delete an object outside the message conversation even w
 });
 
 test('ownership migration records the source conversation for new cleanup jobs', () => {
-  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0068_bind_attachment_cleanup_to_conversation.sql'), 'utf8');
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192957_bind_attachment_cleanup_to_conversation_0068.sql'), 'utf8');
   assert.match(migration, /add column if not exists conversation_id uuid/);
   assert.match(migration, /old\.conversation_id/);
   assert.match(migration, /set search_path = ''/);
