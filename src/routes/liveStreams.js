@@ -60,6 +60,53 @@ async function canModerateLive(stream, userId) {
   return Boolean(data);
 }
 
+router.post('/creators/:creatorId/follow', async (req, res) => {
+  const creatorId = req.params.creatorId;
+  if (!validId(creatorId) || creatorId === req.user.id) return res.status(400).json({ error: 'Invalid LIVE creator' });
+  try {
+    if (await hasBlockBetween(creatorId, req.user.id)) return res.status(403).json({ error: 'This creator is unavailable' });
+    const { data: creator, error: creatorError } = await supabaseAdmin.from('profiles')
+      .select('id').eq('id', creatorId).maybeSingle();
+    if (creatorError) throw creatorError;
+    if (!creator) return res.status(404).json({ error: 'Creator not found' });
+    const { error } = await supabaseAdmin.from('live_creator_follows').upsert(
+      { follower_id: req.user.id, creator_id: creatorId }, { onConflict: 'follower_id,creator_id', ignoreDuplicates: true }
+    );
+    if (error) throw error;
+    return res.json({ following: true, creatorId });
+  } catch (error) {
+    console.error('[live] follow failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not follow this creator' });
+  }
+});
+
+router.delete('/creators/:creatorId/follow', async (req, res) => {
+  const creatorId = req.params.creatorId;
+  if (!validId(creatorId) || creatorId === req.user.id) return res.status(400).json({ error: 'Invalid LIVE creator' });
+  try {
+    const { error } = await supabaseAdmin.from('live_creator_follows')
+      .delete().eq('follower_id', req.user.id).eq('creator_id', creatorId);
+    if (error) throw error;
+    return res.json({ following: false, creatorId });
+  } catch (error) {
+    console.error('[live] unfollow failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not unfollow this creator' });
+  }
+});
+
+router.get('/following', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('live_creator_follows')
+      .select('creator_id,created_at').eq('follower_id', req.user.id)
+      .order('created_at', { ascending: false }).limit(500);
+    if (error) throw error;
+    return res.json({ following: data || [] });
+  } catch (error) {
+    console.error('[live] following list failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load followed creators' });
+  }
+});
+
 router.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_streams')
@@ -82,7 +129,7 @@ router.post('/', async (req, res) => {
   if (!config) return res.status(503).json({ error: 'LIVE streaming is not enabled on this server yet' });
   if (!title || title.length > 80 || description.length > 500) return res.status(400).json({ error: 'LIVE title or description is invalid' });
   if (!['public','followers','private'].includes(visibility)) return res.status(400).json({ error: 'Invalid LIVE visibility' });
-  if (visibility !== 'public') return res.status(409).json({ error: 'Follower-only and private LIVE access require the invitation/follower rollout' });
+  const allowGuests = req.body?.allowGuests === true;
   try {
     const id = randomUUID();
     const roomName = 'zlive_' + id.replace(/-/g, '');
@@ -93,6 +140,8 @@ router.post('/', async (req, res) => {
       p_title: title,
       p_description: description,
       p_room_name: roomName,
+      p_visibility: visibility,
+      p_allow_guests: allowGuests,
     });
     if (error) throw error;
     return res.status(201).json({
@@ -114,13 +163,9 @@ router.post('/:streamId/join', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
-    if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) {
-      return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
-    }
     if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
       return res.status(403).json({ error: 'This LIVE stream is unavailable' });
     }
-    const token = issueToken(req.user, stream.room_name, config, stream.creator_id === req.user.id);
     const { data: role, error: joinError } = await supabaseAdmin.rpc('join_live_stream', {
       p_stream_id: streamId, p_user_id: req.user.id,
     });
@@ -130,14 +175,122 @@ router.post('/:streamId/join', async (req, res) => {
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
     }
+    const canPublish = role === 'creator' || role === 'guest';
+    const token = issueToken(req.user, stream.room_name, config, canPublish);
     const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
-      token, role, canModerate,
+      token, role, canPublish, canModerate,
     });
   } catch (error) {
     console.error('[live] join failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not join this LIVE stream' });
+  }
+});
+
+router.post('/:streamId/invites', async (req, res) => {
+  const streamId = req.params.streamId;
+  const userIds = Array.isArray(req.body?.userIds) ? [...new Set(req.body.userIds.filter(validId))] : [];
+  if (!validId(streamId) || userIds.length < 1 || userIds.length > 100) {
+    return res.status(400).json({ error: 'Provide between 1 and 100 valid invitees' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can invite viewers' });
+    if (stream.visibility !== 'private') return res.status(409).json({ error: 'Invitations are only required for private LIVE streams' });
+    const invitees = userIds.filter((id) => id !== req.user.id);
+    if (invitees.some((id) => false)) return res.status(400).json({ error: 'Invalid invitee' });
+    for (const userId of invitees) {
+      if (await hasBlockBetween(stream.creator_id, userId)) return res.status(403).json({ error: 'A blocked account cannot be invited' });
+    }
+    const { data: profiles, error: profileError } = await supabaseAdmin.from('profiles')
+      .select('id').in('id', invitees);
+    if (profileError) throw profileError;
+    const existing = new Set((profiles || []).map((row) => row.id));
+    if (invitees.some((id) => !existing.has(id))) return res.status(404).json({ error: 'One or more invitees do not exist' });
+    const rows = invitees.map((userId) => ({
+      stream_id: streamId, user_id: userId, invited_by: req.user.id,
+      invitation_type: 'viewer', status: 'pending', requested_by: null,
+    }));
+    const { error } = await supabaseAdmin.from('live_stream_invites').upsert(rows, { onConflict: 'stream_id,user_id' });
+    if (error) throw error;
+    return res.json({ invited: invitees.length });
+  } catch (error) {
+    console.error('[live] invite creation failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not invite viewers to this LIVE stream' });
+  }
+});
+
+router.post('/:streamId/guest-requests', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (!stream.allow_guests) return res.status(409).json({ error: 'Guest participation is disabled for this LIVE stream' });
+    if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before requesting guest access' });
+    if (stream.creator_id === req.user.id) return res.status(400).json({ error: 'The creator is already a publisher' });
+    if (await hasBlockBetween(stream.creator_id, req.user.id)) return res.status(403).json({ error: 'Guest access is unavailable' });
+    const { error } = await supabaseAdmin.from('live_stream_invites').upsert({
+      stream_id: streamId, user_id: req.user.id, invited_by: stream.creator_id,
+      requested_by: req.user.id, invitation_type: 'guest', status: 'requested',
+    }, { onConflict: 'stream_id,user_id' });
+    if (error) throw error;
+    return res.status(202).json({ requested: true });
+  } catch (error) {
+    console.error('[live] guest request failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not request guest access' });
+  }
+});
+
+router.get('/:streamId/guest-requests', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can review guest requests' });
+    const { data, error } = await supabaseAdmin.from('live_stream_invites')
+      .select('user_id,requested_by,status,created_at')
+      .eq('stream_id', streamId).eq('invitation_type', 'guest').eq('status', 'requested')
+      .order('created_at', { ascending: true }).limit(100);
+    if (error) throw error;
+    const userIds = (data || []).map((row) => row.user_id);
+    const { data: profiles, error: profileError } = userIds.length
+      ? await supabaseAdmin.from('profiles').select('id,name').in('id', userIds)
+      : { data: [], error: null };
+    if (profileError) throw profileError;
+    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    return res.json({ requests: (data || []).map((row) => ({ ...row, name: names.get(row.user_id) || 'ZannyChat user' })) });
+  } catch (error) {
+    console.error('[live] guest request list failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load guest requests' });
+  }
+});
+
+router.patch('/:streamId/guest-requests/:userId', async (req, res) => {
+  const { streamId, userId } = req.params;
+  const status = req.body?.status;
+  if (!validId(streamId) || !validId(userId) || !['accepted','declined'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid guest request decision' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can approve guest requests' });
+    if (!stream.allow_guests) return res.status(409).json({ error: 'Guest participation is disabled' });
+    const { data, error } = await supabaseAdmin.from('live_stream_invites')
+      .update({ status, invited_by: req.user.id, updated_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', userId)
+      .eq('invitation_type', 'guest').eq('status', 'requested')
+      .select('user_id,status').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Pending guest request not found' });
+    return res.json({ request: data });
+  } catch (error) {
+    console.error('[live] guest request decision failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not update guest request' });
   }
 });
 
@@ -165,7 +318,7 @@ router.get('/:streamId/comments', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
-    if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) return res.status(403).json({ error: 'This LIVE stream is not public' });
+    if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before reading comments' });
     if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
       return res.status(403).json({ error: 'This LIVE stream is unavailable' });
     }
