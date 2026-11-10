@@ -150,6 +150,25 @@ router.post('/:streamId/leave', async (req, res) => {
   }
 });
 
+router.get('/:streamId/comments', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) return res.status(403).json({ error: 'This LIVE stream is not public' });
+    const { data, error } = await supabaseAdmin.from('live_stream_comments')
+      .select('id,stream_id,user_id,body,moderation_status,created_at')
+      .eq('stream_id', streamId).eq('moderation_status', 'visible')
+      .order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    return res.json({ comments: (data || []).reverse() });
+  } catch (error) {
+    console.error('[live] comments fetch failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load LIVE comments' });
+  }
+});
+
 router.post('/:streamId/comment', makeLimiter({ windowMs: 10 * 1000, max: 5, error: 'Please slow down before posting another LIVE comment.' }), async (req, res) => {
   const streamId = req.params.streamId;
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
