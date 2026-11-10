@@ -24,12 +24,26 @@ test('compatibility migration reasserts server-controlled 6/12/24/48-hour expiry
   assert.match(source, /SET search_path = ''/i);
 });
 
-test('migration versions are unique and contiguous through the latest migration', () => {
+test('legacy migrations use explicit timestamped replacements without duplicate pending versions', () => {
   const files = fs.readdirSync(migrations).filter((n) => /^\d{4}_.+\.sql$/.test(n)).sort();
   const versions = files.map((n) => n.slice(0, 4));
-  const latest = files.length;
-  assert.equal(new Set(versions).size, latest);
+  assert.equal(new Set(versions).size, versions.length);
   assert.equal(versions[0], '0001');
-  assert.equal(versions.at(-1), String(latest).padStart(4, '0'));
-  for (let i = 0; i < versions.length; i++) assert.equal(Number(versions[i]), i + 1);
+  for (const version of ['0059', '0065', '0067', '0069', '0075']) {
+    assert.ok(versions.includes(version), `expected retained historical migration ${version}`);
+  }
+  const timestampedReplacements = [
+    '20261110192943_profile_privacy_and_attachment_cleanup_0066.sql',
+    '20261110192957_bind_attachment_cleanup_to_conversation_0068.sql',
+    '20261110193010_presence_and_read_receipt_projection_0070.sql',
+    '20261110193028_private_avatar_compatibility_stage_0071.sql',
+    '20261110193050_attachment_cleanup_claim_conversation_binding_0072.sql',
+    '20261110193055_private_profile_cover_compatibility_0073.sql',
+  ];
+  for (const filename of timestampedReplacements) {
+    assert.ok(fs.existsSync(path.join(migrations, filename)), `missing recorded replacement ${filename}`);
+  }
+  for (const version of ['0066', '0068', '0070', '0071', '0072', '0073']) {
+    assert.ok(!versions.includes(version), `legacy version ${version} must not be replayed`);
+  }
 });

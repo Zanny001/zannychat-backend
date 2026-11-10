@@ -23,12 +23,14 @@ test('heartbeat leases cannot be updated to a future timestamp or on non-accepte
   assert.match(sql, /new\.last_activity_at > now\(\) \+ interval '10 seconds'/);
 });
 
-test('stale signaling is purged and terminal call rows receive bounded retention', () => {
+test('stale signaling is purged without deleting durable call history', () => {
   assert.match(sql, /function public\.cleanup_stale_call_signals\(\)/);
   assert.match(sql, /s\.created_at < now\(\) - interval '1 day'/);
-  assert.match(sql, /ended_at < now\(\) - interval '30 days'/);
+  assert.doesNotMatch(sql, /delete\s+from\s+public\.call_sessions/i);
   assert.match(sql, /grant execute on function public\.cleanup_stale_call_signals\(\) to service_role/);
   assert.match(sql, /cron\.schedule\('zannychat-call-signal-retention'/);
+  assert.match(sql, /is_service_role boolean := coalesce\(auth\.role\(\) = 'service_role', false\)/i);
+  assert.match(sql, /or is_service_role/i);
 });
 
 

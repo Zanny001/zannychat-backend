@@ -1,0 +1,33 @@
+name: Advanced calling backend checks
+
+on:
+  push:
+    branches: [main, release/backend-advanced-calling-live-1.2.241]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:group-calls
+      - run: npm run test:live-streams
+      - run: npm run test:group-live-admission
+      - run: npm run test:call-notifications
+      - run: npm run test:call-signaling
+      - run: npm run test:push-client-unit
+      - run: npm run test:migration-reconciliation
+      - run: npm run test:profile-status-call-history
+      - run: npm run test:attachment-cleanup
+      - run: npm run test:profile-privacy
+      - run: npm run test:chat-directory-rpcs
+      - run: npm run test:database-hardening
+      - run: npm run test:security-headers

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0071_private_avatar_compatibility_stage.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110193028_private_avatar_compatibility_stage_0071.sql'), 'utf8');
 
 test('private avatar stage is additive and preserves all legacy avatar links and public access', () => {
   assert.match(sql, /add column if not exists avatar_path text/i);

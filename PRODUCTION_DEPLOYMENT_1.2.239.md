@@ -43,18 +43,23 @@ A dedicated regression test checks these grant and revoke statements.
 
 A read-only query against the linked production Supabase project verified that the effective table privileges currently match this intended access model. This verifies present permissions, not which migration or manual operation established them.
 
-The expected application migration ledger (`supabase_migrations.schema_migrations`) does not exist in the linked production database. The available `auth`, `realtime` and `storage` migration tables are subsystem histories and do not establish application migration history.
+The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110202504. This is a partial ledger, not a complete, independently verified record of every repository migration.
+
+Comparing the active repository migration directory with the remote ledger snapshot shows that the ledger has no entries for the historical local versions 0001–0058 (except 0059), nor for 0060–0064. The timestamped migrations 20261110192943, 20261110192957, 20261110193010, 20261110193028, 20261110193050 and 20261110193055 are recorded for the corresponding 0066, 0068 and 0070–0073 changes. The older 0066, 0068 and 0070–0073 filenames have therefore been moved out of the active migration directory and preserved under supabase/migration-archive/legacy so they cannot be replayed as new versions. Read-only checks confirmed several corresponding database objects already exist (including phone-discovery objects, the call heartbeat/lease column and RPC, the status-expiry trigger/constraint, and the public-schema CREATE revocations). This establishes current schema state for those objects, but does not prove the exact source migration/version that created them.
+
+Several historical rows (including 0059, 0065, 0067, 0069 and 20261110170000) have no recorded statement array or creator metadata. Their presence proves that those version labels are recorded, but does not independently prove that the recorded SQL exactly matches the repository file. Timestamped replacement migrations for 0065–0073 are recorded separately. The 0071 timestamped source is the corrected variant; the old legacy 0071 file used a different parameter name and a less restrictive function search path and must not be replayed.
 
 Therefore:
-1. Preserve the verified live call-table privileges; no corrective migration is justified by the current evidence.
-2. Keep the restored grants in migration 0059 for fresh installations.
-3. Treat the production application migration history, including whether 0059 was formally recorded as applied, as unverified.
-4. Do not infer migration history from the current privileges or edit migration history to make it appear reconciled.
+1. Preserve the verified live call-table privileges and current durable-call-history behavior.
+2. Keep the exact, corrected timestamped migration sources that correspond to the recorded timestamped versions.
+3. Treat local versions 0001–0058 (except 0059) and 0060–0064 as unrecorded in the remote ledger. Read-only checks show key objects from some of those versions are present, but their exact source migration provenance remains unverified.
+4. Do not run `supabase db push`, `--include-all`, migration repair, or a reset against production until a reviewed baseline accounts for every pending local version and every remote ledger row.
+5. Do not insert/delete ledger rows merely to make local and remote histories appear aligned.
 
 ### Migration history and production safety
 
 1. Take or verify a recoverable Supabase backup/PITR restore point before any approved schema rollout.
-2. Establish a supported, authoritative application migration-history baseline. The expected `supabase_migrations.schema_migrations` ledger was absent during this review.
+2. Establish a supported, authoritative application migration-history baseline. The `supabase_migrations.schema_migrations` ledger exists, but its recorded versions do not cover the full local historical migration chain.
 3. Do not mistake `auth.schema_migrations`, `realtime.schema_migrations` or `storage.migrations` for the application's migration ledger.
 4. Reconcile repository migrations 0001–0073 against the actual production schema and any independently retained deployment records.
 5. Review the complete SQL for migrations 0065–0073, including dependencies, grants, policies and effects against the live schema.
@@ -62,7 +67,12 @@ Therefore:
 7. Obtain explicit production approval before applying any migration.
 8. Verify database objects, effective privileges and the authoritative migration history after an approved rollout.
 
-No production migration is authorized by this document.
+Two narrow, non-data-changing migrations were applied during this review:
+
+- `20261110202304_harden_qualified_definer_search_paths_0063`: pins existing reviewed SECURITY DEFINER functions to an empty `search_path` and safely skips the absent `get_conversation_poll_vote_counts(uuid)` overload. Post-apply inspection confirmed `set_pinned_message_snapshot()` and `deliver_due_scheduled_messages(integer)` now have an empty `search_path`.
+- `20261110202504_index_remaining_call_foreign_keys_and_optimize_profile_rls`: adds indexes for the caller/callee foreign keys on `call_invitation_notifications` and the host foreign key on `group_call_rooms`, and changes the owner-only `profile_details` policy to use `(SELECT auth.uid())` without changing its access semantics.
+
+Post-apply Supabase performance-advisor results no longer report unindexed foreign keys or the profile RLS init-plan warning. The remaining 80 unused-index notices are informational; do not drop indexes until real production workload confirms they are unnecessary. The security advisor still reports 28 RLS-enabled tables without policies; direct privilege inspection confirmed that none of those tables grants SELECT/INSERT/UPDATE/DELETE to `anon` or `authenticated`, which is the intended backend-only design. It also reports 22 authenticated-callable SECURITY DEFINER RPCs that need per-function authorization review (do not blanket-revoke user-facing RPCs) and leaked-password protection disabled in Auth, which remains a separate dashboard/configuration action. No application rows were modified, and no backend deployment, Render configuration change, or APK rebuild was performed.
 
 ## 3. Background workers
 

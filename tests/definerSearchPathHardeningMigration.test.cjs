@@ -5,7 +5,7 @@ const path = require('node:path');
 const migrationPath = path.join(__dirname, '../supabase/migrations/0063_harden_qualified_definer_search_paths.sql');
 const migration = fs.readFileSync(migrationPath, 'utf8');
 
-test('reviewed SECURITY DEFINER routines are pinned to an empty search_path', () => {
+test('reviewed SECURITY DEFINER routines are conditionally pinned to an empty search_path', () => {
   const expected = [
     'public.get_channel_post_stats(uuid[], uuid)',
     'public.get_own_status_view_counts(uuid[])',
@@ -20,8 +20,11 @@ test('reviewed SECURITY DEFINER routines are pinned to an empty search_path', ()
   ];
   const normalized = migration.replace(/\s+/g, ' ').toLowerCase();
   for (const signature of expected) {
-    assert.ok(normalized.includes(`alter function ${signature.toLowerCase()} set search_path = ''`), `missing hardening for ${signature}`);
+    assert.ok(normalized.includes(signature.toLowerCase()), 'missing reviewed signature ' + signature);
   }
+  assert.match(migration, /to_regprocedure\(v_signature\)/i);
+  assert.match(migration, /if v_function is not null then[\s\S]*?alter function/i);
+  assert.match(migration, /set search_path = %l/i);
 });
 
 test('migration is configuration-only and documents its reviewed scope', () => {

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0067_harden_message_retraction_content.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192952_harden_message_retraction_content_0067.sql'), 'utf8');
 
 function deletionBody(source) {
   const start = source.search(/create\s+or\s+replace\s+function\s+public\.delete_message\s*\(/i);

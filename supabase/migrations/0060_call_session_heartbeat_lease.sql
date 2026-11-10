@@ -34,9 +34,14 @@ grant execute on function public.heartbeat_call_session(uuid) to authenticated;
 
 -- Rebuild the session trigger with lease-aware active-call detection.
 create or replace function public.validate_call_session_write()
-returns trigger language plpgsql security definer set search_path = '' as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
   actor uuid := auth.uid();
+  is_service_role boolean := coalesce(auth.role() = 'service_role', false);
   member_count integer;
   total_count integer;
 begin
@@ -49,8 +54,8 @@ begin
     if exists (
       select 1 from public.call_sessions c
       where ((c.status = 'accepted' and c.last_activity_at > now() - interval '3 minutes')
-         or (c.status = 'ringing' and c.expires_at > now()))
-      and (c.caller_id in (new.caller_id, new.callee_id) or c.callee_id in (new.caller_id, new.callee_id))
+        or (c.status = 'ringing' and c.expires_at > now()))
+        and (c.caller_id in (new.caller_id, new.callee_id) or c.callee_id in (new.caller_id, new.callee_id))
     ) then
       raise exception 'a participant is already in an active call' using errcode = '23505';
     end if;
@@ -75,31 +80,56 @@ begin
      or new.expires_at <> old.expires_at then
     raise exception 'call identity fields are immutable' using errcode = '42501';
   end if;
-  if actor is null or actor not in (old.caller_id, old.callee_id) then
+  if actor is null then
+    if not is_service_role and current_user <> 'postgres' then
+      raise exception 'not a call participant' using errcode = '42501';
+    end if;
+  elsif actor not in (old.caller_id, old.callee_id) and not is_service_role then
     raise exception 'not a call participant' using errcode = '42501';
   end if;
+
   if new.status = old.status then
     if new.accepted_at is distinct from old.accepted_at or new.ended_at is distinct from old.ended_at then
       raise exception 'call lifecycle timestamps are immutable outside a state transition' using errcode = '42501';
     end if;
-    if new.last_activity_at is distinct from old.last_activity_at and
-       (old.status <> 'accepted' or new.last_activity_at < old.last_activity_at or new.last_activity_at > now() + interval '10 seconds') then
+    if new.last_activity_at is distinct from old.last_activity_at
+       and (old.status <> 'accepted' or new.last_activity_at < old.last_activity_at
+         or new.last_activity_at > now() + interval '10 seconds') then
       raise exception 'invalid call heartbeat lease' using errcode = '42501';
     end if;
     return new;
   end if;
-  if old.status = 'ringing' and new.status in ('accepted','declined') and actor = old.callee_id then
-    if now() > old.expires_at then
-      new.status := 'missed'; new.accepted_at := old.accepted_at; new.ended_at := now();
-    elsif new.status = 'accepted' then
-      new.accepted_at := now(); new.ended_at := old.ended_at; new.last_activity_at := now();
-    else
-      new.accepted_at := old.accepted_at; new.ended_at := now();
+
+  if old.status = 'ringing' and new.status = 'missed'
+     and (actor in (old.caller_id, old.callee_id) or is_service_role or (actor is null and current_user = 'postgres')) then
+    if now() < old.expires_at then
+      raise exception 'call invitation has not expired' using errcode = '42501';
     end if;
-  elsif old.status = 'ringing' and new.status = 'cancelled' and actor = old.caller_id then
-    new.accepted_at := old.accepted_at; new.ended_at := now();
-  elsif old.status = 'accepted' and new.status = 'ended' and actor in (old.caller_id, old.callee_id) then
-    new.accepted_at := old.accepted_at; new.ended_at := now();
+    new.accepted_at := old.accepted_at;
+    new.ended_at := now();
+  elsif old.status = 'ringing' and new.status in ('accepted', 'declined')
+     and (actor = old.callee_id or (is_service_role and new.status = 'declined')) then
+    if now() > old.expires_at then
+      new.status := 'missed';
+      new.accepted_at := old.accepted_at;
+      new.ended_at := now();
+    elsif new.status = 'accepted' then
+      new.accepted_at := now();
+      new.ended_at := old.ended_at;
+      new.last_activity_at := now();
+    else
+      new.accepted_at := old.accepted_at;
+      new.ended_at := now();
+    end if;
+  elsif old.status = 'ringing' and new.status = 'cancelled'
+     and (actor = old.caller_id or is_service_role) then
+    if now() >= old.expires_at then new.status := 'missed'; end if;
+    new.accepted_at := old.accepted_at;
+    new.ended_at := now();
+  elsif old.status = 'accepted' and new.status = 'ended'
+     and (actor in (old.caller_id, old.callee_id) or is_service_role) then
+    new.accepted_at := old.accepted_at;
+    new.ended_at := now();
   else
     raise exception 'invalid call state transition' using errcode = '42501';
   end if;
@@ -164,10 +194,7 @@ begin
       or s.created_at < now() - interval '1 day'
     );
   get diagnostics deleted_count = row_count;
-  delete from public.call_sessions
-    where (status in ('declined','cancelled','ended','missed','failed') and ended_at < now() - interval '30 days')
-       or (status = 'ringing' and expires_at < now() - interval '30 days')
-       or (status = 'accepted' and last_activity_at < now() - interval '30 days');
+  -- Keep call_sessions as durable participant-visible history; only signaling expires.
   return deleted_count;
 end;
 $$;

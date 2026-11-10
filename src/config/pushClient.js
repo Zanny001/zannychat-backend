@@ -14,20 +14,21 @@ async function sendPushToUser(userId, { title, body, data }) {
     .eq('user_id', userId);
 
   if (error) throw error;
-  if (!tokenRows || tokenRows.length === 0) return { sent: 0, failed: 0 };
+  if (!tokenRows || tokenRows.length === 0) return { sent: 0, failed: 0, noTokens: true };
 
   const messages = tokenRows
     .filter((row) => Expo.isExpoPushToken(row.expo_push_token))
     .map((row) => ({
       to: row.expo_push_token,
-      sound: 'default',
+      sound: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'call_ring.wav' : 'default',
+      categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined,
       title,
       body,
       data: data || {},
-      ...(data?.type === 'incoming_call' ? { channelId: 'calls', priority: 'high', collapseId: data.callId } : {}),
+      ...(['incoming_call', 'group_call_invite'].includes(data?.type) ? { channelId: 'calls', priority: 'high', collapseId: data.callId || data.groupCallId } : {}),
     }));
 
-  if (messages.length === 0) return { sent: 0, failed: 0 };
+  if (messages.length === 0) return { sent: 0, failed: 0, noTokens: true };
 
   const chunks = expo.chunkPushNotifications(messages);
   const staleTokens = new Set();
