@@ -59,10 +59,6 @@ async function sendApnsVoip(token, event) {
   return sendApnsVoipPayload(token, { incomingCall: event }, expiration);
 }
 
-async function sendApnsCallEnded(token, event) {
-  // A remote end is only useful while the local CallKit surface is still active.
-  return sendApnsVoipPayload(token, { callEnded: event }, Math.floor(Date.now() / 1000) + 30);
-}
 
 function nativeEndedReason(status) {
   if (status === 'missed') return 'unanswered';
@@ -134,25 +130,24 @@ async function sendCallVoipPushToUser(admin, userId, event) {
 async function sendCallEndedToUser(admin, userId, serverCallId, status = 'ended') {
   try {
     const { data: tokens, error } = await admin.from('call_voip_tokens')
-      .select('token,token_type').eq('user_id', userId);
-    if (error || !tokens?.length) return { sent: 0, failed: 0, skipped: 0 };
+      .select('token,token_type').eq('user_id', userId).eq('token_type', 'FCM');
+    const fcmTokens = (tokens || []).filter((row) => row.token_type === 'FCM' && row.token);
+    if (error || !fcmTokens.length) return { sent: 0, failed: 0 };
     const event = { eventId: randomUUID(), serverCallId, reason: nativeEndedReason(status) };
-    let sent = 0, failed = 0, skipped = 0;
-    for (const row of tokens) {
+    let sent = 0, failed = 0;
+    for (const row of fcmTokens) {
       try {
-        const accepted = row.token_type === 'APNS_VOIP'
-          ? await sendApnsCallEnded(row.token, event)
-          : row.token_type === 'FCM'
-            ? await sendFcmData(row.token, { messageType: 'callEnded', callEnded: JSON.stringify(event) })
-            : false;
+        const accepted = await sendFcmData(row.token, {
+          messageType: 'callEnded',
+          callEnded: JSON.stringify(event),
+        });
         if (accepted) sent += 1;
-        else skipped += 1;
       } catch (error) {
         failed += 1;
         console.error('[calls] native call-ended push failed:', error?.message || error);
       }
     }
-    return { sent, failed, skipped };
+    return { sent, failed };
   } catch (_) {
     return { sent: 0, failed: 0, skipped: 0 };
   }
