@@ -247,6 +247,35 @@ router.post('/:streamId/react', async (req, res) => {
 });
 
 
+router.get('/:streamId/participants', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can manage LIVE participants' });
+    const { data: joined, error: joinedError } = await supabaseAdmin.from('live_stream_participants')
+      .select('user_id,joined_at').eq('stream_id', streamId).eq('role', 'viewer').eq('status', 'joined')
+      .order('joined_at', { ascending: true }).limit(500);
+    if (joinedError) throw joinedError;
+    const userIds = (joined || []).map((row) => row.user_id);
+    const [{ data: profiles, error: profilesError }, { data: moderators, error: moderatorsError }] = await Promise.all([
+      userIds.length ? supabaseAdmin.from('profiles').select('id,name').in('id', userIds) : Promise.resolve({ data: [], error: null }),
+      supabaseAdmin.from('live_stream_moderators').select('user_id').eq('stream_id', streamId),
+    ]);
+    if (profilesError || moderatorsError) throw profilesError || moderatorsError;
+    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    const moderatorIds = new Set((moderators || []).map((row) => row.user_id));
+    return res.json({ participants: (joined || []).map((row) => ({
+      userId: row.user_id, name: names.get(row.user_id) || 'ZannyChat user',
+      joinedAt: row.joined_at, moderator: moderatorIds.has(row.user_id),
+    })) });
+  } catch (error) {
+    console.error('[live] participants fetch failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load LIVE participants' });
+  }
+});
+
 router.post('/:streamId/moderators', async (req, res) => {
   const streamId = req.params.streamId;
   const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
