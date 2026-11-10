@@ -92,8 +92,9 @@ test('invitation without registered push tokens is expired instead of pointlessl
 });
 
 test('scoped claim migration limits claims and keeps execution service-role-only', () => {
-  assert.match(targetedSql, /claim_call_invitation_notifications\(p_limit integer, p_call_id uuid\)/i);
-  assert.match(targetedSql, /p_call_id is null or q\\.call_id = p_call_id/i);
-  assert.match(targetedSql, /for update skip locked/i);
-  assert.match(targetedSql, /grant execute on function public\\.claim_call_invitation_notifications\(integer, uuid\) to service_role/i);
+  assert.ok(targetedSql.includes('p_limit integer,'));
+  assert.ok(targetedSql.includes('p_call_id uuid'));
+  assert.ok(targetedSql.includes('p_call_id IS NULL OR q.call_id = p_call_id'));
+  assert.ok(targetedSql.includes('FOR UPDATE SKIP LOCKED'));
+  assert.ok(targetedSql.includes('GRANT EXECUTE ON FUNCTION public.claim_call_invitation_notifications(integer, uuid) TO service_role'));
 });

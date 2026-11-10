@@ -9,9 +9,9 @@ const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Call setup is rate-limited. Please wait before trying again.' }));
 
 // The caller kicks the durable queue immediately after creating a call.
- // The session row and queue entry are the source of truth; push is an
- // acceleration path for background/closed apps, while Realtime covers
- // foreground delivery.
+// The session row and queue entry are the source of truth; push is an
+// acceleration path for background/closed apps, while Realtime covers
+// foreground delivery.
 router.post('/:callId/notify', async (req, res) => {
   const callId = String(req.params.callId || '');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId)) {
