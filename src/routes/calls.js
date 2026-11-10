@@ -27,7 +27,7 @@ const router = express.Router();
      .update({ status: nextStatus }).eq('id', callId).in('status', ['ringing', 'accepted'])
      .select('id,status').maybeSingle();
    if (updateError) return res.status(503).json({ error: 'Could not update call state' });
-   if (updated) await sendCallEndedToUser(supabaseAdmin, call.caller_id, callId, nextStatus);
+   if (updated) await sendCallEndedToUser(supabaseAdmin, call.caller_id, callId, updated.status);
    return res.json({ updated: Boolean(updated), status: updated?.status || nextStatus });
  });
 
