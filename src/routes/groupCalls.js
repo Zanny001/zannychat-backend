@@ -212,23 +212,14 @@ router.post('/:roomId/end', async (req, res) => {
   const roomId = req.params.roomId;
   if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call id' });
   try {
-    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
-      .select('id,conversation_id,host_user_id,status').eq('id', roomId).maybeSingle();
-    if (roomError) throw roomError;
-    if (!room || !['ringing','active'].includes(room.status)) return res.status(404).json({ error: 'Group call is no longer active' });
-    const group = await getGroupMembership(room.conversation_id, req.user.id);
-    if (group.error) return res.status(group.status).json({ error: group.error });
-    if (room.host_user_id !== req.user.id && !group.membership.is_admin) {
-      return res.status(403).json({ error: 'Only the call host or a group admin can end this call' });
+    const { data: ended, error } = await supabaseAdmin.rpc('end_group_call_room', {
+      p_room_id: roomId, p_user_id: req.user.id,
+    });
+    if (error) {
+      if (error.code === '42501') return res.status(403).json({ error: 'Only the call host or a group admin can end this call' });
+      throw error;
     }
-    const now = new Date().toISOString();
-    const { error: endError } = await supabaseAdmin.from('group_call_rooms').update({
-      status: 'ended', ended_at: now,
-    }).eq('id', roomId).in('status', ['ringing','active']);
-    if (endError) throw endError;
-    await supabaseAdmin.from('group_call_participants').update({
-      status: 'left', left_at: now,
-    }).eq('room_id', roomId).in('status', ['invited','joined']);
+    if (!ended) return res.status(404).json({ error: 'Group call is no longer active' });
     return res.json({ ended: true });
   } catch (error) {
     console.error('[group-calls] end failed:', error?.message || error);
