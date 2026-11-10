@@ -40,6 +40,7 @@ AS $function$
   ORDER BY p.name ASC, p.id ASC;
 $function$;
 
+-- PostgREST needs a true zero-argument signature for rpc('get_contact_directory').
 CREATE FUNCTION public.get_contact_directory()
 RETURNS TABLE (
   id uuid,
@@ -84,5 +85,7 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_my_read_cursors() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_read_cursors() TO authenticated;
 
+-- Refresh PostgREST's schema cache so both zero-argument RPCs are discoverable.
 NOTIFY pgrst, 'reload schema';
+
 COMMIT;

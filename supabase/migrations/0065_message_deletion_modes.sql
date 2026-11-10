@@ -18,7 +18,6 @@ CREATE POLICY "Users can read their own message hides"
   ON public.message_hidden_for FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()));
 
--- Replace either legacy or already-reconciled message SELECT policy safely.
 DROP POLICY IF EXISTS "Members can read messages in their conversations" ON public.messages;
 DROP POLICY IF EXISTS "Members can read visible messages in their conversations" ON public.messages;
 CREATE POLICY "Members can read visible messages in their conversations"
@@ -46,38 +45,31 @@ BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
-
   IF p_mode IS NULL OR p_mode NOT IN ('me', 'everyone') THEN
     RAISE EXCEPTION 'Invalid deletion mode' USING ERRCODE = '22023';
   END IF;
 
-  SELECT m.*
-    INTO v_message
+  SELECT m.* INTO v_message
   FROM public.messages AS m
   WHERE m.id = p_message_id
     AND EXISTS (
-      SELECT 1
-      FROM public.conversation_participants AS cp
-      WHERE cp.conversation_id = m.conversation_id
-        AND cp.user_id = v_user_id
+      SELECT 1 FROM public.conversation_participants AS cp
+      WHERE cp.conversation_id = m.conversation_id AND cp.user_id = v_user_id
     )
   FOR UPDATE OF m;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Message not found' USING ERRCODE = 'P0002';
   END IF;
-
   IF p_mode = 'me' THEN
     INSERT INTO public.message_hidden_for(message_id, user_id)
     VALUES (p_message_id, v_user_id)
     ON CONFLICT (message_id, user_id) DO NOTHING;
     RETURN;
   END IF;
-
   IF v_message.sender_id IS DISTINCT FROM v_user_id THEN
     RAISE EXCEPTION 'Only the sender can delete a message for everyone' USING ERRCODE = '42501';
   END IF;
-
   IF v_message.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'Message has already been deleted' USING ERRCODE = '22023';
   END IF;
