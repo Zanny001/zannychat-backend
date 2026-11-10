@@ -43,7 +43,7 @@ A dedicated regression test checks these grant and revoke statements.
 
 A read-only query against the linked production Supabase project verified that the effective table privileges currently match this intended access model. This verifies present permissions, not which migration or manual operation established them.
 
-The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110202304. This is a partial ledger, not a complete, independently verified record of every repository migration.
+The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110202504. This is a partial ledger, not a complete, independently verified record of every repository migration.
 
 Comparing the active repository migration directory with the remote ledger snapshot shows that the ledger has no entries for the historical local versions 0001–0058 (except 0059), nor for 0060–0064. The timestamped migrations 20261110192943, 20261110192957, 20261110193010, 20261110193028, 20261110193050 and 20261110193055 are recorded for the corresponding 0066, 0068 and 0070–0073 changes. The older 0066, 0068 and 0070–0073 filenames have therefore been moved out of the active migration directory and preserved under supabase/migration-archive/legacy so they cannot be replayed as new versions. Read-only checks confirmed several corresponding database objects already exist (including phone-discovery objects, the call heartbeat/lease column and RPC, the status-expiry trigger/constraint, and the public-schema CREATE revocations). This establishes current schema state for those objects, but does not prove the exact source migration/version that created them.
 
@@ -67,7 +67,12 @@ Therefore:
 7. Obtain explicit production approval before applying any migration.
 8. Verify database objects, effective privileges and the authoritative migration history after an approved rollout.
 
-One targeted, configuration-only migration was applied during this review: `20261110202304_harden_qualified_definer_search_paths_0063`. It pins existing reviewed SECURITY DEFINER functions to an empty `search_path`, safely skips the absent `get_conversation_poll_vote_counts(uuid)` overload, and does not alter application tables or user data. No other production migration, backend deployment, Render configuration change, or APK rebuild was performed.
+Two narrow, non-data-changing migrations were applied during this review:
+
+- `20261110202304_harden_qualified_definer_search_paths_0063`: pins existing reviewed SECURITY DEFINER functions to an empty `search_path` and safely skips the absent `get_conversation_poll_vote_counts(uuid)` overload. Post-apply inspection confirmed `set_pinned_message_snapshot()` and `deliver_due_scheduled_messages(integer)` now have an empty `search_path`.
+- `20261110202504_index_remaining_call_foreign_keys_and_optimize_profile_rls`: adds indexes for the caller/callee foreign keys on `call_invitation_notifications` and the host foreign key on `group_call_rooms`, and changes the owner-only `profile_details` policy to use `(SELECT auth.uid())` without changing its access semantics.
+
+Post-apply Supabase performance-advisor results no longer report unindexed foreign keys or the profile RLS init-plan warning. The remaining 80 unused-index notices are informational; do not drop indexes until real production workload confirms they are unnecessary. The security advisor still reports 28 RLS-enabled tables without policies; direct privilege inspection confirmed that none of those tables grants SELECT/INSERT/UPDATE/DELETE to `anon` or `authenticated`, which is the intended backend-only design. It also reports 22 authenticated-callable SECURITY DEFINER RPCs that need per-function authorization review (do not blanket-revoke user-facing RPCs) and leaked-password protection disabled in Auth, which remains a separate dashboard/configuration action. No application rows were modified, and no backend deployment, Render configuration change, or APK rebuild was performed.
 
 ## 3. Background workers
 
