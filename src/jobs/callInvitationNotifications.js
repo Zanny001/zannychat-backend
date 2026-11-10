@@ -65,7 +65,11 @@ async function runCallInvitationNotifications({ admin, sendPush, sendVoipPush, l
 
       let voipResult = { sent: 0, failed: 0, notConfigured: true };
       try {
-        voipResult = await sendVoipPush(admin, call.callee_id, voipEvent);
+        // Never ring a native Telecom surface without a signed terminal-event
+        // credential: if the app is killed, the OS end action must still be
+        // able to reconcile the server call. Expo fallback can mint one when
+        // the recipient opens the incoming-call screen.
+        if (eventToken?.token) voipResult = await sendVoipPush(admin, call.callee_id, voipEvent);
       } catch (voipError) {
         console.warn('[calls] native VoIP delivery unavailable; using Expo fallback:', voipError?.message || voipError);
       }
