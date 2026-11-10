@@ -21,7 +21,7 @@ async function sendPushToUser(userId, { title, body, data }) {
     .map((row) => ({
       to: row.expo_push_token,
       sound: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'call_ring.wav' : 'default',
-      categoryId: ['incoming_call', 'group_call_invite'].includes(data?.type) ? 'incoming-call' : undefined,
+      categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined,
       title,
       body,
       data: data || {},
