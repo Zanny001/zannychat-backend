@@ -53,7 +53,8 @@
     "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs",
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
     "test:group-calls": "node --test tests/groupCalls.test.cjs",
-    "test:live-streams": "node --test tests/liveStreams.test.cjs"
+    "test:live-streams": "node --test tests/liveStreams.test.cjs",
+    "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
