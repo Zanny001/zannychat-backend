@@ -148,6 +148,8 @@ test('LIVE guest publishing requires creator approval and the stream guest switc
   assert.ok(route.includes("router.post('/:streamId/guest-requests'"));
   assert.ok(route.includes("router.get('/:streamId/guest-requests'"));
   assert.ok(route.includes("router.patch('/:streamId/guest-requests/:userId'"));
+  assert.ok(route.includes("requester is no longer a joined viewer"));
+  assert.ok(route.includes("hasBlockBetween(stream.creator_id, userId)"));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
   assert.ok(route.includes("p_visibility: visibility"));
   assert.ok(route.includes("p_allow_guests: allowGuests"));
