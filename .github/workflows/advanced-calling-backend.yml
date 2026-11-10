@@ -19,6 +19,7 @@ jobs:
       - run: npm test
       - run: npm run test:group-calls
       - run: npm run test:live-streams
+      - run: npm run test:group-live-admission
       - run: npm run test:call-notifications
       - run: npm run test:call-signaling
       - run: npm run test:push-client-unit
