@@ -14,6 +14,7 @@ const channelsRouter = require('./routes/channels');
 const discoveryRouter = require('./routes/discovery');
 const callsRouter = require('./routes/calls');
 const groupCallsRouter = require('./routes/groupCalls');
+const liveStreamsRouter = require('./routes/liveStreams');
 
 // Retry transient call-push failures while the API process is awake. The
 // authenticated /calls/:id/notify route handles immediate delivery; this
@@ -89,6 +90,7 @@ app.use('/channels', channelsRouter);
 app.use('/discovery', discoveryRouter);
 app.use('/calls', callsRouter);
 app.use('/group-calls', groupCallsRouter);
+app.use('/live', liveStreamsRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
 // secret auth. See internal.js / requireInternalSecret.
