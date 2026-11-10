@@ -43,7 +43,7 @@ A dedicated regression test checks these grant and revoke statements.
 
 A read-only query against the linked production Supabase project verified that the effective table privileges currently match this intended access model. This verifies present permissions, not which migration or manual operation established them.
 
-The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110193118. This is a partial ledger, not a complete, independently verified record of every repository migration.
+The linked production project **does contain** `supabase_migrations.schema_migrations`. A read-only inspection on 2026-11-10 confirmed that the table has both legacy version rows (0059, 0065, 0067, 0069, 0075) and timestamped rows through 20261110202304. This is a partial ledger, not a complete, independently verified record of every repository migration.
 
 Comparing the active repository migration directory with the remote ledger snapshot shows that the ledger has no entries for the historical local versions 0001–0058 (except 0059), nor for 0060–0064. The timestamped migrations 20261110192943, 20261110192957, 20261110193010, 20261110193028, 20261110193050 and 20261110193055 are recorded for the corresponding 0066, 0068 and 0070–0073 changes. The older 0066, 0068 and 0070–0073 filenames have therefore been moved out of the active migration directory and preserved under supabase/migration-archive/legacy so they cannot be replayed as new versions. Read-only checks confirmed several corresponding database objects already exist (including phone-discovery objects, the call heartbeat/lease column and RPC, the status-expiry trigger/constraint, and the public-schema CREATE revocations). This establishes current schema state for those objects, but does not prove the exact source migration/version that created them.
 
@@ -52,14 +52,14 @@ Several historical rows (including 0059, 0065, 0067, 0069 and 20261110170000) ha
 Therefore:
 1. Preserve the verified live call-table privileges and current durable-call-history behavior.
 2. Keep the exact, corrected timestamped migration sources that correspond to the recorded timestamped versions.
-3. Treat 0057–0058 and 0060–0064 as schema-present but ledger-unreconciled until their provenance is established.
+3. Treat local versions 0001–0058 (except 0059) and 0060–0064 as unrecorded in the remote ledger. Read-only checks show key objects from some of those versions are present, but their exact source migration provenance remains unverified.
 4. Do not run `supabase db push`, `--include-all`, migration repair, or a reset against production until a reviewed baseline accounts for every pending local version and every remote ledger row.
 5. Do not insert/delete ledger rows merely to make local and remote histories appear aligned.
 
 ### Migration history and production safety
 
 1. Take or verify a recoverable Supabase backup/PITR restore point before any approved schema rollout.
-2. Establish a supported, authoritative application migration-history baseline. The expected `supabase_migrations.schema_migrations` ledger was absent during this review.
+2. Establish a supported, authoritative application migration-history baseline. The `supabase_migrations.schema_migrations` ledger exists, but its recorded versions do not cover the full local historical migration chain.
 3. Do not mistake `auth.schema_migrations`, `realtime.schema_migrations` or `storage.migrations` for the application's migration ledger.
 4. Reconcile repository migrations 0001–0073 against the actual production schema and any independently retained deployment records.
 5. Review the complete SQL for migrations 0065–0073, including dependencies, grants, policies and effects against the live schema.
@@ -67,7 +67,7 @@ Therefore:
 7. Obtain explicit production approval before applying any migration.
 8. Verify database objects, effective privileges and the authoritative migration history after an approved rollout.
 
-No production migration is authorized by this document.
+One targeted, configuration-only migration was applied during this review: `20261110202304_harden_qualified_definer_search_paths_0063`. It pins existing reviewed SECURITY DEFINER functions to an empty `search_path`, safely skips the absent `get_conversation_poll_vote_counts(uuid)` overload, and does not alter application tables or user data. No other production migration, backend deployment, Render configuration change, or APK rebuild was performed.
 
 ## 3. Background workers
 
