@@ -111,10 +111,10 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
   const updates = [];
   let expoSent = 0;
   const admin = {
-    rpc: async () => ({ data: [{ call_id: 'voip-call', attempt_count: 0 }], error: null }),
+    rpc: async () => ({ data: [{ call_id: '123e4567-e89b-12d3-a456-426614174000', attempt_count: 0 }], error: null }),
     from(table) {
       if (table === 'call_sessions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: {
-        id: 'voip-call', caller_id: 'caller', callee_id: 'callee', conversation_id: 'conv',
+        id: '123e4567-e89b-12d3-a456-426614174000', caller_id: '123e4567-e89b-12d3-a456-426614174001', callee_id: '123e4567-e89b-12d3-a456-426614174002', conversation_id: 'conv',
         call_type: 'video', status: 'ringing', created_at: '2026-11-05T08:00:00.000Z',
         expires_at: '2026-11-05T08:01:00.000Z',
       }, error: null }) }) }) };
@@ -129,11 +129,11 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
     admin,
     now: () => new Date('2026-11-05T08:00:00.000Z'),
     sendVoipPush: async (_admin, userId, event) => {
-      assert.equal(userId, 'callee');
-      assert.equal(event.serverCallId, 'voip-call');
+      assert.equal(userId, '123e4567-e89b-12d3-a456-426614174002');
+      assert.equal(event.serverCallId, '123e4567-e89b-12d3-a456-426614174000');
       assert.equal(event.hasVideo, true);
       assert.ok(event.metadata.serverEventToken);
-      assert.equal(getCallEventTokenActor('voip-call', event.metadata.serverEventToken, Date.parse('2026-11-05T08:00:00.000Z')), 'callee');
+      assert.equal(getCallEventTokenActor('123e4567-e89b-12d3-a456-426614174000', event.metadata.serverEventToken, Date.parse('2026-11-05T08:00:00.000Z')), '123e4567-e89b-12d3-a456-426614174002');
       return { sent: 1, failed: 0 };
     },
     sendPush: async () => { expoSent += 1; return { sent: 1, failed: 0 }; },
@@ -141,7 +141,7 @@ test('native VoIP delivery is preferred and avoids duplicate Expo notifications'
   assert.equal(result.voipSent, 1);
   assert.equal(result.sent, 0);
   assert.equal(expoSent, 0);
-  assert.ok(updates.some((item) => item.id === 'voip-call' && item.values.status === 'delivered'));
+  assert.ok(updates.some((item) => item.id === '123e4567-e89b-12d3-a456-426614174000' && item.values.status === 'delivered'));
   if (previousSigning === undefined) delete process.env.CALL_EVENT_SIGNING_SECRET;
   else process.env.CALL_EVENT_SIGNING_SECRET = previousSigning;
 });
