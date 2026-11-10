@@ -75,7 +75,7 @@ test('LIVE participant departure locks the stream row to serialize with joins an
   assert.ok(route.includes("rpc('leave_live_stream'"));
 });
 
-const moderationMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110240000_live_moderation_workflows.sql'), 'utf8');
+const moderationMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261111000000_live_moderation_workflows.sql'), 'utf8');
 
 test('LIVE creator-appointed moderators are stream-scoped and backend-only', () => {
   assert.ok(moderationMigration.includes('public.live_stream_moderators'));
@@ -113,7 +113,7 @@ test('only the LIVE creator can list joined viewers and manage stream moderators
   assert.ok(route.includes("router.delete('/:streamId/moderators/:userId'"));
 });
 
-const accessMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110250000_live_followers_private_guests.sql'), 'utf8');
+const accessMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261111010000_live_followers_private_guests.sql'), 'utf8');
 
 test('LIVE follower relationships are private to the backend and block-aware', () => {
   assert.ok(accessMigration.includes('public.live_creator_follows'));
