@@ -11,6 +11,7 @@ DECLARE
   v_room public.group_call_rooms%rowtype;
   v_joined integer;
   v_role text;
+  v_existing_status text;
 BEGIN
   SELECT * INTO v_room
     FROM public.group_call_rooms
@@ -27,10 +28,10 @@ BEGIN
     RAISE EXCEPTION 'user is not a member of this group' USING ERRCODE = '42501';
   END IF;
 
-  SELECT role, status INTO v_role, v_role
+  SELECT status INTO v_existing_status
     FROM public.group_call_participants
    WHERE room_id = p_room_id AND user_id = p_user_id;
-  IF NOT FOUND OR v_role <> 'joined' THEN
+  IF NOT FOUND OR v_existing_status <> 'joined' THEN
     SELECT count(*) INTO v_joined
       FROM public.group_call_participants
      WHERE room_id = p_room_id AND status = 'joined';
