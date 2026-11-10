@@ -42,7 +42,7 @@ async function runCallInvitationNotifications({ admin, sendPush, sendVoipPush, l
         .select('name,avatar_url').eq('id', call.caller_id).maybeSingle();
       if (callerError) throw callerError;
       const callerName = caller?.name || 'A ZannyChat contact';
-      const eventToken = createCallEventToken(call.id, now().getTime());
+      const eventToken = createCallEventToken(call.id, now().getTime(), call.callee_id);
       const voipEvent = {
         eventId: require('node:crypto').randomUUID(),
         serverCallId: call.id,
