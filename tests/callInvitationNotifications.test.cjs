@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { retryDelay, runCallInvitationNotifications } = require('../src/jobs/callInvitationNotifications');
 const { getCallEventTokenActor } = require('../src/services/callEventToken');
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/0066_profile_privacy_and_attachment_cleanup.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 const targetedSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
 
 test('call notification retries are bounded', () => {
