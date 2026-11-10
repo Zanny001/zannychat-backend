@@ -65,5 +65,6 @@ test('remote call-ended supports standard APNs alerts but never sends terminal e
   assert.match(source, /'apns-push-type': 'alert'/);
   assert.match(source, /row\.token_type === 'APNS_ALERT'/);
   assert.match(source, /row\.token_type === 'FCM'/);
-  assert.doesNotMatch(source, /sendApnsVoip\(row\.token, event\)/);
+  const endedSender = source.slice(source.indexOf('async function sendCallEndedToUser'));
+  assert.doesNotMatch(endedSender, /APNS_VOIP|sendApnsVoip/);
 });
