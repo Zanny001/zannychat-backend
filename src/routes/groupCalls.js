@@ -68,6 +68,7 @@ router.post('/', async (req, res) => {
     const invitedUserIds = eligibleMembers
       .filter((member) => member.user_id !== req.user.id)
       .map((member) => member.user_id);
+    const token = tokenFor(req.user, roomName, config);
     const { data: room, error: roomError } = await supabaseAdmin.rpc('create_group_call_room', {
       p_conversation_id: conversationId,
       p_host_user_id: req.user.id,
@@ -93,7 +94,7 @@ router.post('/', async (req, res) => {
     return res.status(201).json({
       room,
       livekitUrl: config.url,
-      token: tokenFor(req.user, roomName, config),
+      token,
       invitedCount: Math.max(0, eligibleMembers.length - 1),
       pushAcceptedDevices: pushAccepted,
     });
@@ -166,6 +167,7 @@ router.post('/:roomId/join', async (req, res) => {
     if (!room || !['ringing','active'].includes(room.status)) return res.status(404).json({ error: 'Group call is no longer active' });
     const group = await getGroupMembership(room.conversation_id, req.user.id);
     if (group.error) return res.status(group.status).json({ error: group.error });
+    const token = tokenFor(req.user, room.room_name, config);
     const { error: joinError } = await supabaseAdmin.rpc('join_group_call_room', {
       p_room_id: roomId, p_user_id: req.user.id,
     });
@@ -176,7 +178,7 @@ router.post('/:roomId/join', async (req, res) => {
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'Group call is no longer active' });
       throw joinError;
     }
-    return res.json({ room, livekitUrl: config.url, token: tokenFor(req.user, room.room_name, config) });
+    return res.json({ room, livekitUrl: config.url, token });
   } catch (error) {
     console.error('[group-calls] join failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not join this group call' });
