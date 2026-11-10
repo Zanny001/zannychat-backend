@@ -75,7 +75,7 @@ router.post('/voip-token', async (req, res) => {
   if (token.length < 16 || token.length > 4096 || !['APNS_VOIP', 'FCM'].includes(type)) {
     return res.status(400).json({ error: 'Invalid VoIP push token' });
   }
-  const platform = type === 'APNS_VOIP' ? 'ios' : 'android';
+  const platform = type === 'FCM' ? 'android' : 'ios';
   const { error } = await supabaseAdmin.from('call_voip_tokens').upsert({
     user_id: req.user.id,
     token,
