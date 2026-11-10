@@ -1,6 +1,8 @@
 const { createHmac, timingSafeEqual } = require('node:crypto');
 
-const TOKEN_TTL_SECONDS = 4 * 60 * 60;
+// A call can remain connected for many hours; keep the signed end-event
+// credential valid for a full day while still bounding replay exposure.
+const TOKEN_TTL_SECONDS = 24 * 60 * 60;
 const TOKEN_CONTEXT = 'zannychat-native-call-event:v1';
 
 function getSecret() {
