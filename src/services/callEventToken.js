@@ -39,6 +39,7 @@ function getCallEventTokenActor(callId, token, nowMs = Date.now()) {
   if (!parsed) return null;
   const now = Math.floor(nowMs / 1000);
   if (parsed.expiresAt < now || parsed.expiresAt > now + TOKEN_TTL_SECONDS + 60) return null;
+  if (parsed.legacy) return null;
   const expected = Buffer.from(sign(callId, parsed.expiresAt, parsed.actorId), 'base64url');
   const actual = Buffer.from(parsed.supplied, 'base64url');
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
@@ -46,16 +47,19 @@ function getCallEventTokenActor(callId, token, nowMs = Date.now()) {
 }
 
 function verifyCallEventToken(callId, token, nowMs = Date.now()) {
-  return getCallEventTokenActor(callId, token, nowMs) !== null
-    || Boolean(parseToken(token)?.actorId === '' && getSecret() && (() => {
-      const parsed = parseToken(token);
-      if (!parsed) return false;
-      const now = Math.floor(nowMs / 1000);
-      if (parsed.expiresAt < now || parsed.expiresAt > now + TOKEN_TTL_SECONDS + 60) return false;
-      const expected = Buffer.from(sign(callId, parsed.expiresAt, ''), 'base64url');
-      const actual = Buffer.from(parsed.supplied, 'base64url');
-      return actual.length === expected.length && timingSafeEqual(actual, expected);
-    })());
+  if (!getSecret() || !callId) return false;
+  const parsed = parseToken(token);
+  if (!parsed) return false;
+  const now = Math.floor(nowMs / 1000);
+  if (parsed.expiresAt < now || parsed.expiresAt > now + TOKEN_TTL_SECONDS + 60) return false;
+  const expected = parsed.legacy
+    ? createHmac('sha256', getSecret())
+      .update(`${TOKEN_CONTEXT}:${callId}:${parsed.expiresAt}`)
+      .digest('base64url')
+    : sign(callId, parsed.expiresAt, parsed.actorId);
+  const expectedBytes = Buffer.from(expected, 'base64url');
+  const actual = Buffer.from(parsed.supplied, 'base64url');
+  return actual.length === expectedBytes.length && timingSafeEqual(actual, expectedBytes);
 }
 
 module.exports = { createCallEventToken, verifyCallEventToken, getCallEventTokenActor, TOKEN_TTL_SECONDS };
