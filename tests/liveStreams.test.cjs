@@ -111,3 +111,40 @@ test('only the LIVE creator can list joined viewers and manage stream moderators
   assert.ok(route.includes("router.post('/:streamId/moderators'"));
   assert.ok(route.includes("router.delete('/:streamId/moderators/:userId'"));
 });
+
+const accessMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110250000_live_followers_private_guests.sql'), 'utf8');
+
+test('LIVE follower relationships are private to the backend and block-aware', () => {
+  assert.ok(accessMigration.includes('public.live_creator_follows'));
+  assert.ok(accessMigration.includes('PRIMARY KEY (follower_id, creator_id)'));
+  assert.ok(accessMigration.includes('REVOKE ALL ON public.live_creator_follows'));
+  assert.ok(route.includes("router.post('/creators/:creatorId/follow'"));
+  assert.ok(route.includes("router.delete('/creators/:creatorId/follow'"));
+  assert.ok(route.includes("router.get('/following/streams'"));
+  assert.ok(route.includes("hasBlockBetween(creatorId, req.user.id)"));
+});
+
+test('LIVE follower-only and private admission is enforced inside the locked database function', () => {
+  assert.ok(accessMigration.includes('FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)'));
+  assert.ok(accessMigration.includes('FOR UPDATE'));
+  assert.ok(accessMigration.includes("v_stream.visibility = 'followers' AND NOT v_is_follower"));
+  assert.ok(accessMigration.includes("v_stream.visibility = 'private'"));
+  assert.ok(accessMigration.includes("invitation_type IN ('viewer','guest')"));
+  assert.ok(accessMigration.includes('public.live_stream_invites'));
+  assert.ok(route.includes("router.post('/:streamId/invites'"));
+  assert.ok(route.includes("router.get('/invitations'"));
+  assert.ok(route.includes("router.get('/following/streams'"));
+});
+
+test('LIVE guest publishing requires creator approval and the stream guest switch', () => {
+  assert.ok(accessMigration.includes('p_allow_guests boolean'));
+  assert.ok(accessMigration.includes('allow_guests'));
+  assert.ok(accessMigration.includes("v_stream.allow_guests AND v_has_invite"));
+  assert.ok(accessMigration.includes("v_invite.invitation_type = 'guest' AND v_invite.status = 'accepted'"));
+  assert.ok(route.includes("router.post('/:streamId/guest-requests'"));
+  assert.ok(route.includes("router.get('/:streamId/guest-requests'"));
+  assert.ok(route.includes("router.patch('/:streamId/guest-requests/:userId'"));
+  assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
+  assert.ok(route.includes("p_visibility: visibility"));
+  assert.ok(route.includes("p_allow_guests: allowGuests"));
+});
