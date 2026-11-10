@@ -78,6 +78,7 @@ test('group-call end is serialized, rechecks host/admin authorization, and updat
   assert.ok(endAndTypeMigration.includes('FROM public.group_call_rooms'));
   assert.ok(endAndTypeMigration.includes('FOR UPDATE'));
   assert.ok(endAndTypeMigration.includes('FROM public.conversation_participants cp'));
+  assert.ok(endAndTypeMigration.includes('FOR SHARE'));
   assert.ok(endAndTypeMigration.includes('p_user_id <> v_room.host_user_id AND NOT v_is_admin'));
   assert.ok(endAndTypeMigration.includes("status IN ('invited','joined')"));
   assert.ok(endAndTypeMigration.includes('TO service_role'));
