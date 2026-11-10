@@ -43,3 +43,11 @@ test('native event credentials can only be minted by an active call participant'
   assert.match(callsRoute, /actorId === call\.caller_id \? 'cancelled'/);
   assert.match(callsRoute, /actorId === call\.caller_id \? call\.callee_id : call\.caller_id/);
 });
+
+
+test('VoIP token cleanup is scoped to the authenticated account and supports global sign-out', () => {
+  assert.match(callsRoute, /router\.delete\('\/voip-token'/);
+  assert.match(callsRoute, /const removeAll = req\.body\?\.all === true/);
+  assert.match(callsRoute, /\.eq\('user_id', req\.user\.id\)/);
+  assert.match(callsRoute, /if \(!removeAll\) query = query\.eq\('token', token\)/);
+});
