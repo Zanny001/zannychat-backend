@@ -122,9 +122,12 @@ router.get('/invitations', async (req, res) => {
       : { data: [], error: null };
     if (streamError) throw streamError;
     const streamById = new Map((streams || []).map((row) => [row.id, row]));
-    return res.json({ invitations: (invites || []).map((invite) => ({
-      ...invite, stream: streamById.get(invite.stream_id) || null,
-    })).filter((invite) => invite.stream) });
+    const visibleInvitations = [];
+    for (const invite of invites || []) {
+      const stream = streamById.get(invite.stream_id);
+      if (stream && !await hasBlockBetween(stream.creator_id, req.user.id)) visibleInvitations.push({ ...invite, stream });
+    }
+    return res.json({ invitations: visibleInvitations });
   } catch (error) {
     console.error('[live] invitation list failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE invitations' });
@@ -143,21 +146,23 @@ router.get('/following/streams', async (req, res) => {
       .eq('status', 'live').in('visibility', ['public','followers'])
       .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    return res.json({ streams: data || [] });
+    const visible = [];
+    for (const stream of data || []) if (!await hasBlockBetween(stream.creator_id, req.user.id)) visible.push({ ...stream, is_creator: stream.creator_id === req.user.id });
+    return res.json({ streams: visible });
   } catch (error) {
     console.error('[live] followed stream discovery failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load followed creators' });
   }
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_streams')
       .select('id,creator_id,title,description,started_at,viewer_limit')
       .eq('status', 'live').eq('visibility', 'public')
       .order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    return res.json({ streams: data || [] });
+    return res.json({ streams: (data || []).map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id })) });
   } catch (error) {
     console.error('[live] discover failed:', error?.message || error);
     return res.status(503).json({ error: 'LIVE discovery is temporarily unavailable' });
