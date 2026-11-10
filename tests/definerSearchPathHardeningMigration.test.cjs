@@ -20,7 +20,7 @@ test('reviewed SECURITY DEFINER routines are conditionally pinned to an empty se
   ];
   const normalized = migration.replace(/\s+/g, ' ').toLowerCase();
   for (const signature of expected) {
-    assert.ok(normalized.includes(signature.toLowerCase()), \`missing reviewed signature \${signature}\`);
+    assert.ok(normalized.includes(signature.toLowerCase()), 'missing reviewed signature ' + signature);
   }
   assert.match(migration, /to_regprocedure\(v_signature\)/i);
   assert.match(migration, /if v_function is not null then[\s\S]*?alter function/i);
