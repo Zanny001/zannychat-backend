@@ -258,17 +258,21 @@ router.get('/:streamId/participants', async (req, res) => {
       .select('user_id,joined_at').eq('stream_id', streamId).eq('role', 'viewer').eq('status', 'joined')
       .order('joined_at', { ascending: true }).limit(500);
     if (joinedError) throw joinedError;
-    const userIds = (joined || []).map((row) => row.user_id);
-    const [{ data: profiles, error: profilesError }, { data: moderators, error: moderatorsError }] = await Promise.all([
-      userIds.length ? supabaseAdmin.from('profiles').select('id,name').in('id', userIds) : Promise.resolve({ data: [], error: null }),
-      supabaseAdmin.from('live_stream_moderators').select('user_id').eq('stream_id', streamId),
-    ]);
-    if (profilesError || moderatorsError) throw profilesError || moderatorsError;
-    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    const { data: moderators, error: moderatorsError } = await supabaseAdmin.from('live_stream_moderators')
+      .select('user_id').eq('stream_id', streamId);
+    if (moderatorsError) throw moderatorsError;
+    const joinedById = new Map((joined || []).map((row) => [row.user_id, row]));
     const moderatorIds = new Set((moderators || []).map((row) => row.user_id));
-    return res.json({ participants: (joined || []).map((row) => ({
-      userId: row.user_id, name: names.get(row.user_id) || 'ZannyChat user',
-      joinedAt: row.joined_at, moderator: moderatorIds.has(row.user_id),
+    const userIds = [...new Set([...joinedById.keys(), ...moderatorIds])];
+    const { data: profiles, error: profilesError } = userIds.length
+      ? await supabaseAdmin.from('profiles').select('id,name').in('id', userIds)
+      : { data: [], error: null };
+    if (profilesError) throw profilesError;
+    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    return res.json({ participants: userIds.map((userId) => ({
+      userId, name: names.get(userId) || 'ZannyChat user',
+      joinedAt: joinedById.get(userId)?.joined_at || null,
+      joined: joinedById.has(userId), moderator: moderatorIds.has(userId),
     })) });
   } catch (error) {
     console.error('[live] participants fetch failed:', error?.message || error);
