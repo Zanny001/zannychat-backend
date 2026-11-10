@@ -15,23 +15,52 @@ const router = express.Router();
    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
    const reason = typeof req.body?.reason === 'string' ? req.body.reason : '';
    if (!/^[0-9a-f-]{36}$/i.test(callId) || !token) return res.status(400).json({ error: 'Invalid native call event' });
-   const { verifyCallEventToken } = require('../services/callEventToken');
+   const { verifyCallEventToken, getCallEventTokenActor } = require('../services/callEventToken');
    if (!verifyCallEventToken(callId, token)) return res.status(403).json({ error: 'Invalid or expired native call event' });
    const { data: call, error } = await supabaseAdmin.from('call_sessions')
-     .select('id,caller_id,status').eq('id', callId).maybeSingle();
+     .select('id,caller_id,callee_id,status').eq('id', callId).maybeSingle();
    if (error) return res.status(503).json({ error: 'Could not inspect call state' });
    if (!call) return res.status(404).json({ error: 'Call not found' });
+   // Older in-flight invitation tokens were callee-scoped by delivery; new
+   // tokens cryptographically identify their participant.
+   const actorId = getCallEventTokenActor(callId, token) || call.callee_id;
+   if (![call.caller_id, call.callee_id].includes(actorId)) return res.status(403).json({ error: 'Native call token is not valid for a participant' });
    if (!['ringing', 'accepted'].includes(call.status)) return res.json({ updated: false, alreadyEnded: true });
-   const nextStatus = call.status === 'ringing' ? (reason === 'unanswered' ? 'missed' : 'declined') : 'ended';
+   const nextStatus = call.status === 'accepted' ? 'ended'
+     : actorId === call.caller_id ? 'cancelled'
+       : reason === 'unanswered' ? 'missed' : 'declined';
    const { data: updated, error: updateError } = await supabaseAdmin.from('call_sessions')
      .update({ status: nextStatus }).eq('id', callId).in('status', ['ringing', 'accepted'])
      .select('id,status').maybeSingle();
    if (updateError) return res.status(503).json({ error: 'Could not update call state' });
-   if (updated) await sendCallEndedToUser(supabaseAdmin, call.caller_id, callId, updated.status);
+   const recipientId = actorId === call.caller_id ? call.callee_id : call.caller_id;
+   if (updated) await sendCallEndedToUser(supabaseAdmin, recipientId, callId, updated.status);
    return res.json({ updated: Boolean(updated), status: updated?.status || nextStatus });
  });
 
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Call setup is rate-limited. Please wait before trying again.' }));
+
+// Only the authenticated caller may mint an outgoing native-end token.
+// The token is call-scoped, participant-bound, short-lived, and returned
+// once to native app-private storage; it is never placed in call UI fields.
+router.post('/:callId/native-event-token', async (req, res) => {
+  const callId = String(req.params.callId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId)) {
+    return res.status(400).json({ error: 'Invalid call id' });
+  }
+  const { data: call, error } = await supabaseAdmin.from('call_sessions')
+    .select('id,caller_id,status,expires_at').eq('id', callId).maybeSingle();
+  if (error) return res.status(503).json({ error: 'Could not inspect call state' });
+  if (!call || call.caller_id !== req.user.id) return res.status(404).json({ error: 'Call invitation not found' });
+  if (call.status !== 'ringing' || new Date(call.expires_at).getTime() <= Date.now()) {
+    return res.status(409).json({ error: 'Call invitation is no longer active' });
+  }
+  const { createCallEventToken } = require('../services/callEventToken');
+  const eventToken = createCallEventToken(callId, Date.now(), req.user.id);
+  if (!eventToken) return res.status(503).json({ error: 'Native call reconciliation is not configured' });
+  res.set('Cache-Control', 'no-store');
+  return res.json(eventToken);
+});
 
 // The caller kicks the durable queue immediately after creating a call.
 // The session row and queue entry are the source of truth; push is an
