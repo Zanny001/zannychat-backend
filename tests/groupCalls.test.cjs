@@ -70,3 +70,22 @@ test('group-call departure serializes on the room row and ends the room atomical
   assert.ok(route.includes("rpc('leave_group_call_room'"));
   assert.ok(route.includes('roomEnded: roomEnded === true'));
 });
+
+const endAndTypeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110200000_atomic_group_call_end_and_call_type.sql'), 'utf8');
+
+test('group-call end is serialized, rechecks host/admin authorization, and updates all invitations', () => {
+  assert.ok(endAndTypeMigration.includes('FUNCTION public.end_group_call_room(p_room_id uuid, p_user_id uuid)'));
+  assert.ok(endAndTypeMigration.includes('FROM public.group_call_rooms'));
+  assert.ok(endAndTypeMigration.includes('FOR UPDATE'));
+  assert.ok(endAndTypeMigration.includes('FROM public.conversation_participants cp'));
+  assert.ok(endAndTypeMigration.includes('p_user_id <> v_room.host_user_id AND NOT v_is_admin'));
+  assert.ok(endAndTypeMigration.includes("status IN ('invited','joined')"));
+  assert.ok(endAndTypeMigration.includes('TO service_role'));
+  assert.ok(route.includes("rpc('end_group_call_room'"));
+});
+
+test('group-call room schema includes the call_type column used by API routes', () => {
+  assert.ok(endAndTypeMigration.includes('ADD COLUMN IF NOT EXISTS call_type text'));
+  assert.ok(endAndTypeMigration.includes("CHECK (call_type IN ('audio','video'))"));
+  assert.ok(route.includes("call_type: callType"));
+});
