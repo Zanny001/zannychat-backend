@@ -101,17 +101,15 @@ router.post('/:streamId/join', async (req, res) => {
     if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) {
       return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
     }
-    const existing = await requireJoined(streamId, req.user.id);
-    const { data: participants, error: countError } = await supabaseAdmin.from('live_stream_participants')
-      .select('user_id').eq('stream_id', streamId).eq('status', 'joined');
-    if (countError) throw countError;
-    if (!existing && (participants || []).length >= stream.viewer_limit) return res.status(409).json({ error: 'This LIVE audience is full' });
-    const role = stream.creator_id === req.user.id ? 'creator' : 'viewer';
-    const { error: participantError } = await supabaseAdmin.from('live_stream_participants').upsert({
-      stream_id: streamId, user_id: req.user.id, role, status: 'joined',
-      joined_at: new Date().toISOString(), left_at: null,
-    }, { onConflict: 'stream_id,user_id' });
-    if (participantError) throw participantError;
+    const { data: role, error: joinError } = await supabaseAdmin.rpc('join_live_stream', {
+      p_stream_id: streamId, p_user_id: req.user.id,
+    });
+    if (joinError) {
+      if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This LIVE audience is full' });
+      if (joinError.code === '42501') return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
+      if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
+      throw joinError;
+    }
     return res.json({
       stream, livekitUrl: config.url,
       token: issueToken(req.user, stream.room_name, config, role === 'creator'),
