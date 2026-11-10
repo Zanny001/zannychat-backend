@@ -67,6 +67,8 @@ test('LIVE participant departure locks the stream row to serialize with joins an
   assert.ok(lifecycleMigration.includes('FROM public.live_streams'));
   assert.ok(lifecycleMigration.includes('FOR UPDATE'));
   assert.ok(lifecycleMigration.includes('GET DIAGNOSTICS v_updated = ROW_COUNT'));
+  assert.ok(lifecycleMigration.includes("p_user_id = v_stream.creator_id"));
+  assert.ok(lifecycleMigration.includes("creator must end the LIVE stream"));
   assert.ok(lifecycleMigration.includes('TO service_role'));
   assert.ok(route.includes("rpc('leave_live_stream'"));
 });
