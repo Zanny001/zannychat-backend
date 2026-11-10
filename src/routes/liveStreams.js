@@ -118,8 +118,17 @@ router.get('/invite-candidates', async (req, res) => {
       .select('user_id').in('conversation_id', conversationIds).neq('user_id', req.user.id).limit(500);
     if (participantError) throw participantError;
     const candidateIds = [...new Set((participants || []).map((row) => row.user_id))];
-    const visibleIds = [];
-    for (const userId of candidateIds) if (!await hasBlockBetween(req.user.id, userId)) visibleIds.push(userId);
+    if (!candidateIds.length) return res.json({ candidates: [] });
+    const [blockedByMe, blockedMe] = await Promise.all([
+      supabaseAdmin.from('blocked_users').select('blocked_id').eq('blocker_id', req.user.id).in('blocked_id', candidateIds),
+      supabaseAdmin.from('blocked_users').select('blocker_id').eq('blocked_id', req.user.id).in('blocker_id', candidateIds),
+    ]);
+    if (blockedByMe.error || blockedMe.error) throw blockedByMe.error || blockedMe.error;
+    const blockedIds = new Set([
+      ...(blockedByMe.data || []).map((row) => row.blocked_id),
+      ...(blockedMe.data || []).map((row) => row.blocker_id),
+    ]);
+    const visibleIds = candidateIds.filter((userId) => !blockedIds.has(userId));
     if (!visibleIds.length) return res.json({ candidates: [] });
     const { data: profiles, error: profileError } = await supabaseAdmin.from('profiles')
       .select('id,name,avatar_color').in('id', visibleIds).order('name', { ascending: true }).limit(100);
