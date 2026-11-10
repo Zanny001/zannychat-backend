@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261110085000_allow_service_role_native_call_transitions.sql'),
+  path.join(__dirname, '../supabase/migrations/20261110193106_allow_service_role_native_call_transitions_20261110085000.sql'),
   'utf8',
 );
 
@@ -27,7 +27,7 @@ test('native event notifications use the status actually persisted by database t
 
 test('service-role native reconciliation may persist caller cancellation without relaxing participant checks', () => {
   const cancellationMigration = fs.readFileSync(
-    path.join(__dirname, '../supabase/migrations/20261110091000_allow_service_role_native_call_cancellation.sql'),
+    path.join(__dirname, '../supabase/migrations/20261110193112_allow_service_role_native_call_cancellation_20261110091000.sql'),
     'utf8',
   );
   assert.match(cancellationMigration, /OLD\.status = 'ringing' AND NEW\.status = 'cancelled'[\s\S]*?actor = OLD\.caller_id OR is_service_role/);
