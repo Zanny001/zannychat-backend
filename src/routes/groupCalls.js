@@ -65,32 +65,22 @@ router.post('/', async (req, res) => {
     if (eligibleMembers.length < 2) return res.status(409).json({ error: 'No other eligible group members can join this call' });
     const roomId = randomUUID();
     const roomName = 'zgc_' + roomId.replace(/-/g, '');
-    const now = new Date().toISOString();
-    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms').insert({
-      id: roomId,
-      conversation_id: conversationId,
-      host_user_id: req.user.id,
-      room_name: roomName,
-      call_type: callType,
-      status: 'active',
-      max_participants: Math.min(16, eligibleMembers.length),
-      started_at: now,
-    }).select('id,conversation_id,host_user_id,room_name,call_type,status,max_participants,created_at,started_at').single();
+    const invitedUserIds = eligibleMembers
+      .filter((member) => member.user_id !== req.user.id)
+      .map((member) => member.user_id);
+    const { data: room, error: roomError } = await supabaseAdmin.rpc('create_group_call_room', {
+      p_conversation_id: conversationId,
+      p_host_user_id: req.user.id,
+      p_room_id: roomId,
+      p_room_name: roomName,
+      p_call_type: callType,
+      p_max_participants: eligibleMembers.length,
+      p_invited_user_ids: invitedUserIds,
+    });
     if (roomError) {
       if (roomError.code === '23505') return res.status(409).json({ error: 'This group already has an active call' });
+      if (roomError.code === '42501') return res.status(403).json({ error: 'Group membership changed. Refresh the group and try again.' });
       throw roomError;
-    }
-    const participantRows = group.members.map((member) => ({
-      room_id: roomId,
-      user_id: member.user_id,
-      role: member.user_id === req.user.id ? 'host' : 'member',
-      status: member.user_id === req.user.id ? 'joined' : blockedIds.has(member.user_id) ? 'declined' : 'invited',
-      ...(member.user_id === req.user.id ? { joined_at: now } : {}),
-    }));
-    const { error: participantError } = await supabaseAdmin.from('group_call_participants').insert(participantRows);
-    if (participantError) {
-      await supabaseAdmin.from('group_call_rooms').update({ status: 'ended', ended_at: now }).eq('id', roomId);
-      throw participantError;
     }
     const invitationResults = await Promise.allSettled(eligibleMembers
       .filter((member) => member.user_id !== req.user.id)
