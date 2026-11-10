@@ -106,3 +106,13 @@ test('group-call creation inserts the room and all invitations atomically after 
   assert.ok(route.includes("rpc('create_group_call_room'"));
   assert.equal(route.includes(".from('group_call_participants').insert(participantRows)"), false);
 });
+
+test('abandoned host-only group calls are closed before another call starts and expired invites show missed', () => {
+  assert.ok(createCallMigration.includes('WITH stale_rooms AS'));
+  assert.ok(createCallMigration.includes("COALESCE(r.started_at, r.created_at) <= v_now - interval '2 minutes'"));
+  assert.ok(createCallMigration.includes("p.status = 'joined'"));
+  assert.ok(createCallMigration.includes("p.user_id <> r.host_user_id"));
+  assert.ok(createCallMigration.includes("p.status = 'invited'"));
+  assert.ok(route.includes('Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000'));
+  assert.ok(route.includes("? 'missed'"));
+});
