@@ -129,6 +129,7 @@ test('LIVE follower-only and private admission is enforced inside the locked dat
   assert.ok(accessMigration.includes('FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)'));
   assert.ok(accessMigration.includes('FOR UPDATE'));
   assert.ok(accessMigration.includes("v_stream.visibility = 'followers' AND NOT v_is_follower"));
+  assert.ok(accessMigration.includes("v_invite.invitation_type IN ('viewer','guest')"));
   assert.ok(accessMigration.includes("v_stream.visibility = 'private'"));
   assert.ok(accessMigration.includes("invitation_type IN ('viewer','guest')"));
   assert.ok(accessMigration.includes('public.live_stream_invites'));
