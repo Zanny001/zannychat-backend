@@ -197,21 +197,11 @@ router.post('/:roomId/leave', async (req, res) => {
   const roomId = req.params.roomId;
   if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call id' });
   try {
-    const now = new Date().toISOString();
-    const { error } = await supabaseAdmin.from('group_call_participants').update({
-      status: 'left', left_at: now,
-    }).eq('room_id', roomId).eq('user_id', req.user.id).eq('status', 'joined');
+    const { data: roomEnded, error } = await supabaseAdmin.rpc('leave_group_call_room', {
+      p_room_id: roomId, p_user_id: req.user.id,
+    });
     if (error) throw error;
-    const { data: joined, error: joinedError } = await supabaseAdmin.from('group_call_participants')
-      .select('user_id').eq('room_id', roomId).eq('status', 'joined');
-    if (joinedError) throw joinedError;
-    if (!joined?.length) {
-      await supabaseAdmin.from('group_call_rooms')
-        .update({ status: 'ended', ended_at: now }).eq('id', roomId).in('status', ['ringing','active']);
-      await supabaseAdmin.from('group_call_participants').update({ status: 'left', left_at: now })
-        .eq('room_id', roomId).eq('status', 'joined');
-    }
-    return res.json({ left: true, roomEnded: !joined?.length });
+    return res.json({ left: true, roomEnded: roomEnded === true });
   } catch (error) {
     console.error('[group-calls] leave failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not leave this group call' });
