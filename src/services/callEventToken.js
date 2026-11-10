@@ -7,34 +7,55 @@ function getSecret() {
   return process.env.CALL_EVENT_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 }
 
-function sign(callId, expiresAt) {
+function sign(callId, expiresAt, actorId = '') {
   return createHmac('sha256', getSecret())
-    .update(`${TOKEN_CONTEXT}:${callId}:${expiresAt}`)
+    .update(`${TOKEN_CONTEXT}:${callId}:${actorId}:${expiresAt}`)
     .digest('base64url');
 }
 
-function createCallEventToken(callId, nowMs = Date.now()) {
+function createCallEventToken(callId, nowMs = Date.now(), actorId = '') {
   if (!getSecret() || !callId) return null;
   const expiresAt = Math.floor(nowMs / 1000) + TOKEN_TTL_SECONDS;
+  const normalizedActorId = typeof actorId === 'string' && actorId ? actorId : '';
   return {
-    token: `${expiresAt}.${sign(callId, expiresAt)}`,
+    token: `${expiresAt}.${normalizedActorId || '-' }.${sign(callId, expiresAt, normalizedActorId)}`,
     expiresAt: new Date(expiresAt * 1000).toISOString(),
   };
 }
 
-function verifyCallEventToken(callId, token, nowMs = Date.now()) {
-  if (!getSecret() || !callId || typeof token !== 'string') return false;
-  const separator = token.indexOf('.');
-  if (separator < 1) return false;
-  const expiresText = token.slice(0, separator);
-  const supplied = token.slice(separator + 1);
-  if (!/^\d{10}$/.test(expiresText) || !/^[A-Za-z0-9_-]{40,50}$/.test(supplied)) return false;
-  const expiresAt = Number(expiresText);
-  const now = Math.floor(nowMs / 1000);
-  if (expiresAt < now || expiresAt > now + TOKEN_TTL_SECONDS + 60) return false;
-  const expected = Buffer.from(sign(callId, expiresAt), 'base64url');
-  const actual = Buffer.from(supplied, 'base64url');
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+function parseToken(token) {
+  if (typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3 || !/^\d{10}$/.test(parts[0])) return null;
+  const actorId = parts[1] === '-' ? '' : parts[1];
+  if (actorId && !/^[0-9a-f-]{36}$/i.test(actorId)) return null;
+  if (!/^[A-Za-z0-9_-]{40,50}$/.test(parts[2])) return null;
+  return { expiresAt: Number(parts[0]), actorId, supplied: parts[2] };
 }
 
-module.exports = { createCallEventToken, verifyCallEventToken, TOKEN_TTL_SECONDS };
+function getCallEventTokenActor(callId, token, nowMs = Date.now()) {
+  if (!getSecret() || !callId) return null;
+  const parsed = parseToken(token);
+  if (!parsed) return null;
+  const now = Math.floor(nowMs / 1000);
+  if (parsed.expiresAt < now || parsed.expiresAt > now + TOKEN_TTL_SECONDS + 60) return null;
+  const expected = Buffer.from(sign(callId, parsed.expiresAt, parsed.actorId), 'base64url');
+  const actual = Buffer.from(parsed.supplied, 'base64url');
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  return parsed.actorId || null;
+}
+
+function verifyCallEventToken(callId, token, nowMs = Date.now()) {
+  return getCallEventTokenActor(callId, token, nowMs) !== null
+    || Boolean(parseToken(token)?.actorId === '' && getSecret() && (() => {
+      const parsed = parseToken(token);
+      if (!parsed) return false;
+      const now = Math.floor(nowMs / 1000);
+      if (parsed.expiresAt < now || parsed.expiresAt > now + TOKEN_TTL_SECONDS + 60) return false;
+      const expected = Buffer.from(sign(callId, parsed.expiresAt, ''), 'base64url');
+      const actual = Buffer.from(parsed.supplied, 'base64url');
+      return actual.length === expected.length && timingSafeEqual(actual, expected);
+    })());
+}
+
+module.exports = { createCallEventToken, verifyCallEventToken, getCallEventTokenActor, TOKEN_TTL_SECONDS };
