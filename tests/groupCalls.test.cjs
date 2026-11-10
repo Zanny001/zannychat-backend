@@ -98,6 +98,8 @@ test('group-call creation inserts the room and all invitations atomically after 
   assert.ok(createCallMigration.includes('FUNCTION public.create_group_call_room('));
   assert.ok(createCallMigration.includes('public.conversations c'));
   assert.ok(createCallMigration.includes('public.conversation_participants cp'));
+  assert.ok(createCallMigration.includes('public.blocked_users'));
+  assert.ok(createCallMigration.includes('blocked group member cannot be invited'));
   assert.ok(createCallMigration.includes('FOR SHARE'));
   assert.ok(createCallMigration.includes('INSERT INTO public.group_call_rooms'));
   assert.ok(createCallMigration.includes('INSERT INTO public.group_call_participants'));
