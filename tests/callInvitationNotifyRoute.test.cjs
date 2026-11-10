@@ -22,7 +22,8 @@ test('native VoIP token registration and call-end delivery routes are authentica
   assert.ok(route.includes("router.delete('/voip-token'"));
   assert.ok(route.includes("router.post('/:callId/end-notify'"));
   assert.ok(route.includes('sendCallEndedToUser'));
-  assert.ok(route.includes("['APNS_VOIP', 'FCM']"));
+  assert.ok(route.includes("['APNS_VOIP', 'APNS_ALERT', 'FCM']"));
+  assert.ok(route.includes("type === 'FCM' ? 'android' : 'ios'"));
 });
 
 test('native call-end reconciliation is signed and mounted before user authentication middleware', () => {
