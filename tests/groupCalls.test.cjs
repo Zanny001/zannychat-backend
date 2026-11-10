@@ -56,7 +56,7 @@ test('group call database state is backend-only and limits active rooms per grou
   assert.match(migration, /GRANT ALL ON public\.group_call_rooms, public\.group_call_participants TO service_role/);
 });
 
-const departureMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110190000_atomic_group_call_departure.sql'), 'utf8');
+const departureMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192237_atomic_group_call_departure_20261110190000.sql'), 'utf8');
 
 test('group-call departure serializes on the room row and ends the room atomically', () => {
   assert.ok(departureMigration.includes('FUNCTION public.leave_group_call_room(p_room_id uuid, p_user_id uuid)'));
@@ -72,7 +72,7 @@ test('group-call departure serializes on the room row and ends the room atomical
   assert.ok(route.includes('roomEnded: roomEnded === true'));
 });
 
-const endAndTypeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110200000_atomic_group_call_end_and_call_type.sql'), 'utf8');
+const endAndTypeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192243_atomic_group_call_end_and_call_type_20261110200000.sql'), 'utf8');
 
 test('group-call end is serialized, rechecks host/admin authorization, and updates all invitations', () => {
   assert.ok(endAndTypeMigration.includes('FUNCTION public.end_group_call_room(p_room_id uuid, p_user_id uuid)'));
@@ -92,7 +92,7 @@ test('group-call room schema includes the call_type column used by API routes', 
   assert.ok(route.includes("call_type: callType"));
 });
 
-const createCallMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110210000_atomic_group_call_creation.sql'), 'utf8');
+const createCallMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192249_atomic_group_call_creation_20261110210000.sql'), 'utf8');
 
 test('group-call creation inserts the room and all invitations atomically after validating group membership', () => {
   assert.ok(createCallMigration.includes('FUNCTION public.create_group_call_room('));
