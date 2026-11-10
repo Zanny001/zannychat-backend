@@ -52,6 +52,17 @@ router.post('/', async (req, res) => {
     if (group.members.length < 2 || group.members.length > 16) {
       return res.status(409).json({ error: 'Group calls currently support 2 to 16 group members' });
     }
+    const { data: blocks, error: blocksError } = await supabaseAdmin.from('blocked_users')
+      .select('blocker_id,blocked_id')
+      .or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`);
+    if (blocksError) throw blocksError;
+    const blockedIds = new Set((blocks || []).map((row) =>
+      row.blocker_id === req.user.id ? row.blocked_id : row.blocker_id
+    ));
+    const eligibleMembers = group.members.filter((member) =>
+      member.user_id === req.user.id || !blockedIds.has(member.user_id)
+    );
+    if (eligibleMembers.length < 2) return res.status(409).json({ error: 'No other eligible group members can join this call' });
     const roomId = randomUUID();
     const roomName = 'zgc_' + roomId.replace(/-/g, '');
     const now = new Date().toISOString();
@@ -62,7 +73,7 @@ router.post('/', async (req, res) => {
       room_name: roomName,
       call_type: callType,
       status: 'active',
-      max_participants: Math.min(16, group.members.length),
+      max_participants: Math.min(16, eligibleMembers.length),
       started_at: now,
     }).select('id,conversation_id,host_user_id,room_name,call_type,status,max_participants,created_at,started_at').single();
     if (roomError) {
@@ -73,7 +84,7 @@ router.post('/', async (req, res) => {
       room_id: roomId,
       user_id: member.user_id,
       role: member.user_id === req.user.id ? 'host' : 'member',
-      status: member.user_id === req.user.id ? 'joined' : 'invited',
+      status: member.user_id === req.user.id ? 'joined' : blockedIds.has(member.user_id) ? 'declined' : 'invited',
       ...(member.user_id === req.user.id ? { joined_at: now } : {}),
     }));
     const { error: participantError } = await supabaseAdmin.from('group_call_participants').insert(participantRows);
@@ -81,7 +92,7 @@ router.post('/', async (req, res) => {
       await supabaseAdmin.from('group_call_rooms').update({ status: 'ended', ended_at: now }).eq('id', roomId);
       throw participantError;
     }
-    const invitationResults = await Promise.allSettled(group.members
+    const invitationResults = await Promise.allSettled(eligibleMembers
       .filter((member) => member.user_id !== req.user.id)
       .map((member) => sendPushToUser(member.user_id, {
         title: callType === 'video' ? 'Incoming group video call' : 'Incoming group audio call',
@@ -93,7 +104,7 @@ router.post('/', async (req, res) => {
       room,
       livekitUrl: config.url,
       token: tokenFor(req.user, roomName, config),
-      invitedCount: Math.max(0, group.members.length - 1),
+      invitedCount: Math.max(0, eligibleMembers.length - 1),
       pushAcceptedDevices: pushAccepted,
     });
   } catch (error) {
