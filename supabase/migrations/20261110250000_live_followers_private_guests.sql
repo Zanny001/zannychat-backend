@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_invites (
     CHECK (status IN ('pending','requested','accepted','declined','revoked')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (stream_id, user_id),
+  PRIMARY KEY (stream_id, user_id, invitation_type),
   CHECK (user_id <> invited_by)
 );
 CREATE INDEX IF NOT EXISTS live_stream_invites_user_status_idx
@@ -56,7 +56,7 @@ BEGIN
   IF p_title IS NULL OR char_length(btrim(p_title)) NOT BETWEEN 1 AND 80
      OR p_description IS NULL OR char_length(p_description) > 500
      OR p_room_name IS NULL OR char_length(p_room_name) NOT BETWEEN 1 AND 128
-     OR p_visibility NOT IN ('public','followers','private')
+     OR p_visibility IS NULL OR p_visibility NOT IN ('public','followers','private')
      OR p_allow_guests IS NULL THEN
     RAISE EXCEPTION 'invalid LIVE stream details' USING ERRCODE = '22023';
   END IF;
@@ -114,6 +114,9 @@ BEGIN
       FROM public.live_stream_invites
      WHERE stream_id = p_stream_id AND user_id = p_user_id
        AND status IN ('pending','accepted')
+     ORDER BY CASE WHEN invitation_type = 'guest' AND status = 'accepted' THEN 0 ELSE 1 END,
+              created_at DESC
+     LIMIT 1
      FOR UPDATE;
     v_has_invite := FOUND;
 
