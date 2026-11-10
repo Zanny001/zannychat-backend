@@ -158,6 +158,9 @@ router.get('/:streamId/comments', async (req, res) => {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (stream.visibility !== 'public' && stream.creator_id !== req.user.id) return res.status(403).json({ error: 'This LIVE stream is not public' });
+    if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
+      return res.status(403).json({ error: 'This LIVE stream is unavailable' });
+    }
     const { data, error } = await supabaseAdmin.from('live_stream_comments')
       .select('id,stream_id,user_id,body,moderation_status,created_at')
       .eq('stream_id', streamId).eq('moderation_status', 'visible')
@@ -220,6 +223,9 @@ router.post('/:streamId/react', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
+      return res.status(403).json({ error: 'Reactions are unavailable' });
+    }
     if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before reacting' });
     const { error } = await supabaseAdmin.from('live_stream_reactions').insert({
       stream_id: streamId, user_id: req.user.id, reaction,
