@@ -21,7 +21,8 @@ test('service-role native reconciliation is limited to signed terminal call tran
 const callsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/calls.js'), 'utf8');
 
 test('native event notifications use the status actually persisted by database triggers', () => {
-  assert.match(callsRoute, /const recipientId = actorId === call\.caller_id \? call\.callee_id : call\.caller_id/);\n  assert.match(callsRoute, /sendCallEndedToUser\(supabaseAdmin, recipientId, callId, updated\.status\)/);
+  assert.match(callsRoute, /const recipientId = actorId === call\.caller_id \? call\.callee_id : call\.caller_id/);
+  assert.match(callsRoute, /sendCallEndedToUser\(supabaseAdmin, recipientId, callId, updated\.status\)/);
 });
 
 test('service-role native reconciliation may persist caller cancellation without relaxing participant checks', () => {
