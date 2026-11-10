@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.call_voip_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   token text NOT NULL UNIQUE,
-  token_type text NOT NULL CHECK (token_type IN ('APNS_VOIP', 'FCM')),
+  token_type text NOT NULL CHECK (token_type IN ('APNS_VOIP', 'APNS_ALERT', 'FCM')),
   platform text NOT NULL CHECK (platform IN ('ios', 'android')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
