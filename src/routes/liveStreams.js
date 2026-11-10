@@ -107,6 +107,30 @@ router.get('/following', async (req, res) => {
   }
 });
 
+router.get('/invitations', async (req, res) => {
+  try {
+    const { data: invites, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
+      .select('stream_id,invited_by,created_at').eq('user_id', req.user.id)
+      .eq('invitation_type', 'viewer').eq('status', 'pending')
+      .order('created_at', { ascending: false }).limit(50);
+    if (inviteError) throw inviteError;
+    const streamIds = (invites || []).map((row) => row.stream_id);
+    const { data: streams, error: streamError } = streamIds.length
+      ? await supabaseAdmin.from('live_streams')
+        .select('id,creator_id,title,description,allow_guests,visibility,status,started_at')
+        .in('id', streamIds).eq('status', 'live')
+      : { data: [], error: null };
+    if (streamError) throw streamError;
+    const streamById = new Map((streams || []).map((row) => [row.id, row]));
+    return res.json({ invitations: (invites || []).map((invite) => ({
+      ...invite, stream: streamById.get(invite.stream_id) || null,
+    })).filter((invite) => invite.stream) });
+  } catch (error) {
+    console.error('[live] invitation list failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load LIVE invitations' });
+  }
+});
+
 router.get('/following/streams', async (req, res) => {
   try {
     const { data: follows, error: followError } = await supabaseAdmin.from('live_creator_follows')
