@@ -54,14 +54,16 @@ test('missing VoIP token schema degrades to Expo fallback', async () => {
 
 
 
-test('remote call-ended pushes remain FCM-only and never use APNs VoIP', async () => {
+test('remote call-ended supports standard APNs alerts but never sends terminal events as PushKit VoIP', async () => {
   const result = await sendCallEndedToUser(adminWithTokens([
     { token: 'a'.repeat(64), token_type: 'APNS_VOIP' },
   ]), 'user-1', 'call-1', 'missed');
   assert.equal(result.sent, 0);
   assert.equal(result.failed, 0);
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/config/callVoipPushClient.js'), 'utf8');
-  assert.doesNotMatch(source, /sendApnsCallEnded/);
-  assert.match(source, /messageType: 'callEnded'/);
+  assert.match(source, /async function sendApnsAlert/);
+  assert.match(source, /'apns-push-type': 'alert'/);
+  assert.match(source, /row\.token_type === 'APNS_ALERT'/);
   assert.match(source, /row\.token_type === 'FCM'/);
+  assert.doesNotMatch(source, /sendApnsVoip\(row\.token, event\)/);
 });
