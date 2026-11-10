@@ -98,6 +98,6 @@ test('LIVE report queue and resolution are restricted to creator-appointed moder
 
 test('appointed LIVE moderators can hide comments but cannot end the stream', () => {
   assert.ok(route.includes("Only the creator or an appointed LIVE moderator can moderate comments"));
-  assert.ok(route.includes("if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can end this LIVE stream' })") === false);
-  assert.ok(route.includes("router.post('/:streamId/end'"));
+  assert.ok(route.includes("rpc('end_live_stream'"));
+  assert.ok(route.includes("Only the creator can end this LIVE stream"));
 });
