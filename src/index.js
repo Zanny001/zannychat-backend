@@ -14,6 +14,32 @@ const channelsRouter = require('./routes/channels');
 const discoveryRouter = require('./routes/discovery');
 const callsRouter = require('./routes/calls');
 
+// Retry transient call-push failures while the API process is awake. The
+// authenticated /calls/:id/notify route handles immediate delivery; this
+// worker drains due retries and recovers stale processing leases.
+function startCallInvitationWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { runCallInvitationNotifications } = require('./jobs/callInvitationNotifications');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await runCallInvitationNotifications({ admin: supabaseAdmin, limit: 20 });
+    } catch (error) {
+      console.error('[calls] background invitation retry failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 5_000);
+  warmup.unref?.();
+  return timer;
+}
+
 const app = express();
 
 // This is a JSON API, not a document host. Disable Express fingerprinting
@@ -84,6 +110,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`ZannyChat backend listening on port ${PORT}`);
+    startCallInvitationWorker();
   });
 }
 
