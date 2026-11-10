@@ -184,7 +184,7 @@ RETURNS public.live_streams
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_stream public.live_streams%rowtype;
   v_invite_ids uuid[] := COALESCE(p_invited_user_ids, ARRAY[]::uuid[]);
@@ -234,7 +234,7 @@ BEGIN
 
   RETURN v_stream;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean)
   FROM PUBLIC, anon, authenticated;
