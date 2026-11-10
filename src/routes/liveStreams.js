@@ -18,13 +18,23 @@ function validId(value) {
 function issueToken(user, roomName, config, canPublish) {
   return createLiveKitToken({
     identity: user.id,
-    name: user.name || user.email || 'ZannyChat viewer',
+    name: user.user_metadata?.name || user.user_metadata?.full_name || 'ZannyChat viewer',
     room: roomName,
     canPublish,
     canSubscribe: true,
     canPublishData: true,
     config,
   });
+}
+
+async function hasBlockBetween(userA, userB) {
+  const { data: first, error: firstError } = await supabaseAdmin.from('blocked_users')
+    .select('blocker_id').eq('blocker_id', userA).eq('blocked_id', userB).maybeSingle();
+  if (firstError) throw firstError;
+  const { data: second, error: secondError } = await supabaseAdmin.from('blocked_users')
+    .select('blocker_id').eq('blocker_id', userB).eq('blocked_id', userA).maybeSingle();
+  if (secondError) throw secondError;
+  return Boolean(first || second);
 }
 
 async function getStream(streamId) {
@@ -85,6 +95,7 @@ router.post('/', async (req, res) => {
       token: issueToken(req.user, roomName, config, true),
     });
   } catch (error) {
+    if (error?.code === '23505') return res.status(409).json({ error: 'You already have an active LIVE stream' });
     console.error('[live] create failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not start LIVE right now' });
   }
@@ -136,7 +147,7 @@ router.post('/:streamId/leave', async (req, res) => {
   }
 });
 
-router.post('/:streamId/comment', async (req, res) => {
+router.post('/:streamId/comment', makeLimiter({ windowMs: 10 * 1000, max: 5, error: 'Please slow down before posting another LIVE comment.' }), async (req, res) => {
   const streamId = req.params.streamId;
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
@@ -146,6 +157,7 @@ router.post('/:streamId/comment', async (req, res) => {
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (!stream.allow_comments) return res.status(403).json({ error: 'Comments are disabled for this LIVE stream' });
     if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before commenting' });
+    if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) return res.status(403).json({ error: 'Comments are unavailable' });
     const { data, error } = await supabaseAdmin.from('live_stream_comments').insert({
       stream_id: streamId, user_id: req.user.id, body,
     }).select('id,stream_id,user_id,body,moderation_status,created_at').single();
