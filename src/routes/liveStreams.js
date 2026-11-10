@@ -97,7 +97,7 @@ router.post('/', async (req, res) => {
     if (error) throw error;
     return res.status(201).json({
       stream, livekitUrl: config.url,
-      token,
+      token, role: 'creator', canModerate: true,
     });
   } catch (error) {
     if (error?.code === '23505') return res.status(409).json({ error: 'You already have an active LIVE stream' });
@@ -130,10 +130,10 @@ router.post('/:streamId/join', async (req, res) => {
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
     }
+    const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
-      token,
-      role,
+      token, role, canModerate,
     });
   } catch (error) {
     console.error('[live] join failed:', error?.message || error);
