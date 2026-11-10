@@ -83,7 +83,7 @@ RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_stream public.live_streams%rowtype;
   v_updated integer;
@@ -105,7 +105,7 @@ BEGIN
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   RETURN v_updated > 0;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.leave_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.leave_live_stream(uuid, uuid) TO service_role;
