@@ -16,6 +16,12 @@ services:
         sync: false
       - key: INTERNAL_WEBHOOK_SECRET
         sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
       - key: TURN_URLS
         sync: false
       - key: TURN_SHARED_SECRET

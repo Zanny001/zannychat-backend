@@ -11,7 +11,7 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-create or replace function public.can_view_profile_avatar(p_owner_id uuid)
+create or replace function public.can_view_profile_avatar(p_user_id uuid)
 returns boolean
 language plpgsql
 stable
@@ -23,21 +23,21 @@ declare
   v_visibility text;
   v_is_contact boolean := false;
 begin
-  if v_viewer is null or p_owner_id is null then return false; end if;
-  if v_viewer = p_owner_id then return true; end if;
+  if v_viewer is null or p_user_id is null then return false; end if;
+  if v_viewer = p_user_id then return true; end if;
   if exists (
     select 1 from public.blocked_users b
-    where (b.blocker_id = v_viewer and b.blocked_id = p_owner_id)
-       or (b.blocker_id = p_owner_id and b.blocked_id = v_viewer)
+    where (b.blocker_id = v_viewer and b.blocked_id = p_user_id)
+       or (b.blocker_id = p_user_id and b.blocked_id = v_viewer)
   ) then return false; end if;
   select coalesce(d.photo_visibility, 'everyone') into v_visibility
-  from public.profile_details d where d.user_id = p_owner_id;
+  from public.profile_details d where d.user_id = p_user_id;
   v_visibility := coalesce(v_visibility, 'everyone');
   if v_visibility = 'nobody' then return false; end if;
   select exists (
     select 1 from public.conversation_participants a
     join public.conversation_participants b on b.conversation_id = a.conversation_id
-    where a.user_id = v_viewer and b.user_id = p_owner_id
+    where a.user_id = v_viewer and b.user_id = p_user_id
   ) into v_is_contact;
   return v_visibility = 'everyone' or (v_visibility = 'contacts' and v_is_contact);
 end;
