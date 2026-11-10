@@ -20,7 +20,7 @@ async function sendPushToUser(userId, { title, body, data }) {
     .filter((row) => Expo.isExpoPushToken(row.expo_push_token))
     .map((row) => ({
       to: row.expo_push_token,
-      sound: data?.type === 'incoming_call' ? 'call-ring.wav' : 'default',
+      sound: data?.type === 'incoming_call' ? 'call_ring.wav' : 'default',
       categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined,
       title,
       body,
