@@ -36,6 +36,7 @@ async function sendApnsVoip(token, event) {
         'apns-topic': `${bundleId}.voip`,
         'apns-push-type': 'voip',
         'apns-priority': '10',
+        'apns-expiration': event.expiresAt ? String(Math.floor(new Date(event.expiresAt).getTime() / 1000)) : String(Math.floor(Date.now() / 1000) + 45),
         'content-type': 'application/json',
       });
       let status = 0, responseBody = '';
@@ -80,7 +81,7 @@ async function sendFcmData(token, data) {
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: { token, data, android: { priority: 'HIGH' } } }),
+    body: JSON.stringify({ message: { token, data, android: { priority: 'HIGH', ttl: '45s' } } }),
   });
   if (!response.ok) throw new Error(`FCM ${response.status}: ${(await response.text()).slice(0, 200)}`);
   return true;

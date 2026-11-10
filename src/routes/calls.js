@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { buildIceConfig } = require('../utils/turnCredentials.cjs');
 const { runCallInvitationNotifications } = require('../jobs/callInvitationNotifications');
+const { sendCallEndedToUser } = require('../config/callVoipPushClient');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 
 const router = express.Router();
@@ -34,6 +35,23 @@ router.post('/voip-token', async (req, res) => {
     return res.status(503).json({ error: 'Could not register call notifications' });
   }
   return res.json({ registered: true, platform });
+});
+
+router.post('/:callId/end-notify', async (req, res) => {
+  const callId = req.params.callId;
+  const { data: call, error } = await supabaseAdmin.from('call_sessions')
+    .select('id,caller_id,callee_id,status').eq('id', callId).maybeSingle();
+  if (error) return res.status(503).json({ error: 'Could not inspect call state' });
+  if (!call) return res.status(404).json({ error: 'Call not found' });
+  if (![call.caller_id, call.callee_id].includes(req.user.id)) {
+    return res.status(403).json({ error: 'Not a participant in this call' });
+  }
+  if (!['declined', 'cancelled', 'ended', 'missed', 'failed'].includes(call.status)) {
+    return res.status(409).json({ error: 'Call has not ended' });
+  }
+  const recipientId = req.user.id === call.caller_id ? call.callee_id : call.caller_id;
+  const delivery = await sendCallEndedToUser(supabaseAdmin, recipientId, call.id, call.status);
+  return res.json({ sent: Number(delivery.sent) || 0 });
 });
 
 router.delete('/voip-token', async (req, res) => {
