@@ -247,9 +247,9 @@ COMMENT ON TABLE public.live_creator_follows IS
   'One-way creator follows used to authorize follower-only LIVE broadcasts.';
 COMMENT ON TABLE public.live_stream_invites IS
   'Per-stream viewer invitations and guest participation requests/approvals; backend-only.';
-COMMIT;
-
 REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean, uuid[])
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean, uuid[])
   TO service_role;
+
+COMMIT;
