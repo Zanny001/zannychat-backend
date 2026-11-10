@@ -252,17 +252,14 @@ router.post('/:streamId/end', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
-    const stream = await getStream(streamId);
-    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
-    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can end this LIVE stream' });
-    const now = new Date().toISOString();
-    const { error } = await supabaseAdmin.from('live_streams').update({
-      status: 'ended', ended_at: now,
-    }).eq('id', streamId).eq('status', 'live');
-    if (error) throw error;
-    await supabaseAdmin.from('live_stream_participants').update({
-      status: 'left', left_at: now,
-    }).eq('stream_id', streamId).eq('status', 'joined');
+    const { data: ended, error } = await supabaseAdmin.rpc('end_live_stream', {
+      p_stream_id: streamId, p_creator_id: req.user.id,
+    });
+    if (error) {
+      if (error.code === '42501') return res.status(403).json({ error: 'Only the creator can end this LIVE stream' });
+      throw error;
+    }
+    if (!ended) return res.status(404).json({ error: 'LIVE stream has ended' });
     return res.json({ ended: true });
   } catch (error) {
     console.error('[live] end failed:', error?.message || error);
