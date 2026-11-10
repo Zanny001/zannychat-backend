@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110180000_call_invitation_delivery.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110025034_call_invitation_delivery.sql'), 'utf8');
 
 test('call invitation delivery uses a private durable queue and idempotent trigger', () => {
   assert.match(sql, /create table if not exists public\.call_invitation_notifications/i);
