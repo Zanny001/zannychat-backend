@@ -169,6 +169,73 @@ BEGIN
 END;
 $$;
 
+-- Private stream creation and its initial invitations are one transaction.
+CREATE OR REPLACE FUNCTION public.create_live_stream(
+  p_stream_id uuid,
+  p_creator_id uuid,
+  p_title text,
+  p_description text,
+  p_room_name text,
+  p_visibility text,
+  p_allow_guests boolean,
+  p_invited_user_ids uuid[]
+)
+RETURNS public.live_streams
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+  v_stream public.live_streams%rowtype;
+  v_invite_ids uuid[] := COALESCE(p_invited_user_ids, ARRAY[]::uuid[]);
+  v_now timestamptz := now();
+BEGIN
+  IF p_title IS NULL OR char_length(btrim(p_title)) NOT BETWEEN 1 AND 80
+     OR p_description IS NULL OR char_length(p_description) > 500
+     OR p_room_name IS NULL OR char_length(p_room_name) NOT BETWEEN 1 AND 128
+     OR p_visibility IS NULL OR p_visibility NOT IN ('public','followers','private')
+     OR p_allow_guests IS NULL OR cardinality(v_invite_ids) > 100
+     OR (p_visibility = 'private' AND cardinality(v_invite_ids) = 0)
+     OR (p_visibility <> 'private' AND cardinality(v_invite_ids) > 0)
+     OR EXISTS (SELECT 1 FROM unnest(v_invite_ids) AS invitee(user_id)
+                 WHERE invitee.user_id IS NULL OR invitee.user_id = p_creator_id)
+     OR cardinality(v_invite_ids) <> (SELECT count(DISTINCT user_id) FROM unnest(v_invite_ids) AS invitee(user_id)) THEN
+    RAISE EXCEPTION 'invalid LIVE stream details or private invitees' USING ERRCODE = '22023';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM unnest(v_invite_ids) AS invitee(user_id)
+      JOIN public.blocked_users b
+        ON (b.blocker_id = p_creator_id AND b.blocked_id = invitee.user_id)
+        OR (b.blocker_id = invitee.user_id AND b.blocked_id = p_creator_id)
+  ) THEN
+    RAISE EXCEPTION 'blocked account cannot be invited' USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO public.live_streams(
+    id, creator_id, title, description, visibility, room_name, status,
+    allow_guests, started_at
+  ) VALUES (
+    p_stream_id, p_creator_id, btrim(p_title), btrim(p_description),
+    p_visibility, p_room_name, 'live', p_allow_guests, v_now
+  ) RETURNING * INTO v_stream;
+
+  INSERT INTO public.live_stream_participants(stream_id, user_id, role, status, joined_at)
+  VALUES (p_stream_id, p_creator_id, 'creator', 'joined', v_now);
+
+  IF p_visibility = 'private' THEN
+    INSERT INTO public.live_stream_invites(
+      stream_id, user_id, invited_by, invitation_type, status, created_at, updated_at
+    )
+    SELECT p_stream_id, invitee.user_id, p_creator_id, 'viewer', 'pending', v_now, v_now
+      FROM unnest(v_invite_ids) AS invitee(user_id);
+  END IF;
+
+  RETURN v_stream;
+END;
+$;
+
 REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean)
@@ -181,3 +248,8 @@ COMMENT ON TABLE public.live_creator_follows IS
 COMMENT ON TABLE public.live_stream_invites IS
   'Per-stream viewer invitations and guest participation requests/approvals; backend-only.';
 COMMIT;
+
+REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean, uuid[])
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean, uuid[])
+  TO service_role;
