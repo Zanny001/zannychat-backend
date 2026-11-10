@@ -181,6 +181,7 @@ router.post('/:roomId/join', async (req, res) => {
     });
     if (joinError) {
       if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This group call is full' });
+      if (joinError.code === 'P0001' && /invitation has expired/i.test(joinError.message || '')) return res.status(410).json({ error: 'This group-call invitation has expired' });
       if (joinError.code === '42501') return res.status(403).json({ error: 'You are not a member of this group' });
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'Group call is no longer active' });
       throw joinError;
