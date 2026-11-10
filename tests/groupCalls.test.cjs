@@ -108,7 +108,7 @@ test('group-call creation inserts the room and all invitations atomically after 
 });
 
 test('abandoned host-only group calls are closed before another call starts and expired invites show missed', () => {
-  assert.ok(createCallMigration.includes('WITH stale_rooms AS'));
+  assert.ok(createCallMigration.includes('FOR v_stale_room IN'));
   assert.ok(createCallMigration.includes("COALESCE(r.started_at, r.created_at) <= v_now - interval '2 minutes'"));
   assert.ok(createCallMigration.includes("p.status = 'joined'"));
   assert.ok(createCallMigration.includes("p.user_id <> r.host_user_id"));
