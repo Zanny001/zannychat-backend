@@ -115,3 +115,9 @@ test('abandoned host-only group calls are closed before another call starts and 
   assert.ok(route.includes('Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000'));
   assert.ok(route.includes("? 'missed'"));
 });
+
+test('group call history distinguishes unanswered invitations from participants who left', () => {
+  assert.ok(route.includes("const neverJoined = !participant.joined_at && ['invited','left'].includes(participant.status)"));
+  assert.ok(route.includes("neverJoined && (room.status === 'ended' || invitationExpired) ? 'missed'"));
+  assert.ok(route.includes("participant.status === 'left' || room.status === 'ended' ? 'ended'"));
+});
