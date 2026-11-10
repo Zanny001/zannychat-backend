@@ -72,3 +72,32 @@ test('LIVE participant departure locks the stream row to serialize with joins an
   assert.ok(lifecycleMigration.includes('TO service_role'));
   assert.ok(route.includes("rpc('leave_live_stream'"));
 });
+
+const moderationMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110240000_live_moderation_workflows.sql'), 'utf8');
+
+test('LIVE creator-appointed moderators are stream-scoped and backend-only', () => {
+  assert.ok(moderationMigration.includes('public.live_stream_moderators'));
+  assert.ok(moderationMigration.includes('PRIMARY KEY (stream_id, user_id)'));
+  assert.ok(moderationMigration.includes('appointed_by uuid NOT NULL'));
+  assert.ok(moderationMigration.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(moderationMigration.includes('REVOKE ALL ON public.live_stream_moderators'));
+  assert.ok(moderationMigration.includes('TO service_role'));
+  assert.ok(route.includes("router.post('/:streamId/moderators'"));
+  assert.ok(route.includes("router.delete('/:streamId/moderators/:userId'"));
+  assert.ok(route.includes("participant.role !== 'viewer'"));
+});
+
+test('LIVE report queue and resolution are restricted to creator-appointed moderators', () => {
+  assert.ok(moderationMigration.includes('reviewed_by uuid'));
+  assert.ok(moderationMigration.includes('reviewed_at timestamptz'));
+  assert.ok(route.includes("router.get('/:streamId/reports'"));
+  assert.ok(route.includes("router.patch('/:streamId/reports/:reportId'"));
+  assert.ok(route.includes('canModerateLive(stream, req.user.id)'));
+  assert.ok(route.includes("['reviewing','resolved','dismissed'].includes(status)"));
+});
+
+test('appointed LIVE moderators can hide comments but cannot end the stream', () => {
+  assert.ok(route.includes("Only the creator or an appointed LIVE moderator can moderate comments"));
+  assert.ok(route.includes("if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can end this LIVE stream' })") === false);
+  assert.ok(route.includes("router.post('/:streamId/end'"));
+});
