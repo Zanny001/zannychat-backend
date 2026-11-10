@@ -114,6 +114,54 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.get('/history', async (req, res) => {
+  const limit = Math.max(1, Math.min(Number(req.query?.limit) || 100, 200));
+  try {
+    const { data: participants, error: participantError } = await supabaseAdmin.from('group_call_participants')
+      .select('room_id,role,status,joined_at,left_at,invited_at')
+      .eq('user_id', req.user.id)
+      .order('invited_at', { ascending: false }).limit(limit);
+    if (participantError) throw participantError;
+    const ids = [...new Set((participants || []).map((row) => row.room_id))];
+    if (!ids.length) return res.json({ calls: [] });
+    const { data: rooms, error: roomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id,conversation_id,host_user_id,call_type,status,created_at,started_at,ended_at')
+      .in('id', ids);
+    if (roomError) throw roomError;
+    const conversationIds = [...new Set((rooms || []).map((row) => row.conversation_id))];
+    const { data: conversations, error: conversationError } = await supabaseAdmin.from('conversations')
+      .select('id,name').in('id', conversationIds);
+    if (conversationError) throw conversationError;
+    const roomsById = Object.fromEntries((rooms || []).map((room) => [room.id, room]));
+    const namesById = Object.fromEntries((conversations || []).map((conversation) => [conversation.id, conversation.name]));
+    const calls = (participants || []).map((participant) => {
+      const room = roomsById[participant.room_id];
+      if (!room) return null;
+      const status = participant.status === 'declined' ? 'declined'
+        : participant.status === 'invited' && room.status === 'ended' ? 'missed'
+        : room.status === 'ended' ? 'ended'
+        : participant.status === 'joined' ? 'active' : 'ringing';
+      const durationSeconds = participant.joined_at && participant.left_at
+        ? Math.max(0, Math.floor((Date.parse(participant.left_at) - Date.parse(participant.joined_at)) / 1000))
+        : 0;
+      return {
+        id: room.id, conversation_id: room.conversation_id,
+        caller_id: room.host_user_id, callee_id: req.user.id,
+        call_type: room.call_type || 'audio', status,
+        created_at: room.created_at, accepted_at: participant.joined_at,
+        ended_at: participant.left_at || room.ended_at,
+        direction: room.host_user_id === req.user.id ? 'outgoing' : 'incoming',
+        participantName: namesById[room.conversation_id] || 'Group call',
+        avatarColor: '#6557D9', durationSeconds, isGroupCall: true,
+      };
+    }).filter(Boolean);
+    return res.json({ calls });
+  } catch (error) {
+    console.error('[group-calls] history failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load group call history' });
+  }
+});
+
 router.post('/:roomId/join', async (req, res) => {
   const roomId = req.params.roomId;
   if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call id' });
