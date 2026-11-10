@@ -38,7 +38,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   actor uuid := auth.uid();
   is_service_role boolean := coalesce(auth.role() = 'service_role', false);
@@ -135,7 +135,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- Signals for stale accepted calls are rejected; new calls no longer get blocked by them.
 create or replace function public.validate_call_signal_insert()
