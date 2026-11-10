@@ -78,18 +78,14 @@ router.post('/', async (req, res) => {
   try {
     const id = randomUUID();
     const roomName = 'zlive_' + id.replace(/-/g, '');
-    const { data: stream, error } = await supabaseAdmin.from('live_streams').insert({
-      id, creator_id: req.user.id, title, description, visibility,
-      room_name: roomName, status: 'live',
-    }).select('id,creator_id,title,description,room_name,visibility,status,started_at').single();
-    if (error) throw error;
-    const { error: participantError } = await supabaseAdmin.from('live_stream_participants').insert({
-      stream_id: id, user_id: req.user.id, role: 'creator', status: 'joined',
+    const { data: stream, error } = await supabaseAdmin.rpc('create_live_stream', {
+      p_stream_id: id,
+      p_creator_id: req.user.id,
+      p_title: title,
+      p_description: description,
+      p_room_name: roomName,
     });
-    if (participantError) {
-      await supabaseAdmin.from('live_streams').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id);
-      throw participantError;
-    }
+    if (error) throw error;
     return res.status(201).json({
       stream, livekitUrl: config.url,
       token: issueToken(req.user, roomName, config, true),
