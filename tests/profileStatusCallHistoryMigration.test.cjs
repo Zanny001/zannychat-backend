@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261110010000_profile_status_call_history.sql'),
+  path.join(__dirname, '../supabase/migrations/20261110010238_profile_status_call_history.sql'),
   'utf8',
 );
 
