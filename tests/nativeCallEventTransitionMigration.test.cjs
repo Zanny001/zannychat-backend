@@ -17,3 +17,9 @@ test('service-role native reconciliation is limited to signed terminal call tran
   assert.match(migration, /call identity fields are immutable/);
   assert.match(migration, /invalid call state transition/);
 });
+
+const callsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/calls.js'), 'utf8');
+
+test('native event notifications use the status actually persisted by database triggers', () => {
+  assert.match(callsRoute, /sendCallEndedToUser\(supabaseAdmin, call\.caller_id, callId, updated\.status\)/);
+});
