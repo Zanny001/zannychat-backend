@@ -97,6 +97,10 @@ BEGIN
     RETURN false;
   END IF;
 
+  IF p_user_id = v_stream.creator_id THEN
+    RAISE EXCEPTION 'creator must end the LIVE stream' USING ERRCODE = '42501';
+  END IF;
+
   UPDATE public.live_stream_participants
      SET status = 'left', left_at = COALESCE(left_at, now())
    WHERE stream_id = p_stream_id
