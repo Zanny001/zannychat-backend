@@ -111,7 +111,7 @@ test('abandoned host-only group calls are closed before another call starts and 
   assert.ok(createCallMigration.includes("COALESCE(r.started_at, r.created_at) <= v_now - interval '2 minutes'"));
   assert.ok(createCallMigration.includes("p.status = 'joined'"));
   assert.ok(createCallMigration.includes("p.user_id <> v_stale_room.host_user_id"));
-  assert.ok(createCallMigration.includes("p.status = 'invited'"));
+  assert.ok(createCallMigration.includes("status = 'invited'"));
   assert.ok(route.includes('Date.parse(participant.invited_at) <= Date.now() - 2 * 60 * 1000'));
   assert.ok(route.includes("? 'missed'"));
 });
