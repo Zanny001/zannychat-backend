@@ -24,14 +24,18 @@ BEGIN
     RETURN false;
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM public.conversation_participants cp
+     WHERE cp.conversation_id = v_room.conversation_id
+       AND cp.user_id = p_user_id
+  ) THEN
+    RAISE EXCEPTION 'user is not a member of this group' USING ERRCODE = '42501';
+  END IF;
+
   SELECT COALESCE(bool_or(cp.is_admin), false) INTO v_is_admin
     FROM public.conversation_participants cp
    WHERE cp.conversation_id = v_room.conversation_id
      AND cp.user_id = p_user_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'user is not a member of this group' USING ERRCODE = '42501';
-  END IF;
 
   IF p_user_id <> v_room.host_user_id AND NOT v_is_admin THEN
     RAISE EXCEPTION 'only the call host or a group admin can end this call' USING ERRCODE = '42501';
