@@ -208,10 +208,14 @@ router.post('/', async (req, res) => {
   const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
   const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
   const visibility = req.body?.visibility || 'public';
+  const inviteeIds = Array.isArray(req.body?.inviteeIds) ? req.body.inviteeIds : [];
   const config = getLiveKitConfig();
   if (!config) return res.status(503).json({ error: 'LIVE streaming is not enabled on this server yet' });
   if (!title || title.length > 80 || description.length > 500) return res.status(400).json({ error: 'LIVE title or description is invalid' });
   if (!['public','followers','private'].includes(visibility)) return res.status(400).json({ error: 'Invalid LIVE visibility' });
+  if (inviteeIds.length > 100 || inviteeIds.some((id) => !validId(id)) || new Set(inviteeIds).size !== inviteeIds.length) return res.status(400).json({ error: 'Invalid private LIVE invitees' });
+  if (visibility === 'private' && inviteeIds.length === 0) return res.status(400).json({ error: 'Private LIVE requires at least one invitee' });
+  if (visibility !== 'private' && inviteeIds.length > 0) return res.status(400).json({ error: 'Invitees are only valid for private LIVE' });
   const allowGuests = req.body?.allowGuests === true;
   try {
     const id = randomUUID();
@@ -225,6 +229,7 @@ router.post('/', async (req, res) => {
       p_room_name: roomName,
       p_visibility: visibility,
       p_allow_guests: allowGuests,
+      p_invited_user_ids: inviteeIds,
     });
     if (error) throw error;
     return res.status(201).json({
@@ -233,6 +238,8 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     if (error?.code === '23505') return res.status(409).json({ error: 'You already have an active LIVE stream' });
+    if (error?.code === '42501') return res.status(403).json({ error: 'A blocked account cannot be invited to this LIVE stream' });
+    if (error?.code === '22023' || error?.code === '23503') return res.status(400).json({ error: 'LIVE details or invitees are invalid' });
     console.error('[live] create failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not start LIVE right now' });
   }
