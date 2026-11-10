@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070203_atomic_group_live_admission.sql'), 'utf8');
+const expiryMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110170000_expire_group_call_admission.sql'), 'utf8');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
@@ -17,9 +18,16 @@ test('group-call admission locks the room row and enforces membership and partic
   assert.ok(groupRoute.includes("rpc('join_group_call_room'"));
 });
 
+test('expired ringing group calls cannot admit late participants', () => {
+  assert.ok(expiryMigration.includes("v_room.status = 'ringing' AND v_room.expires_at <= now()"));
+  assert.ok(expiryMigration.includes("RAISE EXCEPTION 'group call is no longer active'"));
+  assert.ok(expiryMigration.includes('FOR UPDATE'));
+  assert.ok(expiryMigration.includes('GRANT EXECUTE ON FUNCTION public.join_group_call_room(uuid, uuid) TO service_role'));
+});
+
 test('LIVE audience admission locks the stream row and enforces visibility and viewer capacity', () => {
   assert.ok(migration.includes('FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)'));
-  assert.ok(migration.includes('v_stream.visibility <> \'public\''));
+  assert.ok(migration.includes("v_stream.visibility <> 'public'"));
   assert.ok(migration.includes('v_joined >= v_stream.viewer_limit'));
   assert.ok(liveRoute.includes("rpc('join_live_stream'"));
 });
