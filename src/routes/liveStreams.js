@@ -265,6 +265,21 @@ router.post('/:streamId/invites', async (req, res) => {
   }
 });
 
+router.get('/:streamId/guest-status', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const { data, error } = await supabaseAdmin.from('live_stream_invites')
+      .select('status').eq('stream_id', streamId).eq('user_id', req.user.id)
+      .eq('invitation_type', 'guest').maybeSingle();
+    if (error) throw error;
+    return res.json({ status: data?.status || 'none' });
+  } catch (error) {
+    console.error('[live] guest status fetch failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not check guest request status' });
+  }
+});
+
 router.post('/:streamId/guest-requests', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
