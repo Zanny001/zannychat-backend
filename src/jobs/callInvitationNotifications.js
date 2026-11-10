@@ -11,13 +11,13 @@ async function updateQueue(admin, callId, values) {
   if (error) throw error;
 }
 
-async function runCallInvitationNotifications({ admin, sendPush, limit = 20, now = () => new Date() } = {}) {
+async function runCallInvitationNotifications({ admin, sendPush, limit = 20, callId = null, now = () => new Date() } = {}) {
   if (!admin) admin = require('../config/supabaseAdmin').supabaseAdmin;
   if (!sendPush) sendPush = require('../config/pushClient').sendPushToUser;
   if (!admin) throw new Error('Supabase service client is not configured');
-  const { data: jobs, error } = await admin.rpc('claim_call_invitation_notifications', { p_limit: limit });
+  const { data: jobs, error } = await admin.rpc('claim_call_invitation_notifications', { p_limit: limit, p_call_id: callId || null });
   if (error) throw error;
-  const summary = { claimed: (jobs || []).length, sent: 0, expired: 0, retried: 0, failed: 0 };
+  const summary = { claimed: (jobs || []).length, sent: 0, expired: 0, retried: 0, failed: 0, noTokens: 0, partialFailures: 0 };
 
   for (const job of jobs || []) {
     try {
@@ -37,9 +37,17 @@ async function runCallInvitationNotifications({ admin, sendPush, limit = 20, now
         body: `${caller?.name || 'A ZannyChat contact'} is calling you`,
         data: { type: 'incoming_call', callId: call.id, conversationId: call.conversation_id, callType: call.call_type },
       });
-      if (!result || result.sent < 1 || result.failed > 0) throw new Error('Push provider did not accept all call invitations');
+      if (!result || result.noTokens || (result.sent < 1 && result.failed === 0)) {
+        await updateQueue(admin, job.call_id, { status: 'expired', lease_started_at: null, last_error: 'No registered push tokens for callee' });
+        summary.noTokens += 1;
+        continue;
+      }
+      if (result.sent < 1) throw new Error('Expo rejected all call invitation pushes');
+      // At least one device accepted the invite. Avoid duplicate pushes to
+      // successful devices when another device has a partial provider error.
       await updateQueue(admin, job.call_id, { status: 'delivered', delivered_at: now().toISOString(), lease_started_at: null, last_error: null });
       summary.sent += result.sent;
+      summary.partialFailures += Number(result.failed) || 0;
     } catch (error) {
       const attempts = (Number.isInteger(job.attempt_count) ? job.attempt_count : 0) + 1;
       const exhausted = attempts >= MAX_ATTEMPTS;

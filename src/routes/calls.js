@@ -28,7 +28,7 @@ router.post('/:callId/notify', async (req, res) => {
     return res.status(409).json({ error: 'Call invitation is no longer active' });
   }
   try {
-    const delivery = await runCallInvitationNotifications({ admin: supabaseAdmin, limit: 10 });
+    const delivery = await runCallInvitationNotifications({ admin: supabaseAdmin, limit: 1, callId });
     return res.json({ accepted: true, delivery });
   } catch (deliveryError) {
     console.error('[calls] invitation push processing failed:', deliveryError.message || deliveryError);
