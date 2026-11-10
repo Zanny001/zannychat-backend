@@ -90,3 +90,17 @@ test('group-call room schema includes the call_type column used by API routes', 
   assert.ok(endAndTypeMigration.includes("CHECK (call_type IN ('audio','video'))"));
   assert.ok(route.includes("call_type: callType"));
 });
+
+const createCallMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110210000_atomic_group_call_creation.sql'), 'utf8');
+
+test('group-call creation inserts the room and all invitations atomically after validating group membership', () => {
+  assert.ok(createCallMigration.includes('FUNCTION public.create_group_call_room('));
+  assert.ok(createCallMigration.includes('FOR UPDATE') === false);
+  assert.ok(createCallMigration.includes('public.conversations c'));
+  assert.ok(createCallMigration.includes('public.conversation_participants cp'));
+  assert.ok(createCallMigration.includes('INSERT INTO public.group_call_rooms'));
+  assert.ok(createCallMigration.includes('INSERT INTO public.group_call_participants'));
+  assert.ok(createCallMigration.includes('TO service_role'));
+  assert.ok(route.includes("rpc('create_group_call_room'"));
+  assert.equal(route.includes(".from('group_call_participants').insert(participantRows)"), false);
+});
