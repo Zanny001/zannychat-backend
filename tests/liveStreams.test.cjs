@@ -61,3 +61,12 @@ test('LIVE ending locks the stream and atomically closes all joined participants
   assert.ok(lifecycleMigration.includes("SET status = 'left', left_at = COALESCE(left_at, v_now)"));
   assert.ok(route.includes("rpc('end_live_stream'"));
 });
+
+test('LIVE participant departure locks the stream row to serialize with joins and stream ending', () => {
+  assert.ok(lifecycleMigration.includes('FUNCTION public.leave_live_stream(p_stream_id uuid, p_user_id uuid)'));
+  assert.ok(lifecycleMigration.includes('FROM public.live_streams'));
+  assert.ok(lifecycleMigration.includes('FOR UPDATE'));
+  assert.ok(lifecycleMigration.includes('GET DIAGNOSTICS v_updated = ROW_COUNT'));
+  assert.ok(lifecycleMigration.includes('TO service_role'));
+  assert.ok(route.includes("rpc('leave_live_stream'"));
+});
