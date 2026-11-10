@@ -26,11 +26,13 @@ function createCallEventToken(callId, nowMs = Date.now(), actorId = '') {
 function parseToken(token) {
   if (typeof token !== 'string') return null;
   const parts = token.split('.');
-  if (parts.length !== 3 || !/^\d{10}$/.test(parts[0])) return null;
-  const actorId = parts[1] === '-' ? '' : parts[1];
+  if (![2, 3].includes(parts.length) || !/^\\d{10}$/.test(parts[0])) return null;
+  const legacy = parts.length === 2;
+  const actorId = legacy || parts[1] === '-' ? '' : parts[1];
+  const supplied = legacy ? parts[1] : parts[2];
   if (actorId && !/^[0-9a-f-]{36}$/i.test(actorId)) return null;
-  if (!/^[A-Za-z0-9_-]{40,50}$/.test(parts[2])) return null;
-  return { expiresAt: Number(parts[0]), actorId, supplied: parts[2] };
+  if (!/^[A-Za-z0-9_-]{40,50}$/.test(supplied)) return null;
+  return { expiresAt: Number(parts[0]), actorId, supplied, legacy };
 }
 
 function getCallEventTokenActor(callId, token, nowMs = Date.now()) {
