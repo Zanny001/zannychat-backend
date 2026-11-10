@@ -18,7 +18,7 @@ test('profile discovery only creates the legacy projection when no function sign
 test('profile discovery enforces visibility, existing-contact scope, and blocks in both directions', () => {
   assert.match(sql, /coalesce\(d\.profile_visibility, 'everyone'\) <> 'nobody'/i);
   assert.match(sql, /coalesce\(d\.profile_visibility, 'everyone'\) = 'everyone'/i);
-  assert.match(sql, /join public\.conversation_participants theirs/i);
+  assert.match(sql, /join\s+public\.conversation_participants(?:\s+as)?\s+theirs/i);
   assert.match(sql, /b\.blocker_id = v_viewer and b\.blocked_id = p\.id/i);
   assert.match(sql, /b\.blocker_id = p\.id and b\.blocked_id = v_viewer/i);
   assert.match(sql, /p\.id <> v_viewer/i);
