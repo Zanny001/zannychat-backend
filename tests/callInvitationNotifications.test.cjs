@@ -105,3 +105,36 @@ test('Expo call pushes request the actionable incoming-call notification categor
   assert.ok(pushClient.includes("categoryId: data?.type === 'incoming_call' ? 'incoming-call' : undefined"));
   assert.ok(pushClient.includes("sound: data?.type === 'incoming_call' ? 'call-ring.wav' : 'default'"));
 });
+
+test('native VoIP delivery is preferred and avoids duplicate Expo notifications', async () => {
+  const updates = [];
+  let expoSent = 0;
+  const admin = {
+    rpc: async () => ({ data: [{ call_id: 'voip-call', attempt_count: 0 }], error: null }),
+    from(table) {
+      if (table === 'call_sessions') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: {
+        id: 'voip-call', caller_id: 'caller', callee_id: 'callee', conversation_id: 'conv',
+        call_type: 'video', status: 'ringing', created_at: '2026-11-05T08:00:00.000Z',
+        expires_at: '2026-11-05T08:01:00.000Z',
+      }, error: null }) }) }) };
+      if (table === 'profiles') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'Caller', avatar_url: null }, error: null }) }) }) };
+      if (table === 'call_invitation_notifications') return { update: (values) => ({ eq: async (_key, id) => { updates.push({ id, values }); return { error: null }; } }) };
+      throw new Error('Unexpected table ' + table);
+    },
+  };
+  const result = await runCallInvitationNotifications({
+    admin,
+    now: () => new Date('2026-11-05T08:00:00.000Z'),
+    sendVoipPush: async (_admin, userId, event) => {
+      assert.equal(userId, 'callee');
+      assert.equal(event.serverCallId, 'voip-call');
+      assert.equal(event.hasVideo, true);
+      return { sent: 1, failed: 0 };
+    },
+    sendPush: async () => { expoSent += 1; return { sent: 1, failed: 0 }; },
+  });
+  assert.equal(result.voipSent, 1);
+  assert.equal(result.sent, 0);
+  assert.equal(expoSent, 0);
+  assert.ok(updates.some((item) => item.id === 'voip-call' && item.values.status === 'delivered'));
+});
