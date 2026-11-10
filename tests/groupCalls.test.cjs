@@ -54,3 +54,17 @@ test('group call database state is backend-only and limits active rooms per grou
   assert.match(migration, /REVOKE ALL ON public\.group_call_rooms, public\.group_call_participants FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT ALL ON public\.group_call_rooms, public\.group_call_participants TO service_role/);
 });
+
+const departureMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110190000_atomic_group_call_departure.sql'), 'utf8');
+
+test('group-call departure serializes on the room row and ends the room atomically', () => {
+  assert.ok(departureMigration.includes('FUNCTION public.leave_group_call_room(p_room_id uuid, p_user_id uuid)'));
+  assert.ok(departureMigration.includes('FROM public.group_call_rooms'));
+  assert.ok(departureMigration.includes('FOR UPDATE'));
+  assert.ok(departureMigration.includes("status = 'joined'"));
+  assert.ok(departureMigration.includes("IF v_joined = 0 AND v_room.status IN ('ringing','active')"));
+  assert.ok(departureMigration.includes("SET status = 'ended'"));
+  assert.ok(departureMigration.includes('TO service_role'));
+  assert.ok(route.includes("rpc('leave_group_call_room'"));
+  assert.ok(route.includes('roomEnded: roomEnded === true'));
+});
