@@ -124,7 +124,7 @@ router.post('/:streamId/join', async (req, res) => {
     }
     return res.json({
       stream, livekitUrl: config.url,
-      token: issueToken(req.user, stream.room_name, config, role === 'creator'),
+      token,
       role,
     });
   } catch (error) {
