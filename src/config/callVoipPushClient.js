@@ -18,7 +18,7 @@ function makeJwt(header, claims, key, algorithm) {
   return `${head}.${body}.${b64url(signature)}`;
 }
 
-async function sendApnsVoip(token, event) {
+async function sendApnsVoipPayload(token, payload, expiration) {
   const key = envKey('APNS_PRIVATE_KEY');
   const keyId = process.env.APNS_KEY_ID;
   const teamId = process.env.APNS_TEAM_ID;
@@ -36,7 +36,7 @@ async function sendApnsVoip(token, event) {
         'apns-topic': `${bundleId}.voip`,
         'apns-push-type': 'voip',
         'apns-priority': '10',
-        'apns-expiration': event.expiresAt ? String(Math.floor(new Date(event.expiresAt).getTime() / 1000)) : String(Math.floor(Date.now() / 1000) + 45),
+        'apns-expiration': String(expiration),
         'content-type': 'application/json',
       });
       let status = 0, responseBody = '';
@@ -44,12 +44,31 @@ async function sendApnsVoip(token, event) {
       req.on('data', (chunk) => { responseBody += chunk; });
       req.on('end', () => status === 200 ? resolve() : reject(new Error(`APNs ${status}: ${responseBody}`)));
       req.on('error', reject);
-      req.end(JSON.stringify({ incomingCall: event }));
+      req.end(JSON.stringify(payload));
     });
     return true;
   } finally {
     client.close();
   }
+}
+
+async function sendApnsVoip(token, event) {
+  const expiration = event.expiresAt
+    ? Math.floor(new Date(event.expiresAt).getTime() / 1000)
+    : Math.floor(Date.now() / 1000) + 45;
+  return sendApnsVoipPayload(token, { incomingCall: event }, expiration);
+}
+
+async function sendApnsCallEnded(token, event) {
+  // A remote end is only useful while the local CallKit surface is still active.
+  return sendApnsVoipPayload(token, { callEnded: event }, Math.floor(Date.now() / 1000) + 30);
+}
+
+function nativeEndedReason(status) {
+  if (status === 'missed') return 'unanswered';
+  if (status === 'declined') return 'declinedElsewhere';
+  if (status === 'failed') return 'failed';
+  return 'remoteEnded';
 }
 
 async function getFcmAccessToken(account) {
@@ -112,20 +131,30 @@ async function sendCallVoipPushToUser(admin, userId, event) {
   }
 }
 
-async function sendCallEndedToUser(admin, userId, serverCallId, reason = 'remoteEnded') {
+async function sendCallEndedToUser(admin, userId, serverCallId, status = 'ended') {
   try {
-    const { data: tokens, error } = await admin.from('call_voip_tokens').select('token').eq('user_id', userId).eq('token_type', 'FCM');
-    if (error || !tokens?.length) return { sent: 0, failed: 0 };
-    let sent = 0, failed = 0;
+    const { data: tokens, error } = await admin.from('call_voip_tokens')
+      .select('token,token_type').eq('user_id', userId);
+    if (error || !tokens?.length) return { sent: 0, failed: 0, skipped: 0 };
+    const event = { eventId: randomUUID(), serverCallId, reason: nativeEndedReason(status) };
+    let sent = 0, failed = 0, skipped = 0;
     for (const row of tokens) {
       try {
-        const accepted = await sendFcmData(row.token, { messageType: 'callEnded', callEnded: JSON.stringify({ eventId: randomUUID(), serverCallId, reason }) });
+        const accepted = row.token_type === 'APNS_VOIP'
+          ? await sendApnsCallEnded(row.token, event)
+          : row.token_type === 'FCM'
+            ? await sendFcmData(row.token, { messageType: 'callEnded', callEnded: JSON.stringify(event) })
+            : false;
         if (accepted) sent += 1;
-      } catch (_) { failed += 1; }
+        else skipped += 1;
+      } catch (error) {
+        failed += 1;
+        console.error('[calls] native call-ended push failed:', error?.message || error);
+      }
     }
-    return { sent, failed };
+    return { sent, failed, skipped };
   } catch (_) {
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, skipped: 0 };
   }
 }
 
