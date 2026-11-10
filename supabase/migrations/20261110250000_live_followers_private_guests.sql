@@ -33,49 +33,6 @@ REVOKE ALL ON public.live_creator_follows, public.live_stream_invites
   FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.live_creator_follows, public.live_stream_invites TO service_role;
 
--- Keep creation and creator presence in one transaction while persisting
--- visibility and guest policy chosen by the creator.
-CREATE OR REPLACE FUNCTION public.create_live_stream(
-  p_stream_id uuid,
-  p_creator_id uuid,
-  p_title text,
-  p_description text,
-  p_room_name text,
-  p_visibility text,
-  p_allow_guests boolean
-)
-RETURNS public.live_streams
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_stream public.live_streams%rowtype;
-  v_now timestamptz := now();
-BEGIN
-  IF p_title IS NULL OR char_length(btrim(p_title)) NOT BETWEEN 1 AND 80
-     OR p_description IS NULL OR char_length(p_description) > 500
-     OR p_room_name IS NULL OR char_length(p_room_name) NOT BETWEEN 1 AND 128
-     OR p_visibility IS NULL OR p_visibility NOT IN ('public','followers','private')
-     OR p_allow_guests IS NULL THEN
-    RAISE EXCEPTION 'invalid LIVE stream details' USING ERRCODE = '22023';
-  END IF;
-
-  INSERT INTO public.live_streams(
-    id, creator_id, title, description, visibility, room_name, status,
-    allow_guests, started_at
-  ) VALUES (
-    p_stream_id, p_creator_id, btrim(p_title), btrim(p_description),
-    p_visibility, p_room_name, 'live', p_allow_guests, v_now
-  ) RETURNING * INTO v_stream;
-
-  INSERT INTO public.live_stream_participants(stream_id, user_id, role, status, joined_at)
-  VALUES (p_stream_id, p_creator_id, 'creator', 'joined', v_now);
-
-  RETURN v_stream;
-END;
-$$;
-
 -- Admission is serialized on the stream row. Followers and private invitations
 -- are rechecked in the transaction, not trusted from the route's preflight.
 CREATE OR REPLACE FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)
@@ -236,10 +193,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean)
-  FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.create_live_stream(uuid, uuid, text, text, text, text, boolean)
-  TO service_role;
 REVOKE ALL ON FUNCTION public.join_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.join_live_stream(uuid, uuid) TO service_role;
 
