@@ -12,6 +12,39 @@ router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Call
 // The session row and queue entry are the source of truth; push is an
 // acceleration path for background/closed apps, while Realtime covers
 // foreground delivery.
+
+// Register an OS-level VoIP token (APNs PushKit or FCM). Tokens are private
+// device credentials and are only written/read by the authenticated API.
+router.post('/voip-token', async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  const type = req.body?.type;
+  if (token.length < 16 || token.length > 4096 || !['APNS_VOIP', 'FCM'].includes(type)) {
+    return res.status(400).json({ error: 'Invalid VoIP push token' });
+  }
+  const platform = type === 'APNS_VOIP' ? 'ios' : 'android';
+  const { error } = await supabaseAdmin.from('call_voip_tokens').upsert({
+    user_id: req.user.id,
+    token,
+    token_type: type,
+    platform,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'token' });
+  if (error) {
+    console.error('[calls] VoIP token registration failed:', error.message || error);
+    return res.status(503).json({ error: 'Could not register call notifications' });
+  }
+  return res.json({ registered: true, platform });
+});
+
+router.delete('/voip-token', async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  if (!token || token.length > 4096) return res.status(400).json({ error: 'Invalid VoIP push token' });
+  const { error } = await supabaseAdmin.from('call_voip_tokens').delete()
+    .eq('user_id', req.user.id).eq('token', token);
+  if (error) return res.status(503).json({ error: 'Could not remove call notifications' });
+  return res.json({ removed: true });
+});
+
 router.post('/:callId/notify', async (req, res) => {
   const callId = String(req.params.callId || '');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId)) {
