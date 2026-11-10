@@ -115,23 +115,6 @@ AS $$
     AND position('..' in d.avatar_path) = 0;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_visible_profile_cover_path(p_user_id uuid)
-RETURNS text
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT d.cover_path
-  FROM public.profile_details d
-  WHERE d.user_id = p_user_id
-    AND public.can_view_profile_avatar(p_user_id)
-    AND public.get_public_profile_details(p_user_id) <> '{}'::jsonb
-    AND d.cover_path IS NOT NULL
-    AND d.cover_path LIKE p_user_id::text || '/%'
-    AND position('..' in d.cover_path) = 0;
-$$;
-
 CREATE OR REPLACE FUNCTION public.get_public_profile_details(p_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -180,6 +163,25 @@ BEGIN
   ));
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION public.get_visible_profile_cover_path(p_user_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT d.cover_path
+  FROM public.profile_details d
+  WHERE d.user_id = p_user_id
+    AND public.can_view_profile_avatar(p_user_id)
+    AND public.get_public_profile_details(p_user_id) <> '{}'::jsonb
+    AND d.cover_path IS NOT NULL
+    AND d.cover_path LIKE p_user_id::text || '/%'
+    AND position('..' in d.cover_path) = 0;
+$$;
+
+
 
 REVOKE ALL ON FUNCTION public.can_view_profile_avatar(uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_visible_profile_avatar_path(uuid) FROM PUBLIC, anon;
