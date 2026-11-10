@@ -83,7 +83,7 @@ BEGIN
     ) INTO v_is_follower;
 
     IF v_stream.visibility = 'followers' AND NOT v_is_follower
-       AND NOT (v_has_invite AND v_invite.invitation_type = 'viewer') THEN
+       AND NOT (v_has_invite AND v_invite.invitation_type IN ('viewer','guest')) THEN
       RAISE EXCEPTION 'LIVE stream is for followers only' USING ERRCODE = '42501';
     END IF;
 
