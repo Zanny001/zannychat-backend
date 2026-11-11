@@ -51,6 +51,20 @@ async function getBlockedUserIds(userId, otherIds) {
   ]);
 }
 
+async function getProfileNames(userIds) {
+  const ids = [...new Set((userIds || []).filter(validId))];
+  if (!ids.length) return new Map();
+  try {
+    const { data, error } = await supabaseAdmin.from('profiles')
+      .select('id,name').in('id', ids);
+    if (error) throw error;
+    return new Map((data || []).map((row) => [row.id, row.name]));
+  } catch (error) {
+    console.error('[live] comment display name lookup failed:', error?.message || error);
+    return new Map();
+  }
+}
+
 async function getStream(streamId) {
   const { data, error } = await supabaseAdmin.from('live_streams')
     .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at')
@@ -451,7 +465,13 @@ router.get('/:streamId/comments', async (req, res) => {
       .eq('stream_id', streamId).eq('moderation_status', 'visible')
       .order('created_at', { ascending: false }).limit(50);
     if (error) throw error;
-    return res.json({ comments: (data || []).reverse() });
+    const ordered = (data || []).reverse();
+    const names = await getProfileNames(ordered.map((comment) => comment.user_id));
+    const comments = ordered.map((row) => {
+      const { user_id: _userId, ...comment } = row;
+      return { ...comment, user_name: names.get(_userId) || 'ZannyChat user' };
+    });
+    return res.json({ comments });
   } catch (error) {
     console.error('[live] comments fetch failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE comments' });
@@ -473,7 +493,11 @@ router.post('/:streamId/comment', makeLimiter({ windowMs: 10 * 1000, max: 5, err
       stream_id: streamId, user_id: req.user.id, body,
     }).select('id,stream_id,user_id,body,moderation_status,created_at').single();
     if (error) throw error;
-    return res.status(201).json({ comment: data });
+    const names = await getProfileNames([req.user.id]);
+    const { user_id: _userId, ...comment } = data;
+    return res.status(201).json({
+      comment: { ...comment, user_name: names.get(_userId) || 'ZannyChat user' },
+    });
   } catch (error) {
     console.error('[live] comment failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not post LIVE comment' });
