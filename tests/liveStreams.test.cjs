@@ -158,3 +158,13 @@ test('LIVE guest publishing requires creator approval and the stream guest switc
   assert.ok(accessMigration.includes('p_invited_user_ids uuid[]'));
   assert.ok(accessMigration.includes("invitation_type, status, created_at, updated_at"));
 });
+
+
+test('LIVE comments expose profile display names without returning raw user IDs', () => {
+  assert.ok(route.includes("async function getProfileNames(userIds)"));
+  assert.ok(route.includes("from('profiles')"));
+  assert.ok(route.includes(".select('id,name').in('id', ids)"));
+  assert.ok(route.includes("user_name: names.get(_userId) || 'ZannyChat user'"));
+  assert.ok(route.includes("const { user_id: _userId, ...comment } = row"));
+  assert.ok(route.includes("const { user_id: _userId, ...comment } = data"));
+});
