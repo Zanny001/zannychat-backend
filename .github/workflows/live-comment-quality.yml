@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: live-comment-quality-\${{ github.ref }}
+  group: live-comment-quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
