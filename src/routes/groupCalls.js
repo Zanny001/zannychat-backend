@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
+const { cleanupEndedGroupCallMedia } = require('../jobs/groupCallMediaCleanup');
 const { sendPushToUser } = require('../config/pushClient');
 
 const router = express.Router();
@@ -216,7 +217,12 @@ router.post('/:roomId/end', async (req, res) => {
       throw error;
     }
     if (!ended) return res.status(404).json({ error: 'Group call is no longer active' });
-    return res.json({ ended: true });
+
+    // Ending the database room alone does not disconnect participants already
+    // connected to the SFU. Attempt immediate teardown; the scheduled worker
+    // retries any room whose media_terminated_at marker remains unset.
+    const mediaCleanup = await cleanupEndedGroupCallMedia({ admin: supabaseAdmin, roomIds: [roomId], limit: 1 });
+    return res.json({ ended: true, mediaTerminated: mediaCleanup.terminated > 0, mediaTerminationPending: mediaCleanup.failed > 0 });
   } catch (error) {
     console.error('[group-calls] end failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not end this group call' });
