@@ -20,6 +20,7 @@ jobs:
       - run: npm test
       - run: npm run test:health-endpoints
       - run: npm run test:health-unit
+      - run: npm run test:observability
       - run: npm run test:ai-provider-failure
       - run: npm run test:api-hardening
       - run: npm run test:discovery-feed
