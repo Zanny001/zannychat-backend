@@ -37,4 +37,5 @@ jobs:
       - run: npm run test:chat-directory-rpcs
       - run: npm run test:database-hardening
       - run: npm run test:status-block-privacy
+      - run: npm run test:status-reaction-upsert
       - run: npm run test:security-headers
