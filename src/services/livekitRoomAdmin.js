@@ -5,8 +5,8 @@ function encode(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-function createRoomAdminToken(roomName, config, nowSeconds = Math.floor(Date.now() / 1000)) {
-  if (!roomName || !config?.apiKey || !config?.apiSecret) {
+function createRoomDeletionToken(config, nowSeconds = Math.floor(Date.now() / 1000)) {
+  if (!config?.apiKey || !config?.apiSecret) {
     throw new Error('LiveKit room administration is not configured');
   }
   const header = encode({ alg: 'HS256', typ: 'JWT' });
@@ -14,8 +14,8 @@ function createRoomAdminToken(roomName, config, nowSeconds = Math.floor(Date.now
     iss: config.apiKey,
     sub: 'zannychat-room-admin',
     nbf: nowSeconds - 5,
-    exp: nowSeconds + 60,
-    video: { roomAdmin: true, roomJoin: true, room: roomName },
+    exp: nowSeconds + 30,
+    video: { roomCreate: true },
   });
   const unsigned = header + '.' + payload;
   const signature = createHmac('sha256', config.apiSecret).update(unsigned).digest('base64url');
@@ -46,7 +46,7 @@ async function deleteLiveKitRoom(roomName, {
   if (!config) throw new Error('Group calling is not configured on this server');
   if (typeof fetchImpl !== 'function') throw new Error('LiveKit room administration requires fetch');
 
-  const token = createRoomAdminToken(roomName, config, nowSeconds);
+  const token = createRoomDeletionToken(config, nowSeconds);
   const response = await fetchImpl(liveKitHttpUrl(config.url), {
     method: 'POST',
     headers: {
@@ -64,4 +64,4 @@ async function deleteLiveKitRoom(roomName, {
   return { deleted: true, alreadyAbsent: false };
 }
 
-module.exports = { createRoomAdminToken, liveKitHttpUrl, deleteLiveKitRoom };
+module.exports = { createRoomDeletionToken, liveKitHttpUrl, deleteLiveKitRoom };
