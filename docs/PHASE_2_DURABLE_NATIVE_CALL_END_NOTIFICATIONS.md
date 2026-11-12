@@ -6,7 +6,7 @@ Native call termination already reconciles the durable call session using a sign
 
 ## Change
 
-- Add a backend-only `call_end_notifications` queue with one row per call and recipient.
+- Add a backend-only `call_end_notifications` queue with one row per call and recipient, including a covering recipient foreign-key index.
 - Enqueue the terminal event after the signed native event updates the call session, and when the authenticated `end-notify` endpoint is used.
 - Claim due notifications with `FOR UPDATE SKIP LOCKED` and a two-minute processing lease.
 - Retry provider failures and missing device tokens with bounded exponential backoff; expire after 12 attempts.
@@ -28,7 +28,7 @@ The existing `npm run test:call-notifications` suite now covers:
 
 ## Release gates
 
-1. The additive migration `20261112104335_durable_call_end_notifications.sql` was applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
+1. The additive migrations `20261112104335_durable_call_end_notifications.sql` and `20261112104530_index_call_end_notifications_recipient_id.sql` were applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
 2. Post-apply privilege verification confirmed RLS enabled, no SELECT privilege for `anon` or `authenticated`, and service-role-only access to the queue and claim RPC.
 3. Verify Render has the correct FCM service-account JSON and APNs alert credentials before relying on device delivery.
 4. Test incoming call, native decline, caller cancellation, unanswered timeout, active remote end, process death and token re-registration on physical Android and iOS devices.
