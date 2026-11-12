@@ -251,6 +251,104 @@ router.delete('/:channelId/posts/:postId', async (req, res) => {
   return res.json({ deleted: true });
 });
 
+// Public community feed: only posts from public channels are eligible.
+// Private channels stay behind requireChannelAccess on their channel routes.
+router.get('/discover/feed', async (req, res) => {
+  if (!supabaseAdmin) return unavailable(res);
+  res.set('Cache-Control', 'no-store');
+
+  const pageSize = 20;
+  const beforeCreatedAt = typeof req.query.beforeCreatedAt === 'string' ? req.query.beforeCreatedAt : '';
+  const beforeId = typeof req.query.beforeId === 'string' ? req.query.beforeId : '';
+  let cursorTimestamp = null;
+  if (beforeCreatedAt || beforeId) {
+    cursorTimestamp = normalizeChannelPostCursorTimestamp(beforeCreatedAt);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(beforeId);
+    if (!cursorTimestamp || !isUuid) return res.status(400).json({ error: 'Invalid discovery feed cursor' });
+  }
+
+  const [{ data: publicChannels, error: channelError }, { data: blockRows, error: blockError }] = await Promise.all([
+    supabaseAdmin.from('channels')
+      .select('id, title')
+      .eq('is_private', false)
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    supabaseAdmin.from('blocked_users')
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`)
+      .limit(5000),
+  ]);
+  if (channelError || blockError) return res.status(500).json({ error: 'Unable to load community discovery' });
+
+  const channelRows = Array.isArray(publicChannels) ? publicChannels : [];
+  const channelIds = channelRows.map((channel) => channel.id);
+  if (!channelIds.length) return res.json({ posts: [], nextCursor: null, hasMore: false });
+
+  const channelById = new Map(channelRows.map((channel) => [channel.id, channel]));
+  const blockedIds = new Set((blockRows || []).map((row) => (
+    row.blocker_id === req.user.id ? row.blocked_id : row.blocker_id
+  )));
+
+  let query = supabaseAdmin.from('channel_posts')
+    .select('id, channel_id, author_id, body, created_at, is_pinned')
+    .in('channel_id', channelIds)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(pageSize + 1);
+  if (cursorTimestamp) {
+    // Preserve PostgreSQL timestamp precision and use the stable ID tiebreaker.
+    query = query.or(`created_at.lt.${cursorTimestamp},and(created_at.eq.${cursorTimestamp},id.lt.${beforeId})`);
+  }
+
+  const { data: fetchedPosts, error: postsError } = await query;
+  if (postsError) return res.status(500).json({ error: 'Unable to load community posts' });
+
+  const fetched = Array.isArray(fetchedPosts) ? fetchedPosts : [];
+  const hasMore = fetched.length > pageSize;
+  const page = fetched.slice(0, pageSize);
+  const lastPost = hasMore ? page[page.length - 1] : null;
+  const nextCursor = lastPost ? { created_at: lastPost.created_at, id: lastPost.id } : null;
+  const visiblePosts = page.filter((post) => !blockedIds.has(post.author_id));
+  const postIds = visiblePosts.map((post) => post.id);
+  if (!postIds.length) return res.json({ posts: [], nextCursor, hasMore });
+
+  // Views are unique per authenticated viewer and post; repeated refreshes
+  // do not inflate the view count.
+  const { error: viewError } = await supabaseAdmin.from('channel_post_views')
+    .upsert(postIds.map((postId) => ({ post_id: postId, user_id: req.user.id })), {
+      onConflict: 'post_id,user_id',
+      ignoreDuplicates: true,
+    });
+  if (viewError) return res.status(500).json({ error: 'Unable to record community feed views' });
+
+  const { data: stats, error: statsError } = await supabaseAdmin.rpc('get_channel_post_stats', {
+    p_post_ids: postIds,
+    p_user_id: req.user.id,
+  });
+  if (statsError) return res.status(500).json({ error: 'Unable to load community feed statistics' });
+  const statsByPostId = new Map((stats || []).map((item) => [item.post_id, item]));
+
+  return res.json({
+    posts: visiblePosts.map((post) => {
+      const itemStats = statsByPostId.get(post.id);
+      return {
+        id: post.id,
+        channelId: post.channel_id,
+        channelTitle: channelById.get(post.channel_id)?.title || 'Community',
+        body: post.body,
+        created_at: post.created_at,
+        is_pinned: Boolean(post.is_pinned),
+        reactionCounts: itemStats?.reaction_counts && typeof itemStats.reaction_counts === 'object' ? itemStats.reaction_counts : {},
+        myReaction: typeof itemStats?.my_reaction === 'string' ? itemStats.my_reaction : null,
+        commentCount: Number.isSafeInteger(Number(itemStats?.comment_count)) ? Number(itemStats.comment_count) : 0,
+        viewCount: Number.isSafeInteger(Number(itemStats?.view_count)) ? Number(itemStats.view_count) : 0,
+      };
+    }),
+    nextCursor,
+    hasMore,
+  });
+});
+
 router.get('/:channelId/posts', async (req, res) => {
   if (!supabaseAdmin) return unavailable(res);
   const { data: channelRow, error: channelError } = await supabaseAdmin.from('channels').select('id, owner_id, title, description, is_private').eq('id', req.params.channelId).maybeSingle();
