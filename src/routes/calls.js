@@ -3,7 +3,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { buildIceConfig } = require('../utils/turnCredentials.cjs');
 const { runCallInvitationNotifications } = require('../jobs/callInvitationNotifications');
-const { sendCallEndedToUser } = require('../config/callVoipPushClient');
+const { enqueueCallEndNotification } = require('../jobs/callEndNotifications');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 
 const router = express.Router();
@@ -34,8 +34,13 @@ const router = express.Router();
      .select('id,status').maybeSingle();
    if (updateError) return res.status(503).json({ error: 'Could not update call state' });
    const recipientId = actorId === call.caller_id ? call.callee_id : call.caller_id;
-   if (updated) await sendCallEndedToUser(supabaseAdmin, recipientId, callId, updated.status);
-   return res.json({ updated: Boolean(updated), status: updated?.status || nextStatus });
+   let delivery = null;
+   if (updated) {
+     delivery = await enqueueCallEndNotification({
+       admin: supabaseAdmin, callId, recipientId, terminalStatus: updated.status,
+     });
+   }
+   return res.json({ updated: Boolean(updated), status: updated?.status || nextStatus, notification: delivery });
  });
 
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Call setup is rate-limited. Please wait before trying again.' }));
@@ -103,8 +108,10 @@ router.post('/:callId/end-notify', async (req, res) => {
     return res.status(409).json({ error: 'Call has not ended' });
   }
   const recipientId = req.user.id === call.caller_id ? call.callee_id : call.caller_id;
-  const delivery = await sendCallEndedToUser(supabaseAdmin, recipientId, call.id, call.status);
-  return res.json({ sent: Number(delivery.sent) || 0 });
+  const delivery = await enqueueCallEndNotification({
+    admin: supabaseAdmin, callId: call.id, recipientId, terminalStatus: call.status,
+  });
+  return res.json({ sent: Number(delivery.delivered) || 0, queued: true, notification: delivery });
 });
 
 router.delete('/voip-token', async (req, res) => {
