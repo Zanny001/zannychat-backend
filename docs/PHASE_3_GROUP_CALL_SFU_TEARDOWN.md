@@ -6,7 +6,7 @@ The group-call database lifecycle is atomic, but ending a room in Postgres does 
 
 ## Change
 
-- Add a short-lived, room-scoped LiveKit room-admin JWT generated only on the backend.
+- Add a 30-second LiveKit server-side JWT carrying only the `roomCreate` grant required by the DeleteRoom API. LiveKit does not offer a room-scoped grant for DeleteRoom, so this credential is never returned to clients and exists only for the server-side deletion request.
 - Call LiveKit's `RoomService/DeleteRoom` API after the host/admin successfully ends a group call.
 - Track successful media teardown separately from the durable call record using `group_call_rooms.media_terminated_at`.
 - Run a backend retry worker every 30 seconds for ended rooms whose media teardown is still pending.
