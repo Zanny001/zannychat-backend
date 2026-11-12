@@ -58,7 +58,8 @@
     "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
     "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs",
     "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs",
-    "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs"
+    "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs",
+    "test:observability": "node --test tests/requestObservability.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
