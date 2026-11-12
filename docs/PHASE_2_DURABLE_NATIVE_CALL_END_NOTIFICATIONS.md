@@ -28,7 +28,7 @@ The existing `npm run test:call-notifications` suite now covers:
 
 ## Release gates
 
-1. Review and apply `20261112114500_durable_call_end_notifications.sql` to the intended Supabase environment before deploying this backend commit.
+1. Review and apply `20261112104335_durable_call_end_notifications.sql` to the intended Supabase environment before deploying this backend commit.
 2. Verify Render has the correct FCM service-account JSON and APNs alert credentials.
 3. Test incoming call, native decline, caller cancellation, unanswered timeout, active remote end, process death and token re-registration on physical Android and iOS devices.
 4. Confirm queue rows reach `delivered` when provider delivery is accepted and retry/expire correctly when providers are unavailable.
