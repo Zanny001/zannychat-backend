@@ -267,31 +267,19 @@ router.get('/discover/feed', async (req, res) => {
     if (!cursorTimestamp || !isUuid) return res.status(400).json({ error: 'Invalid discovery feed cursor' });
   }
 
-  const [{ data: publicChannels, error: channelError }, { data: blockRows, error: blockError }] = await Promise.all([
-    supabaseAdmin.from('channels')
-      .select('id, title')
-      .eq('is_private', false)
-      .order('created_at', { ascending: false })
-      .limit(1000),
-    supabaseAdmin.from('blocked_users')
-      .select('blocker_id, blocked_id')
-      .or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`)
-      .limit(5000),
-  ]);
-  if (channelError || blockError) return res.status(500).json({ error: 'Unable to load community discovery' });
+  const { data: blockRows, error: blockError } = await supabaseAdmin.from('blocked_users')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`)
+    .limit(5000);
+  if (blockError) return res.status(500).json({ error: 'Unable to load community discovery' });
 
-  const channelRows = Array.isArray(publicChannels) ? publicChannels : [];
-  const channelIds = channelRows.map((channel) => channel.id);
-  if (!channelIds.length) return res.json({ posts: [], nextCursor: null, hasMore: false });
-
-  const channelById = new Map(channelRows.map((channel) => [channel.id, channel]));
   const blockedIds = new Set((blockRows || []).map((row) => (
     row.blocker_id === req.user.id ? row.blocked_id : row.blocker_id
   )));
 
   let query = supabaseAdmin.from('channel_posts')
-    .select('id, channel_id, author_id, body, created_at, is_pinned')
-    .in('channel_id', channelIds)
+    .select('id, channel_id, author_id, body, created_at, is_pinned, channels!inner(title, is_private)')
+    .eq('channels.is_private', false)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(pageSize + 1);
@@ -334,7 +322,7 @@ router.get('/discover/feed', async (req, res) => {
       return {
         id: post.id,
         channelId: post.channel_id,
-        channelTitle: channelById.get(post.channel_id)?.title || 'Community',
+        channelTitle: post.channels?.title || 'Community',
         body: post.body,
         created_at: post.created_at,
         is_pinned: Boolean(post.is_pinned),
