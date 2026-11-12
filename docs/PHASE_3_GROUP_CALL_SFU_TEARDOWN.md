@@ -28,10 +28,11 @@ The existing `npm run test:group-calls` suite now also verifies:
 
 ## Deployment gates
 
-1. Review and apply `20261112104338_group_call_media_teardown.sql` to the intended Supabase environment before deploying this backend commit.
-2. Confirm `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` are configured as server-only Render environment variables.
-3. Run the backend quality workflow.
-4. Test host end, admin end, participant leave, reconnect, and SFU outage/recovery with at least three authenticated devices.
-5. Confirm all remote participants are disconnected and group-call history remains available.
+1. The additive migration `20261112104338_group_call_media_teardown.sql` was applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
+2. Post-apply privilege verification confirmed RLS remains enabled and `anon`/`authenticated` have no SELECT privilege on group-call room state.
+3. Confirm `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` are configured as server-only Render environment variables before deployment.
+4. Run the backend quality workflow.
+5. Test host end, admin end, participant leave, reconnect, and SFU outage/recovery with at least three authenticated devices.
+6. Confirm all remote participants are disconnected and group-call history remains available.
 
-No production migration or Render deployment is performed by this PR.
+The migration is applied, but this PR is not merged or deployed to Render.
