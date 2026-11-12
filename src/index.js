@@ -19,6 +19,29 @@ const liveStreamsRouter = require('./routes/liveStreams');
 // Retry transient call-push failures while the API process is awake. The
 // authenticated /calls/:id/notify route handles immediate delivery; this
 // worker drains due retries and recovers stale processing leases.
+function startCallEndNotificationWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { runCallEndNotifications } = require('./jobs/callEndNotifications');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await runCallEndNotifications({ admin: supabaseAdmin, limit: 20 });
+    } catch (error) {
+      console.error('[calls] background call-ended notification retry failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 6_000);
+  warmup.unref?.();
+  return timer;
+}
+
 function startGroupCallMediaCleanupWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
@@ -138,6 +161,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`ZannyChat backend listening on port ${PORT}`);
     startCallInvitationWorker();
+    startCallEndNotificationWorker();
     startGroupCallMediaCleanupWorker();
   });
 }
