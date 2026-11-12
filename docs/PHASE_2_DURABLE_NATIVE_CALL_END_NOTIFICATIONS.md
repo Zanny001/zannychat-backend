@@ -28,10 +28,11 @@ The existing `npm run test:call-notifications` suite now covers:
 
 ## Release gates
 
-1. Review and apply `20261112104335_durable_call_end_notifications.sql` to the intended Supabase environment before deploying this backend commit.
-2. Verify Render has the correct FCM service-account JSON and APNs alert credentials.
-3. Test incoming call, native decline, caller cancellation, unanswered timeout, active remote end, process death and token re-registration on physical Android and iOS devices.
-4. Confirm queue rows reach `delivered` when provider delivery is accepted and retry/expire correctly when providers are unavailable.
-5. Do not claim Android cold-start Telecom UI dismissal or guaranteed iOS CallKit dismissal from standard APNs alerts; those remain platform/device-specific release gates.
+1. The additive migration `20261112104335_durable_call_end_notifications.sql` was applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
+2. Post-apply privilege verification confirmed RLS enabled, no SELECT privilege for `anon` or `authenticated`, and service-role-only access to the queue and claim RPC.
+3. Verify Render has the correct FCM service-account JSON and APNs alert credentials before relying on device delivery.
+4. Test incoming call, native decline, caller cancellation, unanswered timeout, active remote end, process death and token re-registration on physical Android and iOS devices.
+5. Confirm queue rows reach `delivered` when provider delivery is accepted and retry/expire correctly when providers are unavailable.
+6. Do not claim Android cold-start Telecom UI dismissal or guaranteed iOS CallKit dismissal from standard APNs alerts; those remain platform/device-specific release gates.
 
-No production migration or Render deployment is performed by this PR.
+The migration is applied, but this PR is not merged or deployed to Render.
