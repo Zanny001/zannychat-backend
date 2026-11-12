@@ -32,3 +32,20 @@ The missing ledger entries include the original baseline migrations (`0001` onwa
 ## Security-linter interpretation
 
 Supabase reported RLS-enabled tables with no policies. For the checked call-notification, VoIP-token, and LIVE internal tables, direct SELECT privileges are revoked from `anon` and `authenticated` and retained for `service_role`. These are intentionally server-only tables; do not add broad client policies merely to silence the informational lint.
+
+
+## Verified media migration reconciliation — 2026-11-12
+
+The linked production migration ledger and the repository initially differed for two media migrations:
+
+- Remote `20261111123440` / `fix_status_media_upload_rls`; source recovered from PR #10 and merged to main.
+- Remote `20261111125224` / `harden_private_media_upload_rls`; its source had been committed locally as `20261111130000_harden_private_media_upload_rls.sql`.
+
+The production `supabase_migrations.schema_migrations` table stores the applied SQL statements. We retrieved the stored statement for each remote version and compared it with the corresponding GitHub SQL source after removing SQL line comments and normalizing whitespace/case/punctuation. Both comparisons were equal:
+
+- `20261111123440`: production stored SQL equals the SQL from `20261111123440_fix_status_media_upload_rls.sql`.
+- `20261111125224`: production stored SQL equals the SQL from the prior `20261111130000_harden_private_media_upload_rls.sql`.
+
+For the second migration, this is a verified SQL-content match, not merely a filename inference. The repository migration file is therefore renamed to `20261111125224_harden_private_media_upload_rls.sql` so the local version matches the already-applied production ledger. The SQL body is preserved; this is a source-control filename reconciliation only.
+
+No migration was applied, replayed, repaired, reset, or otherwise changed in production during this reconciliation. Do not run `supabase db push` or migration repair as part of this rename. After the PR is merged, developers should pull the updated migration filenames before running the linked migration list.
