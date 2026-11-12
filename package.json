@@ -23,6 +23,7 @@
     "test:status-media-migration": "node --test tests/statusMediaMigration.test.cjs",
     "test:status-views-migration": "node --test tests/statusViewsMigration.test.cjs",
     "test:status-reactions-migration": "node --test tests/statusReactionsMigration.test.cjs",
+    "test:status-reaction-upsert": "node --test tests/statusReactionUpsertPrivilegeMigration.test.cjs",
     "test:status-replies-migration": "node --test tests/statusRepliesMigration.test.cjs",
     "test:status-video-migration": "node --test tests/statusVideoMigration.test.cjs",
     "test:status-mutes-migration": "node --test tests/statusMutesMigration.test.cjs",
