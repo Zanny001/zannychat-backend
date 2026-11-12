@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createCorsOptions } = require('./config/corsOptions');
+const { requestObservability } = require('./middleware/requestObservability');
 
 const healthRouter = require('./routes/health');
 const conversationsRouter = require('./routes/conversations');
@@ -108,6 +109,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Correlate requests without recording raw URLs, bodies, identities, or secrets.
+app.use(requestObservability);
 
 // Render (like most PaaS hosts) terminates TLS at a proxy one hop in
 // front of this process — trust exactly that one hop so req.ip is the
