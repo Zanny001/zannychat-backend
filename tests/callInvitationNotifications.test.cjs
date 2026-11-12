@@ -240,7 +240,7 @@ test('native call-end push without a registered device token is retained for bou
   assert.equal(updates[0].status, 'pending');
   assert.equal(updates[0].attempt_count, 3);
   assert.equal(updates[0].last_error.includes('No registered'), true);
-  assert.equal(Date.parse(updates[0].next_attempt_at), Date.parse('2026-11-12T10:01:00.000Z'));
+  assert.equal(Date.parse(updates[0].next_attempt_at), Date.parse('2026-11-12T10:02:00.000Z'));
 });
 
 test('call-end enqueue is idempotent and immediately attempts delivery', async () => {
@@ -268,4 +268,15 @@ test('call-end enqueue is idempotent and immediately attempts delivery', async (
   assert.equal(inserted.row.recipient_id, 'user-4');
   assert.deepEqual(inserted.options, { onConflict: 'call_id,recipient_id', ignoreDuplicates: true });
   assert.equal(claimed, true);
+});
+
+
+test('native call terminal events enqueue durable notifications instead of relying on one push attempt', () => {
+  const callsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/calls.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  assert.ok(callsRoute.includes("require('../jobs/callEndNotifications')"));
+  assert.ok(callsRoute.includes('enqueueCallEndNotification'));
+  assert.equal(callsRoute.includes('sendCallEndedToUser(supabaseAdmin'), false);
+  assert.ok(server.includes('startCallEndNotificationWorker();'));
+  assert.ok(server.includes('runCallEndNotifications({ admin: supabaseAdmin, limit: 20 })'));
 });
