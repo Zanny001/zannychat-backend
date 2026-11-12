@@ -18,6 +18,10 @@ Scope: read-only production Supabase observations and CI/operational readiness. 
 - 22 authenticated-executable SECURITY DEFINER functions remain flagged. They have been reviewed as intentional app/RLS helpers; do not blanket-revoke EXECUTE because several are called by RLS policies and application RPCs.
 - Leaked-password protection is a paid-plan feature on this project tier; no plan upgrade or paid service was introduced.
 
+## AI provider availability
+
+Render application logs contained three Anthropic API errors reporting that the provider credit balance was too low. The backend already returned a generic error to clients, but the failure was surfaced as HTTP 500 and raw provider details were written to logs. Phase 6 now maps explicit provider credit/quota exhaustion to HTTP 503 with a safe `AI_TEMPORARILY_UNAVAILABLE` response, avoids logging billing payloads, and includes a regression test. No paid credits or alternate paid provider were added; AI features remain unavailable until the configured provider has usable quota.
+
 ## Operational health
 
 The backend exposes:
