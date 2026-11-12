@@ -28,7 +28,7 @@ The existing `npm run test:call-notifications` suite now covers:
 
 ## Release gates
 
-1. The additive migrations `20261112104335_durable_call_end_notifications.sql` and `20261112104530_index_call_end_notifications_recipient_id.sql` were applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
+1. The additive migrations `20261112104335_durable_call_end_notifications.sql` and `20261112104520_index_call_end_notifications_recipient_id.sql` were applied to production Supabase on 2026-11-12 and recorded in the remote migration ledger.
 2. Post-apply privilege verification confirmed RLS enabled, no SELECT privilege for `anon` or `authenticated`, and service-role-only access to the queue and claim RPC.
 3. Verify Render has the correct FCM service-account JSON and APNs alert credentials before relying on device delivery.
 4. Test incoming call, native decline, caller cancellation, unanswered timeout, active remote end, process death and token re-registration on physical Android and iOS devices.
