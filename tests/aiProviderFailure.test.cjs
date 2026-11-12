@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { isAiQuotaUnavailable, respondToAiFailure } = require('../src/utils/aiProviderFailure');
+const { isAiQuotaUnavailable, respondToAiFailure } = require('../src/utils/aiProviderFailure.cjs');
 
 test('recognizes exhausted Anthropic credits without matching unrelated failures', () => {
   assert.equal(isAiQuotaUnavailable(new Error('Anthropic API error (400): Your credit balance is too low to access the Anthropic API.')), true);
