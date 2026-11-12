@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { aiLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { askClaude, isAiConfigured } = require('../config/aiClient');
+const { respondToAiFailure } = require('../utils/aiProviderFailure.cjs');
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ async function assertParticipant(conversationId, userId) {
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
-    console.error('[ai] conversation membership lookup failed:', error.message);
+    console.error('[ai] conversation membership lookup failed');
     throw new Error('AI conversation lookup failed');
   }
   return Boolean(data);
@@ -39,7 +40,7 @@ async function fetchRecentMessages(conversationId, limit = 20) {
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) {
-    console.error('[ai] message lookup failed:', error.message);
+    console.error('[ai] message lookup failed');
     throw new Error('AI message lookup failed');
   }
   return data.reverse(); // chronological order for the model
@@ -89,8 +90,7 @@ router.post('/smart-replies', async (req, res) => {
 
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch (err) {
-    console.error('[ai] request failed:', err.message);
-    res.status(500).json({ error: 'Unable to complete AI request' });
+    respondToAiFailure(res, err);
   }
 });
 
@@ -122,8 +122,7 @@ router.post('/summarize', async (req, res) => {
 
     res.json({ summary: summary.trim() });
   } catch (err) {
-    console.error('[ai] request failed:', err.message);
-    res.status(500).json({ error: 'Unable to complete AI request' });
+    respondToAiFailure(res, err);
   }
 });
 
@@ -144,8 +143,7 @@ router.post('/translate', async (req, res) => {
     });
     res.json({ translated: translated.trim() });
   } catch (err) {
-    console.error('[ai] request failed:', err.message);
-    res.status(500).json({ error: 'Unable to complete AI request' });
+    respondToAiFailure(res, err);
   }
 });
 
