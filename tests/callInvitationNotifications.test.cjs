@@ -189,15 +189,14 @@ test('native VoIP is withheld when a signed terminal-event credential cannot be 
 
 
 test('native call-end notification queue is service-only and claims work with SKIP LOCKED leases', () => {
-  assert.match(callEndSql, /CREATE TABLE IF NOT EXISTS public\\.call_end_notifications/);
-  assert.match(callEndSql, /ENABLE ROW LEVEL SECURITY/);
-  assert.match(callEndSql, /REVOKE ALL ON public\\.call_end_notifications FROM PUBLIC, anon, authenticated/);
-  assert.match(callEndSql, /GRANT ALL ON public\\.call_end_notifications TO service_role/);
-  assert.match(callEndSql, /FOR UPDATE SKIP LOCKED/);
-  assert.match(callEndSql, /lease_started_at <= now\\(\\) - interval '2 minutes'/);
-  assert.match(callEndSql, /GRANT EXECUTE ON FUNCTION public\\.claim_call_end_notifications\\(integer, uuid\\) TO service_role/);
+  assert.ok(callEndSql.includes('CREATE TABLE IF NOT EXISTS public.call_end_notifications'));
+  assert.ok(callEndSql.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(callEndSql.includes('REVOKE ALL ON public.call_end_notifications FROM PUBLIC, anon, authenticated'));
+  assert.ok(callEndSql.includes('GRANT ALL ON public.call_end_notifications TO service_role'));
+  assert.ok(callEndSql.includes('FOR UPDATE SKIP LOCKED'));
+  assert.ok(callEndSql.includes("lease_started_at <= now() - interval '2 minutes'"));
+  assert.ok(callEndSql.includes('GRANT EXECUTE ON FUNCTION public.claim_call_end_notifications(integer, uuid) TO service_role'));
 });
-
 test('native call-end push is marked delivered after provider acceptance', async () => {
   const updates = [];
   const admin = {
