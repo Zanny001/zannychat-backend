@@ -209,3 +209,16 @@ test('ended group-call media cleanup records success and leaves failures retryab
   assert.ok(route.includes('cleanupEndedGroupCallMedia'));
   assert.ok(route.includes('mediaTerminationPending'));
 });
+
+
+test('LiveKit room-admin requests refuse insecure transport in production', () => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    assert.throws(() => liveKitHttpUrl('ws://media.example.invalid'), /secure wss or https transport/);
+    assert.equal(liveKitHttpUrl('wss://media.example.invalid'), 'https://media.example.invalid/twirp/livekit.RoomService/DeleteRoom');
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
