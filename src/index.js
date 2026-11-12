@@ -42,6 +42,29 @@ function startCallEndNotificationWorker() {
   return timer;
 }
 
+function startGroupCallMediaCleanupWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { cleanupEndedGroupCallMedia } = require('./jobs/groupCallMediaCleanup');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await cleanupEndedGroupCallMedia({ admin: supabaseAdmin, limit: 25 });
+    } catch (error) {
+      console.error('[group-calls] background SFU teardown retry failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 7_500);
+  warmup.unref?.();
+  return timer;
+}
+
 function startCallInvitationWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
@@ -139,6 +162,7 @@ if (require.main === module) {
     console.log(`ZannyChat backend listening on port ${PORT}`);
     startCallInvitationWorker();
     startCallEndNotificationWorker();
+    startGroupCallMediaCleanupWorker();
   });
 }
 
