@@ -28,7 +28,7 @@ The existing `npm run test:group-calls` suite now also verifies:
 
 ## Deployment gates
 
-1. Review and apply `20261112113000_group_call_media_teardown.sql` to the intended Supabase environment before deploying this backend commit.
+1. Review and apply `20261112104338_group_call_media_teardown.sql` to the intended Supabase environment before deploying this backend commit.
 2. Confirm `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` are configured as server-only Render environment variables.
 3. Run the backend quality workflow.
 4. Test host end, admin end, participant leave, reconnect, and SFU outage/recovery with at least three authenticated devices.
