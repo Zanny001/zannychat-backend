@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { retryDelay, runCallInvitationNotifications } = require('../src/jobs/callInvitationNotifications');
 const { getCallEventTokenActor } = require('../src/services/callEventToken');
+const { runCallEndNotifications, enqueueCallEndNotification } = require('../src/jobs/callEndNotifications');
+const callEndSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104335_durable_call_end_notifications.sql'), 'utf8');
+const callEndRecipientIndexSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104520_index_call_end_notifications_recipient_id.sql'), 'utf8');
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 const targetedSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
 
@@ -183,4 +186,99 @@ test('native VoIP is withheld when a signed terminal-event credential cannot be 
     if (previousService === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = previousService;
   }
+});
+
+
+test('native call-end notification queue is service-only and claims work with SKIP LOCKED leases', () => {
+  assert.ok(callEndSql.includes('CREATE TABLE IF NOT EXISTS public.call_end_notifications'));
+  assert.ok(callEndSql.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(callEndSql.includes('REVOKE ALL ON public.call_end_notifications FROM PUBLIC, anon, authenticated'));
+  assert.ok(callEndSql.includes('GRANT ALL ON public.call_end_notifications TO service_role'));
+  assert.ok(callEndSql.includes('FOR UPDATE SKIP LOCKED'));
+  assert.ok(callEndSql.includes("lease_started_at <= now() - interval '2 minutes'"));
+  assert.ok(callEndSql.includes('GRANT EXECUTE ON FUNCTION public.claim_call_end_notifications(integer, uuid) TO service_role'));
+  assert.ok(callEndRecipientIndexSql.includes('CREATE INDEX IF NOT EXISTS call_end_notifications_recipient_id_idx'));
+  assert.ok(callEndRecipientIndexSql.includes('ON public.call_end_notifications (recipient_id)'));
+});
+test('native call-end push is marked delivered after provider acceptance', async () => {
+  const updates = [];
+  const admin = {
+    rpc: async (name, args) => {
+      assert.equal(name, 'claim_call_end_notifications');
+      assert.deepEqual(args, { p_limit: 5, p_call_id: 'call-1' });
+      return { data: [{ id: 'job-1', call_id: 'call-1', recipient_id: 'user-2', terminal_status: 'ended', attempt_count: 0 }], error: null };
+    },
+    from(table) {
+      assert.equal(table, 'call_end_notifications');
+      return { update: (values) => ({ eq: async (_column, id) => { updates.push({ values, id }); return { error: null }; } }) };
+    },
+  };
+  const result = await runCallEndNotifications({
+    admin, limit: 5, callId: 'call-1',
+    sendCallEnded: async (_admin, userId, callId, status) => {
+      assert.deepEqual([userId, callId, status], ['user-2', 'call-1', 'ended']);
+      return { sent: 1, failed: 0 };
+    },
+    now: () => new Date('2026-11-12T10:00:00.000Z'),
+  });
+  assert.deepEqual(result, { claimed: 1, delivered: 1, retried: 0, expired: 0, failed: 0 });
+  assert.equal(updates[0].id, 'job-1');
+  assert.equal(updates[0].values.status, 'delivered');
+  assert.equal(updates[0].values.delivered_at, '2026-11-12T10:00:00.000Z');
+});
+
+test('native call-end push without a registered device token is retained for bounded retry', async () => {
+  const updates = [];
+  const admin = {
+    rpc: async () => ({ data: [{ id: 'job-2', call_id: 'call-2', recipient_id: 'user-3', terminal_status: 'missed', attempt_count: 2 }], error: null }),
+    from: () => ({ update: (values) => ({ eq: async () => { updates.push(values); return { error: null }; } }) }),
+  };
+  const result = await runCallEndNotifications({
+    admin,
+    sendCallEnded: async () => ({ sent: 0, failed: 0 }),
+    now: () => new Date('2026-11-12T10:00:00.000Z'),
+  });
+  assert.equal(result.retried, 1);
+  assert.equal(updates[0].status, 'pending');
+  assert.equal(updates[0].attempt_count, 3);
+  assert.equal(updates[0].last_error, 'No call-ended push provider accepted the event');
+  assert.equal(Date.parse(updates[0].next_attempt_at), Date.parse('2026-11-12T10:02:00.000Z'));
+});
+
+test('call-end enqueue is idempotent and immediately attempts delivery', async () => {
+  let inserted;
+  let claimed = false;
+  const admin = {
+    from: (table) => ({
+      upsert: async (row, options) => {
+        assert.equal(table, 'call_end_notifications');
+        inserted = { row, options };
+        return { error: null };
+      },
+    }),
+    rpc: async () => {
+      claimed = true;
+      return { data: [], error: null };
+    },
+  };
+  const result = await enqueueCallEndNotification({
+    admin, callId: 'call-3', recipientId: 'user-4', terminalStatus: 'cancelled',
+    now: () => new Date('2026-11-12T10:00:00.000Z'),
+  });
+  assert.deepEqual(result, { claimed: 0, delivered: 0, retried: 0, expired: 0, failed: 0 });
+  assert.equal(inserted.row.call_id, 'call-3');
+  assert.equal(inserted.row.recipient_id, 'user-4');
+  assert.deepEqual(inserted.options, { onConflict: 'call_id,recipient_id', ignoreDuplicates: true });
+  assert.equal(claimed, true);
+});
+
+
+test('native call terminal events enqueue durable notifications instead of relying on one push attempt', () => {
+  const callsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/calls.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  assert.ok(callsRoute.includes("require('../jobs/callEndNotifications')"));
+  assert.ok(callsRoute.includes('enqueueCallEndNotification'));
+  assert.equal(callsRoute.includes('sendCallEndedToUser(supabaseAdmin'), false);
+  assert.ok(server.includes('startCallEndNotificationWorker();'));
+  assert.ok(server.includes('runCallEndNotifications({ admin: supabaseAdmin, limit: 20 })'));
 });
