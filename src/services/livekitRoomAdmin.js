@@ -24,6 +24,9 @@ function createRoomDeletionToken(config, nowSeconds = Math.floor(Date.now() / 10
 
 function liveKitHttpUrl(value) {
   const url = new URL(String(value || '').trim());
+  if (process.env.NODE_ENV === 'production' && !['wss:', 'https:'].includes(url.protocol)) {
+    throw new Error('LiveKit must use secure wss or https transport in production');
+  }
   if (url.protocol === 'wss:') url.protocol = 'https:';
   else if (url.protocol === 'ws:') url.protocol = 'http:';
   if (!['https:', 'http:'].includes(url.protocol)) {
