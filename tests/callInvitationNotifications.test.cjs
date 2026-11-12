@@ -6,6 +6,7 @@ const { retryDelay, runCallInvitationNotifications } = require('../src/jobs/call
 const { getCallEventTokenActor } = require('../src/services/callEventToken');
 const { runCallEndNotifications, enqueueCallEndNotification } = require('../src/jobs/callEndNotifications');
 const callEndSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104335_durable_call_end_notifications.sql'), 'utf8');
+const callEndRecipientIndexSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104530_index_call_end_notifications_recipient_id.sql'), 'utf8');
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 const targetedSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
 
@@ -196,6 +197,8 @@ test('native call-end notification queue is service-only and claims work with SK
   assert.ok(callEndSql.includes('FOR UPDATE SKIP LOCKED'));
   assert.ok(callEndSql.includes("lease_started_at <= now() - interval '2 minutes'"));
   assert.ok(callEndSql.includes('GRANT EXECUTE ON FUNCTION public.claim_call_end_notifications(integer, uuid) TO service_role'));
+  assert.ok(callEndRecipientIndexSql.includes('CREATE INDEX IF NOT EXISTS call_end_notifications_recipient_id_idx'));
+  assert.ok(callEndRecipientIndexSql.includes('ON public.call_end_notifications (recipient_id)'));
 });
 test('native call-end push is marked delivered after provider acceptance', async () => {
   const updates = [];
