@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const grantMigration = fs.readFileSync(
-  path.join(root, 'supabase/migrations/20261112130000_restore_status_reaction_upsert_privilege.sql'),
+  path.join(root, 'supabase/migrations/20261112125840_restore_status_reaction_upsert_privilege.sql'),
   'utf8'
 );
 const originalMigration = fs.readFileSync(
