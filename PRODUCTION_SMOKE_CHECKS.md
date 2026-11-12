@@ -14,7 +14,7 @@ After deploying the backend changes, run `node scripts/smoke-production.mjs` fro
 
 Current production targets (verified project configuration):
 - Frontend: https://zannychat-app.netlify.app
-- Backend: https://zannychat-backend.onrender.com
+- Backend: https://zannychat-backend-1.onrender.com
 - Supabase project URL: https://vithpppgyjmazxvogvno.supabase.co
 
 The smoke script defaults to these frontend/backend hosts. Override with `ZANNYCHAT_FRONTEND_URL` and `ZANNYCHAT_BACKEND_URL` for staging.
