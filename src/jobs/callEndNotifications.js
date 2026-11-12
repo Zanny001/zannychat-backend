@@ -80,4 +80,21 @@ async function runCallEndNotifications({
   return summary;
 }
 
-module.exports = { retryDelay, runCallEndNotifications };
+async function enqueueCallEndNotification({ admin, callId, recipientId, terminalStatus, now = () => new Date() } = {}) {
+  if (!admin) admin = require('../config/supabaseAdmin').supabaseAdmin;
+  if (!admin) throw new Error('Supabase service client is not configured');
+  if (!callId || !recipientId || !['declined','cancelled','ended','missed','failed'].includes(terminalStatus)) {
+    throw new Error('Invalid call-ended notification');
+  }
+  const { error } = await admin.from('call_end_notifications').upsert({
+    call_id: callId,
+    recipient_id: recipientId,
+    terminal_status: terminalStatus,
+    status: 'pending',
+    next_attempt_at: now().toISOString(),
+  }, { onConflict: 'call_id,recipient_id', ignoreDuplicates: true });
+  if (error) throw error;
+  return runCallEndNotifications({ admin, limit: 1, callId, now });
+}
+
+module.exports = { retryDelay, runCallEndNotifications, enqueueCallEndNotification };
