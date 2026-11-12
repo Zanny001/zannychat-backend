@@ -57,7 +57,8 @@
     "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs",
     "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
     "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs",
-    "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs"
+    "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs",
+    "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
