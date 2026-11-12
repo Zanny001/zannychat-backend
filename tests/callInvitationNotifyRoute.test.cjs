@@ -21,7 +21,8 @@ test('native VoIP token registration and call-end delivery routes are authentica
   assert.ok(route.includes("router.post('/voip-token'"));
   assert.ok(route.includes("router.delete('/voip-token'"));
   assert.ok(route.includes("router.post('/:callId/end-notify'"));
-  assert.ok(route.includes('sendCallEndedToUser'));
+  assert.ok(route.includes('enqueueCallEndNotification'));
+  assert.ok(route.includes('recipientId = req.user.id === call.caller_id ? call.callee_id : call.caller_id'));
   assert.ok(route.includes("['APNS_VOIP', 'APNS_ALERT', 'FCM']"));
   assert.ok(route.includes("type === 'FCM' ? 'android' : 'ios'"));
 });
