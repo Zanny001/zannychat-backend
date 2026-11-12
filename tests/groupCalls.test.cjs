@@ -133,21 +133,20 @@ test('Render blueprint prompts for server-only LiveKit credentials without stori
 });
 
 
-const { createRoomAdminToken, liveKitHttpUrl, deleteLiveKitRoom } = require('../src/services/livekitRoomAdmin');
+const { createRoomDeletionToken, liveKitHttpUrl, deleteLiveKitRoom } = require('../src/services/livekitRoomAdmin');
 const { cleanupEndedGroupCallMedia } = require('../src/jobs/groupCallMediaCleanup');
 const mediaTeardownMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112113000_group_call_media_teardown.sql'), 'utf8');
 
-test('LiveKit room-admin credentials are short-lived and restricted to one room', () => {
+test('LiveKit DeleteRoom credentials use the required short-lived server-side roomCreate grant', () => {
   const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
-  const token = createRoomAdminToken('zgc_0123456789abcdef0123456789abcdef', config, 1_800_000_000);
+  const token = createRoomDeletionToken(config, 1_800_000_000);
   const [header, payload, signature] = token.split('.');
   const expected = createHmac('sha256', config.apiSecret).update(header + '.' + payload).digest('base64url');
   assert.equal(signature, expected);
   assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString('utf8')), { alg: 'HS256', typ: 'JWT' });
   const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  assert.equal(claims.exp - claims.nbf, 65);
-  assert.equal(claims.video.roomAdmin, true);
-  assert.equal(claims.video.room, 'zgc_0123456789abcdef0123456789abcdef');
+  assert.equal(claims.exp - claims.nbf, 35);
+  assert.deepEqual(claims.video, { roomCreate: true });
   assert.equal(liveKitHttpUrl(config.url), 'https://media.example.invalid/twirp/livekit.RoomService/DeleteRoom');
 });
 
