@@ -240,7 +240,7 @@ router.post('/', async (req, res) => {
   const visibility = req.body?.visibility || 'public';
   const inviteeIds = Array.isArray(req.body?.inviteeIds) ? req.body.inviteeIds : [];
   const config = getLiveKitConfig();
-  if (!config) return res.status(503).json({ error: 'LIVE streaming is not enabled on this server yet' });
+  if (!config) return res.status(503).json({ error: 'LIVE is not configured on this server. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET on the backend service.' });
   if (!title || title.length > 80 || description.length > 500) return res.status(400).json({ error: 'LIVE title or description is invalid' });
   if (!['public','followers','private'].includes(visibility)) return res.status(400).json({ error: 'Invalid LIVE visibility' });
   if (inviteeIds.length > 100 || inviteeIds.some((id) => !validId(id)) || new Set(inviteeIds).size !== inviteeIds.length) return res.status(400).json({ error: 'Invalid private LIVE invitees' });
