@@ -18,6 +18,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run test:health-endpoints
+      - run: npm run test:health-unit
       - run: npm run test:api-hardening
       - run: npm run test:discovery-feed
       - run: npm run test:group-calls
