@@ -25,10 +25,10 @@ test('status reaction upsert receives only the required authenticated UPDATE gra
 test('the existing RLS update policy remains scoped to the authenticated eligible viewer', () => {
   assert.match(
     originalMigration,
-    /for\s+update\s+to\s+authenticated\s+using\s*\(viewer_id\s*=\s*\(select\s+auth\.uid\(\)\)\s+and[\s\S]*?can_view_status/i
+    /for\s+update\s+to\s+authenticated\s+using\s*\(viewer_id\s*=\s*\(select\s+auth\.uid\(\)\)\s+and\s+exists\s*\(select\s+1\s+from\s+public\.status_updates/i
   );
   assert.match(
     originalMigration,
-    /with\s+check\s*\(viewer_id\s*=\s*\(select\s+auth\.uid\(\)\)\s+and[\s\S]*?can_view_status/i
+    /with\s+check\s*\(viewer_id\s*=\s*\(select\s+auth\.uid\(\)\)\s+and\s+exists\s*\(select\s+1\s+from\s+public\.status_updates/i
   );
 });
