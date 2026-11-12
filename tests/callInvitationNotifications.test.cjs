@@ -5,7 +5,7 @@ const path = require('node:path');
 const { retryDelay, runCallInvitationNotifications } = require('../src/jobs/callInvitationNotifications');
 const { getCallEventTokenActor } = require('../src/services/callEventToken');
 const { runCallEndNotifications, enqueueCallEndNotification } = require('../src/jobs/callEndNotifications');
-const callEndSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112114500_durable_call_end_notifications.sql'), 'utf8');
+const callEndSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104335_durable_call_end_notifications.sql'), 'utf8');
 const sql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110192943_profile_privacy_and_attachment_cleanup_0066.sql'), 'utf8');
 const targetedSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110065545_scope_call_invitation_claims.sql'), 'utf8');
 
