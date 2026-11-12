@@ -22,7 +22,8 @@ const callsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/calls.js'
 
 test('native event notifications use the status actually persisted by database triggers', () => {
   assert.match(callsRoute, /const recipientId = actorId === call\.caller_id \? call\.callee_id : call\.caller_id/);
-  assert.match(callsRoute, /enqueueCallEndNotification\(\{/);\n  assert.match(callsRoute, /terminalStatus: updated\.status/);
+  assert.match(callsRoute, /enqueueCallEndNotification\(\{/);
+  assert.match(callsRoute, /terminalStatus: updated\.status/);
 });
 
 test('service-role native reconciliation may persist caller cancellation without relaxing participant checks', () => {
