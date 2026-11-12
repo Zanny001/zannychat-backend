@@ -131,3 +131,82 @@ test('Render blueprint prompts for server-only LiveKit credentials without stori
     assert.ok(renderConfig.includes(`- key: ${key}\n        sync: false`));
   }
 });
+
+
+const { createRoomAdminToken, liveKitHttpUrl, deleteLiveKitRoom } = require('../src/services/livekitRoomAdmin');
+const { cleanupEndedGroupCallMedia } = require('../src/jobs/groupCallMediaCleanup');
+const mediaTeardownMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112113000_group_call_media_teardown.sql'), 'utf8');
+
+test('LiveKit room-admin credentials are short-lived and restricted to one room', () => {
+  const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
+  const token = createRoomAdminToken('zgc_0123456789abcdef0123456789abcdef', config, 1_800_000_000);
+  const [header, payload, signature] = token.split('.');
+  const expected = createHmac('sha256', config.apiSecret).update(header + '.' + payload).digest('base64url');
+  assert.equal(signature, expected);
+  assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString('utf8')), { alg: 'HS256', typ: 'JWT' });
+  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  assert.equal(claims.exp - claims.nbf, 65);
+  assert.equal(claims.video.roomAdmin, true);
+  assert.equal(claims.video.room, 'zgc_0123456789abcdef0123456789abcdef');
+  assert.equal(liveKitHttpUrl(config.url), 'https://media.example.invalid/twirp/livekit.RoomService/DeleteRoom');
+});
+
+test('LiveKit room deletion uses authenticated server-side Twirp request and rejects malformed room ids', async () => {
+  let request;
+  const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
+  const result = await deleteLiveKitRoom('zgc_0123456789abcdef0123456789abcdef', {
+    config,
+    nowSeconds: 1_800_000_000,
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return { ok: true, status: 200, text: async () => '' };
+    },
+  });
+  assert.deepEqual(result, { deleted: true, alreadyAbsent: false });
+  assert.equal(request.url, 'https://media.example.invalid/twirp/livekit.RoomService/DeleteRoom');
+  assert.equal(request.options.method, 'POST');
+  assert.equal(JSON.parse(request.options.body).room, 'zgc_0123456789abcdef0123456789abcdef');
+  assert.match(request.options.headers.Authorization, /^Bearer [A-Za-z0-9_.-]+$/);
+  await assert.rejects(() => deleteLiveKitRoom('not-a-zanny-room', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }), /Invalid ZannyChat LiveKit room name/);
+});
+
+test('ended group-call media cleanup records success and leaves failures retryable', async () => {
+  const updates = [];
+  const rooms = [
+    { id: 'room-1', room_name: 'zgc_0123456789abcdef0123456789abcdef' },
+    { id: 'room-2', room_name: 'zgc_fedcba9876543210fedcba9876543210' },
+  ];
+  const admin = {
+    from(table) {
+      assert.equal(table, 'group_call_rooms');
+      const query = {
+        operation: 'select',
+        values: null,
+        select() { this.operation = 'select'; return this; },
+        update(values) { this.operation = 'update'; this.values = values; return this; },
+        eq() { return this; },
+        is() { return this; },
+        order() { return this; },
+        limit() { return this; },
+        in() { return this; },
+        then(resolve, reject) {
+          if (this.operation === 'select') return Promise.resolve({ data: rooms, error: null }).then(resolve, reject);
+          updates.push(this.values);
+          return Promise.resolve({ data: null, error: null }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+  };
+  const result = await cleanupEndedGroupCallMedia({
+    admin,
+    now: () => new Date('2026-11-12T10:00:00.000Z'),
+    deleteRoom: async (name) => { if (name.includes('fedcba')) throw new Error('SFU unavailable'); },
+  });
+  assert.deepEqual(result, { checked: 2, terminated: 1, failed: 1 });
+  assert.deepEqual(updates, [{ media_terminated_at: '2026-11-12T10:00:00.000Z' }]);
+  assert.ok(mediaTeardownMigration.includes('ADD COLUMN IF NOT EXISTS media_terminated_at'));
+  assert.ok(mediaTeardownMigration.includes("status = 'ended' AND media_terminated_at IS NULL"));
+  assert.ok(route.includes('cleanupEndedGroupCallMedia'));
+  assert.ok(route.includes('mediaTerminationPending'));
+});
