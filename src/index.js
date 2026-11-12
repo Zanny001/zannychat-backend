@@ -117,7 +117,9 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);
 
 app.use(cors(createCorsOptions()));
-app.use(express.json());
+// Keep API payloads deliberately small: media uploads go directly to private storage,
+// so application JSON should never need large request bodies.
+app.use(express.json({ limit: '100kb', strict: true }));
 
 // Root discovery endpoint: useful for platform smoke checks and avoids an
 // ambiguous 404 when operators open the service URL directly. No secrets or
@@ -150,7 +152,10 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err);
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
-  res.status(status).json({ error: status === 403 ? 'Origin not allowed' : 'Internal server error' });
+  const message = status === 403 ? 'Origin not allowed'
+    : status === 413 ? 'Request body too large'
+      : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 3000;
