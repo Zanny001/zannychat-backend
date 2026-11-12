@@ -55,7 +55,8 @@
     "test:group-calls": "node --test tests/groupCalls.test.cjs",
     "test:live-streams": "node --test tests/liveStreams.test.cjs",
     "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs",
-    "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs"
+    "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
+    "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

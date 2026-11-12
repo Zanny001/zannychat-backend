@@ -19,6 +19,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:api-hardening
+      - run: npm run test:discovery-feed
       - run: npm run test:group-calls
       - run: npm run test:live-streams
       - run: npm run test:group-live-admission
