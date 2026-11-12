@@ -239,7 +239,7 @@ test('native call-end push without a registered device token is retained for bou
   assert.equal(result.retried, 1);
   assert.equal(updates[0].status, 'pending');
   assert.equal(updates[0].attempt_count, 3);
-  assert.equal(updates[0].last_error.includes('No registered'), true);
+  assert.equal(updates[0].last_error, 'No call-ended push provider accepted the event');
   assert.equal(Date.parse(updates[0].next_attempt_at), Date.parse('2026-11-12T10:02:00.000Z'));
 });
 
