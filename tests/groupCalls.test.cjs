@@ -135,7 +135,7 @@ test('Render blueprint prompts for server-only LiveKit credentials without stori
 
 const { createRoomDeletionToken, liveKitHttpUrl, deleteLiveKitRoom } = require('../src/services/livekitRoomAdmin');
 const { cleanupEndedGroupCallMedia } = require('../src/jobs/groupCallMediaCleanup');
-const mediaTeardownMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112113000_group_call_media_teardown.sql'), 'utf8');
+const mediaTeardownMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261112104338_group_call_media_teardown.sql'), 'utf8');
 
 test('LiveKit DeleteRoom credentials use the required short-lived server-side roomCreate grant', () => {
   const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
