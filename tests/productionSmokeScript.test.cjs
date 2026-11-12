@@ -22,3 +22,8 @@ test('production smoke script never sends credentials or mutating HTTP methods',
   assert.doesNotMatch(source, /SUPABASE_SERVICE_ROLE_KEY|Authorization:\s*Bearer/);
   assert.doesNotMatch(source, /method:\s*['"](POST|PUT|PATCH|DELETE)['"]/i);
 });
+
+test('production smoke defaults to the canonical Render backend service', () => {
+  assert.match(source, /https:\/\/zannychat-backend-1\.onrender\.com/);
+  assert.doesNotMatch(source, /https:\/\/zannychat-backend\.onrender\.com/);
+});
