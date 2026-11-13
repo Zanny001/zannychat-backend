@@ -49,3 +49,17 @@ test('people search respects profile visibility and bidirectional blocks', () =>
   assert.match(discovery, /coalesce\(d\.show_online_status, true\)/i);
   assert.match(discovery, /p\.id <> v_viewer/i);
 });
+
+
+test('username fallback never derives public identity from an email address', () => {
+  const privacyFix = fs.readFileSync(
+    path.join(migrationsDir, '20261113123708_remove_email_derived_username_fallback.sql'),
+    'utf8',
+  );
+  const privacyStart = privacyFix.search(/create or replace function public\.handle_new_user\(\)/i);
+  const privacyEnd = privacyFix.indexOf('$function$;', privacyStart);
+  const privacyBody = privacyFix.slice(privacyStart, privacyEnd);
+  assert.match(privacyBody, /'ZannyChat User'/i);
+  assert.doesNotMatch(privacyBody, /new\.email|split_part/i);
+  assert.match(privacyFix, /set username = 'zannyuser'/i);
+});
