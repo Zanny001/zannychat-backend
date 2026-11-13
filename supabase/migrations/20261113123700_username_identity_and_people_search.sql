@@ -178,7 +178,7 @@ RETURNS TABLE (
   avatar_url text
 )
 LANGUAGE plpgsql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path = ''
 AS $function$
