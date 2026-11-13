@@ -32,6 +32,7 @@ test('people search requires authentication, is prefix-only, bounded, and rate-l
   assert.match(migration, /v_viewer uuid := auth\.uid\(\)/i);
   assert.match(migration, /length\(v_query\) < 2 or pg_catalog\.length\(v_query\) > 40/i);
   assert.match(migration, /people_search_limits/i);
+  assert.match(migration, /language plpgsql\\s+volatile\\s+security definer/i);
   assert.match(migration, /v_request_count > 30/i);
   assert.match(migration, /limit greatest\(1, least\(coalesce\(p_limit, 20\), 25\)\)/i);
   assert.match(migration, /lower\(p\.username\) like v_pattern/i);
