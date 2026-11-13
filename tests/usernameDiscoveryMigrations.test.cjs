@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migrationsDir = path.join(__dirname, '..', 'supabase', 'migrations');
-const usernames = fs.readFileSync(path.join(migrationsDir, '20261113133000_automatic_unique_usernames_for_all_auth_users.sql'), 'utf8');
-const discovery = fs.readFileSync(path.join(migrationsDir, '20261113134500_privacy_aware_public_profile_search.sql'), 'utf8');
+const usernames = fs.readFileSync(path.join(migrationsDir, '20261113123254_automatic_unique_usernames_for_all_auth_users.sql'), 'utf8');
+const discovery = fs.readFileSync(path.join(migrationsDir, '20261113123303_privacy_aware_public_profile_search.sql'), 'utf8');
 
 test('email and OAuth account creation provision usernames in the auth trigger', () => {
   assert.match(usernames, /create or replace function public\.handle_new_user\(\)/i);
