@@ -171,6 +171,16 @@ USING (
       AND target_membership.user_id = profiles.id
   )
   OR EXISTS (
+    -- Historical message senders remain identifiable even if they later
+    -- leave a conversation, provided the viewer can still read that thread.
+    SELECT 1
+    FROM public.messages AS message_row
+    JOIN public.conversation_participants AS viewer_membership
+      ON viewer_membership.conversation_id = message_row.conversation_id
+    WHERE viewer_membership.user_id = (SELECT auth.uid())
+      AND message_row.sender_id = profiles.id
+  )
+  OR EXISTS (
     SELECT 1
     FROM public.call_sessions AS cs
     WHERE (
