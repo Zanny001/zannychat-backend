@@ -63,3 +63,23 @@ test('username fallback never derives public identity from an email address', ()
   assert.doesNotMatch(privacyBody, /new\.email|split_part/i);
   assert.match(privacyFix, /set username = 'zannyuser'/i);
 });
+
+
+test('QR profile lookup does not require a shared conversation and enforces privacy', () => {
+  const qrLookup = fs.readFileSync(
+    path.join(migrationsDir, '20261113124306_public_profile_lookup_for_qr_contacts.sql'),
+    'utf8',
+  );
+  assert.match(qrLookup, /create or replace function public\.get_public_profile_by_id\(p_user_id uuid\)/i);
+  assert.match(qrLookup, /security definer\s+set search_path = ''/i);
+  assert.match(qrLookup, /raise exception 'Authentication required'/i);
+  assert.match(qrLookup, /coalesce\(d\.profile_visibility, 'everyone'\) <> 'nobody'/i);
+  assert.match(qrLookup, /coalesce\(d\.profile_visibility, 'everyone'\) <> 'contacts'\s+or exists/i);
+  assert.match(qrLookup, /conversation_participants mine[\s\S]*conversation_participants theirs/i);
+  assert.match(qrLookup, /b\.blocker_id = v_viewer and b\.blocked_id = p\.id/i);
+  assert.match(qrLookup, /b\.blocker_id = p\.id and b\.blocked_id = v_viewer/i);
+  assert.match(qrLookup, /public\.can_view_profile_avatar\(p\.id\)/i);
+  assert.match(qrLookup, /revoke all on function public\.get_public_profile_by_id\(uuid\) from anon/i);
+  assert.match(qrLookup, /grant execute on function public\.get_public_profile_by_id\(uuid\) to authenticated/i);
+  assert.doesNotMatch(qrLookup.match(/returns table\s*\(([\s\S]*?)\)\s*language/i)?.[1] || '', /email|phone/i);
+});
