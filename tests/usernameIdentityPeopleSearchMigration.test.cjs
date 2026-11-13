@@ -49,6 +49,8 @@ test('direct profile reads no longer expose every profile to every authenticated
   assert.match(migration, /create policy "Users can view own and related profiles"/i);
   assert.match(migration, /id = \(select auth\.uid\(\)\)/i);
   assert.match(migration, /from public\.conversation_participants as viewer_membership/i);
+  assert.match(migration, /from public\.messages as message_row/i);
+  assert.match(migration, /message_row\.sender_id = profiles\.id/i);
   assert.match(migration, /from public\.call_sessions as cs/i);
   assert.match(migration, /from public\.status_updates as visible_status/i);
 });
