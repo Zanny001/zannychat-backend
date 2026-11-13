@@ -52,12 +52,6 @@ test('people search respects profile visibility and bidirectional blocks', () =>
 
 
 test('username fallback never derives public identity from an email address', () => {
-  const start = usernames.search(/create or replace function public\.handle_new_user\(\)/i);
-  const end = usernames.indexOf('$function$;', start);
-  const triggerBody = usernames.slice(start, end);
-  assert.match(triggerBody, /'ZannyChat User'/i);
-  assert.doesNotMatch(triggerBody, /new\.email|split_part/i);
-
   const privacyFix = fs.readFileSync(
     path.join(migrationsDir, '20261113123708_remove_email_derived_username_fallback.sql'),
     'utf8',
