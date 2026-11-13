@@ -51,7 +51,7 @@
     "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs",
     "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs tests/definerSearchPathHardeningMigration.test.cjs tests/securityDefinerInventoryAudit.test.cjs",
     "test:contact-directory-privacy": "node --test tests/contactDirectorySharedConversationPrivacy.test.cjs",
-    "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs",
+    "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/usernameIdentityPeopleSearchMigration.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs",
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
     "test:group-calls": "node --test tests/groupCalls.test.cjs",
     "test:live-streams": "node --test tests/liveStreams.test.cjs",
