@@ -16,8 +16,8 @@ CREATE INDEX IF NOT EXISTS profiles_username_prefix_idx
 CREATE INDEX IF NOT EXISTS profiles_name_prefix_idx
   ON public.profiles (lower(name) text_pattern_ops);
 
--- Backfill every existing account with a stable display-name-derived prefix
--- and a random UUID suffix. No email address or phone number is exposed.
+-- Backfill every existing account with a readable display-name-derived
+-- username. Numeric suffixes are added only when a name is already taken.
 DO $backfill$
 DECLARE
   v_profile record;
@@ -32,34 +32,29 @@ BEGIN
     WHERE p.username IS NULL OR btrim(p.username) = ''
     ORDER BY p.created_at, p.id
   LOOP
-    v_base := pg_catalog.btrim(
-      pg_catalog.regexp_replace(
-        pg_catalog.lower(
-          COALESCE(
-            NULLIF(pg_catalog.btrim(v_profile.name), ''),
-            NULLIF(pg_catalog.split_part(COALESCE(v_profile.email, ''), '@', 1), ''),
-            'zannyuser'
-          )
-        ),
-        '[^a-z0-9]+',
-        '_',
-        'g'
+    v_base := pg_catalog.regexp_replace(
+      pg_catalog.lower(
+        COALESCE(
+          NULLIF(pg_catalog.btrim(v_profile.name), ''),
+          NULLIF(pg_catalog.split_part(COALESCE(v_profile.email, ''), '@', 1), ''),
+          'zannyuser'
+        )
       ),
-      '_'
+      '[^a-z0-9]',
+      '',
+      'g'
     );
     IF pg_catalog.length(v_base) < 3 THEN
       v_base := 'zannyuser';
     END IF;
-    v_base := pg_catalog.left(v_base, 7);
+    v_base := pg_catalog.left(v_base, 24);
     v_attempt := 0;
 
     LOOP
-      v_username := v_base || '_' ||
-        pg_catalog.substr(
-          pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''),
-          1,
-          16
-        );
+      v_username := CASE
+        WHEN v_attempt = 0 THEN v_base
+        ELSE pg_catalog.left(v_base, 24 - pg_catalog.length(v_attempt::text)) || v_attempt::text
+      END;
       BEGIN
         UPDATE public.profiles
         SET username = v_username
@@ -68,7 +63,7 @@ BEGIN
         EXIT;
       EXCEPTION WHEN unique_violation THEN
         v_attempt := v_attempt + 1;
-        IF v_attempt >= 20 THEN
+        IF v_attempt >= 999999 THEN
           RAISE EXCEPTION 'Could not allocate a unique username for profile %', v_profile.id;
         END IF;
       END;
@@ -117,22 +112,17 @@ BEGIN
     'ZannyChat member'
   );
 
-  v_base := pg_catalog.btrim(
-    pg_catalog.regexp_replace(pg_catalog.lower(v_name), '[^a-z0-9]+', '_', 'g'),
-    '_'
-  );
+  v_base := pg_catalog.regexp_replace(pg_catalog.lower(v_name), '[^a-z0-9]', '', 'g');
   IF pg_catalog.length(v_base) < 3 THEN
     v_base := 'zannyuser';
   END IF;
-  v_base := pg_catalog.left(v_base, 7);
+  v_base := pg_catalog.left(v_base, 24);
 
   LOOP
-    v_username := v_base || '_' ||
-      pg_catalog.substr(
-        pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''),
-        1,
-        16
-      );
+    v_username := CASE
+      WHEN v_attempt = 0 THEN v_base
+      ELSE pg_catalog.left(v_base, 24 - pg_catalog.length(v_attempt::text)) || v_attempt::text
+    END;
     BEGIN
       INSERT INTO public.profiles (id, name, username)
       VALUES (NEW.id, v_name, v_username)
@@ -149,7 +139,7 @@ BEGIN
       RETURN NEW;
     EXCEPTION WHEN unique_violation THEN
       v_attempt := v_attempt + 1;
-      IF v_attempt >= 20 THEN
+      IF v_attempt >= 999999 THEN
         RAISE EXCEPTION 'Could not allocate a unique username for auth user %', NEW.id;
       END IF;
     END;
