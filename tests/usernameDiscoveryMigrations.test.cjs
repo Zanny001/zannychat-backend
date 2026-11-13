@@ -32,7 +32,8 @@ test('people search is authenticated, bounded, and exposes only public directory
   assert.match(discovery, /raise exception 'Authentication required'/i);
   assert.match(discovery, /greatest\(1, least\(coalesce\(p_limit, 20\), 30\)\)/i);
   assert.match(discovery, /greatest\(0, least\(coalesce\(p_offset, 0\), 1000\)\)/i);
-  const projection = discovery.match(/returns table\\s*\\(([\\s\\S]*?)\\)\\s*language/i)?.[1] || '';\n  assert.doesNotMatch(projection, /email|phone|raw_user_meta_data/i);
+  const projection = discovery.match(/returns table\s*\(([\s\S]*?)\)\s*language/i)?.[1] || '';
+  assert.doesNotMatch(projection, /email|phone|raw_user_meta_data/i);
   assert.match(discovery, /revoke all on function public\.search_public_profiles\(text, integer, integer\) from public/i);
   assert.match(discovery, /revoke all on function public\.search_public_profiles\(text, integer, integer\) from anon/i);
   assert.match(discovery, /grant execute on function public\.search_public_profiles\(text, integer, integer\) to authenticated/i);
