@@ -40,6 +40,15 @@ test('people search requires authentication, is prefix-only, bounded, and rate-l
   assert.match(migration, /grant execute on function public\.search_people\(text, integer\) to authenticated/i);
 });
 
+test('direct profile reads no longer expose every profile to every authenticated user', () => {
+  assert.match(migration, /drop policy if exists "Profiles are viewable by any signed-in user"/i);
+  assert.match(migration, /create policy "Users can view own and related profiles"/i);
+  assert.match(migration, /id = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /from public\.conversation_participants as viewer_membership/i);
+  assert.match(migration, /from public\.call_sessions as cs/i);
+  assert.match(migration, /from public\.status_updates as visible_status/i);
+});
+
 test('people search respects profile visibility, photo visibility and bidirectional blocks', () => {
   assert.match(migration, /coalesce\(d\.profile_visibility, 'everyone'\) <> 'nobody'/i);
   assert.match(migration, /coalesce\(d\.profile_visibility, 'everyone'\) = 'everyone'/i);
