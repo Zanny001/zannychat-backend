@@ -12,6 +12,10 @@ test('existing profiles receive unique lowercase usernames before username becom
   assert.match(migration, /left join auth\.users as u on u\.id = p\.id/i);
   assert.match(migration, /where p\.username is null or btrim\(p\.username\) = ''/i);
   assert.match(migration, /create unique index if not exists profiles_username_lower_unique[\s\S]*?lower\(username\)/i);
+  assert.match(migration, /profiles_username_prefix_idx/i);
+  assert.match(migration, /profiles_name_prefix_idx/i);
+  assert.match(migration, /when v_attempt = 0 then v_base/i);
+  assert.doesNotMatch(migration, /gen_random_uuid/i);
   assert.match(migration, /alter column username set not null/i);
   assert.match(migration, /check \(username ~ '\^\[a-z0-9_\]\{3,24\}\$'\)/i);
 });
