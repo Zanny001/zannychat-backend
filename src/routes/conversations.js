@@ -72,9 +72,6 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: 'Unable to check profile visibility' });
   }
   const profileVisibility = targetDetails?.profile_visibility || 'everyone';
-  if (profileVisibility === 'nobody') {
-    return res.status(403).json({ error: 'This user is not accepting new conversations' });
-  }
 
   // Reuse an existing direct conversation shared by these two users.
   // This avoids splitting new messages across duplicate conversation IDs.
@@ -122,6 +119,12 @@ router.post('/', async (req, res) => {
     if (existingConversation) {
       return res.status(200).json(existingConversation);
     }
+  }
+
+  // Hidden profiles may continue existing chats; visibility settings only
+  // prevent discovering or creating a new conversation with the account.
+  if (profileVisibility === 'nobody') {
+    return res.status(403).json({ error: 'This user is not accepting new conversations' });
   }
 
   const { data: conversation, error: convError } = await supabaseAdmin
