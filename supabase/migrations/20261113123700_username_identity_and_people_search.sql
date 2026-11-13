@@ -159,6 +159,44 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 
+-- The previous policy exposed every profile row to every authenticated
+-- account, bypassing the profile-visibility and block checks in directory RPCs.
+-- Keep direct row reads only for the signed-in user and existing relationships;
+-- discoverable strangers must go through the filtered search/profile RPCs.
+DROP POLICY IF EXISTS "Profiles are viewable by any signed-in user" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view own and related profiles" ON public.profiles;
+
+CREATE POLICY "Users can view own and related profiles"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (
+  id = (SELECT auth.uid())
+  OR EXISTS (
+    SELECT 1
+    FROM public.conversation_participants AS viewer_membership
+    JOIN public.conversation_participants AS target_membership
+      ON target_membership.conversation_id = viewer_membership.conversation_id
+    WHERE viewer_membership.user_id = (SELECT auth.uid())
+      AND target_membership.user_id = profiles.id
+  )
+  OR EXISTS (
+    SELECT 1
+    FROM public.call_sessions AS cs
+    WHERE (
+      (cs.caller_id = (SELECT auth.uid()) AND cs.callee_id = profiles.id)
+      OR (cs.callee_id = (SELECT auth.uid()) AND cs.caller_id = profiles.id)
+    )
+  )
+  OR EXISTS (
+    -- status_updates RLS itself limits this subquery to active statuses
+    -- that this viewer is allowed to see (audience, exclusions and blocks).
+    SELECT 1
+    FROM public.status_updates AS visible_status
+    WHERE visible_status.user_id = profiles.id
+  )
+);
+
 -- Search quotas are stored separately from phone-discovery quotas. No client
 -- role can inspect or mutate this internal table directly.
 CREATE TABLE IF NOT EXISTS public.people_search_limits (
