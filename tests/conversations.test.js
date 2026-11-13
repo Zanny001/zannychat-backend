@@ -37,6 +37,33 @@ describe('POST /conversations', () => {
     expect(res.status).toBe(400);
   });
 
+  test('refuses direct chat when the target profile is hidden from everyone', async () => {
+    setTableResult('blocked_users', { data: [], error: null });
+    setTableResult('profile_details', { data: { profile_visibility: 'nobody' }, error: null });
+
+    const res = await request(app)
+      .post('/conversations')
+      .set('Authorization', 'Bearer good-token')
+      .send({ participantId: '22222222-2222-4222-8222-222222222222' });
+
+    expect(res.status).toBe(403);
+    expect(opsLog).not.toContain('conversations.insert');
+  });
+
+  test('refuses contacts-only direct chat when there is no shared conversation', async () => {
+    setTableResult('blocked_users', { data: [], error: null });
+    setTableResult('profile_details', { data: { profile_visibility: 'contacts' }, error: null });
+    setTableResult('conversation_participants', { data: [], error: null });
+
+    const res = await request(app)
+      .post('/conversations')
+      .set('Authorization', 'Bearer good-token')
+      .send({ participantId: '22222222-2222-4222-8222-222222222222' });
+
+    expect(res.status).toBe(403);
+    expect(opsLog).not.toContain('conversations.insert');
+  });
+
   test('refuses to create a 1:1 when a block exists in either direction', async () => {
     setTableResult('blocked_users', { data: [{ blocker_id: '22222222-2222-4222-8222-222222222222', blocked_id: '11111111-1111-4111-8111-111111111111' }], error: null });
 
