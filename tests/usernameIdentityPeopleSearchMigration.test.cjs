@@ -53,6 +53,19 @@ test('direct profile reads no longer expose every profile to every authenticated
   assert.match(migration, /from public\.status_updates as visible_status/i);
 });
 
+test('private profile columns are available only through scoped RPCs', () => {
+  assert.match(migration, /revoke select on table public\.profiles from public, anon, authenticated/i);
+  assert.match(migration, /revoke select \(id, name, avatar_color, status, online, created_at, avatar_url, username\)/i);
+  assert.match(migration, /grant select \(id, name, username, avatar_color\)[\s\S]*?to authenticated/i);
+  assert.match(migration, /grant update \(username\)[\s\S]*?to authenticated/i);
+  assert.match(migration, /create or replace function public\.get_my_profile\(\)/i);
+  assert.match(migration, /where p\.id = auth\.uid\(\)/i);
+  assert.match(migration, /create or replace function public\.get_conversation_profile_directory\(p_user_ids uuid\[\]\)/i);
+  assert.match(migration, /p\.id = any\(coalesce\(p_user_ids, array\[\]::uuid\[\]\)\)/i);
+  assert.match(migration, /coalesce\(d\.photo_visibility, 'everyone'\) = 'nobody'/i);
+  assert.match(migration, /coalesce\(d\.show_online_status, true\)/i);
+});
+
 test('people search respects profile visibility, photo visibility and bidirectional blocks', () => {
   assert.match(migration, /coalesce\(d\.profile_visibility, 'everyone'\) <> 'nobody'/i);
   assert.match(migration, /coalesce\(d\.profile_visibility, 'everyone'\) = 'everyone'/i);
