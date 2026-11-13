@@ -50,6 +50,28 @@ describe('POST /conversations', () => {
     expect(opsLog).not.toContain('conversations.insert');
   });
 
+  test('allows reuse of an existing direct chat when the target hides their profile', async () => {
+    setTableResult('blocked_users', { data: [], error: null });
+    setTableResult('profile_details', { data: { profile_visibility: 'nobody' }, error: null });
+    setTableResult('conversation_participants', {
+      data: [
+        { conversation_id: 'existing-hidden-chat', user_id: '11111111-1111-4111-8111-111111111111' },
+        { conversation_id: 'existing-hidden-chat', user_id: '22222222-2222-4222-8222-222222222222' },
+      ],
+      error: null,
+    });
+    setTableResult('conversations', { data: { id: 'existing-hidden-chat', is_group: false }, error: null });
+
+    const res = await request(app)
+      .post('/conversations')
+      .set('Authorization', 'Bearer good-token')
+      .send({ participantId: '22222222-2222-4222-8222-222222222222' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('existing-hidden-chat');
+    expect(opsLog).not.toContain('conversations.insert');
+  });
+
   test('refuses contacts-only direct chat when there is no shared conversation', async () => {
     setTableResult('blocked_users', { data: [], error: null });
     setTableResult('profile_details', { data: { profile_visibility: 'contacts' }, error: null });
