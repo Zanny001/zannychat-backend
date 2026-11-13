@@ -106,3 +106,26 @@ test('worker retains an object referenced from another conversation through a si
   assert.deepEqual(removed, []);
   assert.match(updates[0].values.last_error, /still referenced/);
 });
+
+test('worker skips legacy unbound jobs and conversation-prefix collisions without touching Storage', async () => {
+  const updates = [];
+  const removed = [];
+  const admin = {
+    rpc: async () => ({ data: [
+      { id: 11, message_id: 'legacy-message', conversation_id: null, media_url: 'storage://chat-media/room/private.jpg', attempt_count: 0 },
+      { id: 12, message_id: 'prefix-collision', conversation_id: 'room', media_url: 'storage://chat-media/room-evil/private.jpg', attempt_count: 0 },
+    ], error: null }),
+    from(table) {
+      assert.equal(table, 'message_attachment_cleanup');
+      return { update: (values) => ({ eq: async (_column, id) => { updates.push({ id, values }); return { error: null }; } }) };
+    },
+    storage: { from: (bucket) => ({ remove: async (paths) => { removed.push({ bucket, paths }); return { error: null }; } }) },
+  };
+  const result = await runMessageAttachmentCleanup({ admin });
+  assert.equal(result.skipped, 2);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(removed, []);
+  assert.equal(updates.length, 2);
+  assert.match(updates[0].values.last_error, /does not belong to the queued message conversation/);
+  assert.match(updates[1].values.last_error, /does not belong to the queued message conversation/);
+});
