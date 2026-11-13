@@ -61,6 +61,21 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ error: 'Cannot start a conversation with this user' });
   }
 
+  // Enforce the target profile's visibility at the trusted API boundary too.
+  // This endpoint uses the service role and therefore cannot rely on client RLS.
+  const { data: targetDetails, error: targetDetailsError } = await supabaseAdmin
+    .from('profile_details')
+    .select('profile_visibility')
+    .eq('user_id', participantId)
+    .maybeSingle();
+  if (targetDetailsError) {
+    return res.status(500).json({ error: 'Unable to check profile visibility' });
+  }
+  const profileVisibility = targetDetails?.profile_visibility || 'everyone';
+  if (profileVisibility === 'nobody') {
+    return res.status(403).json({ error: 'This user is not accepting new conversations' });
+  }
+
   // Reuse an existing direct conversation shared by these two users.
   // This avoids splitting new messages across duplicate conversation IDs.
   const { data: membershipRows, error: membershipError } = await supabaseAdmin
@@ -84,6 +99,10 @@ router.post('/', async (req, res) => {
   const sharedIds = [...membersByConversation.entries()]
     .filter(([, users]) => users.has(req.user.id) && users.has(participantId))
     .map(([id]) => id);
+
+  if (profileVisibility === 'contacts' && sharedIds.length === 0) {
+    return res.status(403).json({ error: 'This user only accepts conversations from existing contacts' });
+  }
 
   if (sharedIds.length > 0) {
     const { data: existingConversation, error: existingError } = await supabaseAdmin
