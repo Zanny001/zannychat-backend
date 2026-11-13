@@ -10,6 +10,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_lower_unique
   ON public.profiles (lower(username))
   WHERE username IS NOT NULL AND btrim(username) <> '';
 
+-- Support bounded prefix searches without a full table scan as the directory grows.
+CREATE INDEX IF NOT EXISTS profiles_username_prefix_idx
+  ON public.profiles (lower(username) text_pattern_ops);
+CREATE INDEX IF NOT EXISTS profiles_name_prefix_idx
+  ON public.profiles (lower(name) text_pattern_ops);
+
 -- Backfill every existing account with a stable display-name-derived prefix
 -- and a random UUID suffix. No email address or phone number is exposed.
 DO $backfill$
