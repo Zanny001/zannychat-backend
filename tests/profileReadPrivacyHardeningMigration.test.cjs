@@ -3,10 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(
+const rpcs = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261114110000_profile_scoped_read_rpcs.sql'),
+  'utf8',
+);
+const hardening = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261114120000_profile_read_privacy_hardening.sql'),
   'utf8',
 );
+const migration = rpcs + '\\n' + hardening;
 
 test('broad authenticated profile visibility is replaced with relationship-scoped RLS', () => {
   assert.match(migration, /drop policy if exists "Profiles are viewable by any signed-in user"/i);
