@@ -8,6 +8,7 @@ const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
   getLiveKitEgressConfig,
+  listEgress,
   isLiveReplayEnabled,
   startRoomCompositeEgress,
   stopEgress,
@@ -139,7 +140,7 @@ async function canViewLiveReplay(stream, userId) {
 
 async function stopActiveLiveReplayForStream(streamId) {
   const { data, error } = await supabaseAdmin.from('live_stream_replays')
-    .select('id,egress_id,status')
+    .select('id,egress_id,status,room_name')
     .eq('stream_id', streamId)
     .in('status', ['starting', 'recording'])
     .limit(1);
@@ -147,11 +148,21 @@ async function stopActiveLiveReplayForStream(streamId) {
   const replay = data?.[0];
   if (!replay) return;
   const egressConfig = getLiveKitEgressConfig();
-  if (!replay.egress_id || !egressConfig) {
+  if (!egressConfig) {
+    console.error('[live-replay] Egress credentials unavailable while ending stream', { streamId });
+    return;
+  }
+  let egressId = replay.egress_id;
+  if (!egressId) {
+    const listed = await listEgress(replay.room_name, egressConfig);
+    const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+    egressId = found?.egress_id || found?.egressId || null;
+  }
+  if (!egressId) {
     await supabaseAdmin.from('live_stream_replays')
       .update({
         status: 'failed',
-        error_code: 'EGRESS_STOP_UNAVAILABLE',
+        error_code: 'EGRESS_NOT_FOUND',
         completed_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       })
@@ -161,7 +172,10 @@ async function stopActiveLiveReplayForStream(streamId) {
     });
     return;
   }
-  await stopEgress(replay.egress_id, egressConfig);
+  await supabaseAdmin.from('live_stream_replays')
+    .update({ egress_id: egressId, status: 'recording' })
+    .eq('id', replay.id);
+  await stopEgress(egressId, egressConfig);
   await supabaseAdmin.from('live_stream_replays')
     .update({ status: 'processing' })
     .eq('id', replay.id)
@@ -220,6 +234,7 @@ router.post('/:streamId/replays/start', async (req, res) => {
       id: replayId,
       stream_id: streamId,
       creator_id: req.user.id,
+      room_name: stream.room_name,
       file_path: filePath,
       status: 'starting',
       started_at: now,
