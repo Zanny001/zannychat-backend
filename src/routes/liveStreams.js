@@ -224,7 +224,10 @@ router.post('/:streamId/replays/start', async (req, res) => {
     }
 
     const { data: reserved, error: quotaError } = await supabaseAdmin.rpc('reserve_live_replay_quota', { p_replay_id: replayId });
-    if (quotaError) throw quotaError;
+    if (quotaError) {
+      await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
+      throw quotaError;
+    }
     if (reserved !== true) {
       await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
       return res.status(429).json({ error: 'The monthly replay allowance is exhausted or another replay is active' });
@@ -336,7 +339,7 @@ router.delete('/replays/:replayId', async (req, res) => {
     if (error) throw error;
     if (!replay) return res.status(404).json({ error: 'Replay not found' });
     if (replay.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete this replay' });
-    if (['starting', 'recording'].includes(replay.status)) return res.status(409).json({ error: 'Stop the recording before deleting it' });
+    if (['starting', 'recording', 'processing'].includes(replay.status)) return res.status(409).json({ error: 'Wait for the recording to finish before deleting it' });
     if (replay.file_path) {
       const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove([replay.file_path]);
       if (removeError) throw removeError;
