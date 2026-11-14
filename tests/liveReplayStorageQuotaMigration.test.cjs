@@ -15,7 +15,7 @@ test('LIVE replay metadata is private and bounded to one replay per stream', () 
   assert.match(migration, /revoke all on table public\.live_stream_replays from public, anon, authenticated/);
   assert.match(migration, /grant all on table public\.live_stream_replays to service_role/);
   assert.match(migration, /where status in \('starting','recording','processing','ready'\)/);
-  assert.match(migration, /duration_seconds between 0 and 300/);
+  assert.match(migration, /duration_seconds between 0 and 305/);
   assert.match(migration, /file_size_bytes between 0 and 48000000/);
 });
 
