@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261114130000_live_replay_storage_quota.sql'),
+  path.join(__dirname, '../supabase/migrations/20261114084400_live_replay_storage_quota.sql'),
   'utf8',
 ).toLowerCase();
 
