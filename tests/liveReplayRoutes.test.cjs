@@ -70,3 +70,10 @@ test('server worker stops expired recordings and deletes expired private objects
   assert.match(worker, /live-replays/);
   assert.match(worker, /status === 'processing'/);
 });
+
+test('a replay start that cannot be found during recovery is failed and releases its reservation', () => {
+  assert.match(worker, /status: 'failed',[\\s\\S]*error_code: 'EGRESS_NOT_FOUND'/);
+  assert.match(worker, /finalize_live_replay_quota/);
+  assert.match(worker, /p_success: false/);
+  assert.match(worker, /START_RECOVERY_GRACE_MS/);
+});
