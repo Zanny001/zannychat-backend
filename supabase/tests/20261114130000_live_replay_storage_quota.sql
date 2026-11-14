@@ -11,6 +11,18 @@ BEGIN
      OR has_table_privilege('authenticated', 'public.live_replay_quota', 'SELECT') THEN
     RAISE EXCEPTION 'authenticated users must not read replay metadata or quota tables directly';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'live_replay_quota' AND c.relrowsecurity
+  ) THEN
+    RAISE EXCEPTION 'live_replay_quota must have RLS enabled';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.get_live_replay_storage_bytes()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.get_live_replay_storage_bytes()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.get_live_replay_storage_bytes()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'replay storage headroom RPC must be service-role only';
+  END IF;
   IF NOT has_function_privilege('service_role', 'public.reserve_live_replay_quota(uuid)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.reserve_live_replay_quota(uuid)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.reserve_live_replay_quota(uuid)', 'EXECUTE') THEN
