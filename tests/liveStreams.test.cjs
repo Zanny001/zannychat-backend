@@ -8,6 +8,19 @@ const { createLiveKitToken } = require('../src/services/livekitToken');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
 
+test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
+  assert.ok(route.includes("require('../config/pushClient')"));
+  assert.ok(route.includes('async function notifyLiveUsers(userIds, notification)'));
+  assert.ok(route.includes('async function notifyCreatorFollowers(creatorId, notification)'));
+  assert.ok(route.includes("type: 'live_creator_follow'"));
+  assert.ok(route.includes("type: 'live_stream_started'"));
+  assert.ok(route.includes("type: 'live_invitation'"));
+  assert.ok(route.includes("type: 'live_guest_request'"));
+  assert.ok(route.includes("type: 'live_guest_decision'"));
+  assert.ok(route.includes('getBlockedUserIds(creatorId, followerIds)'));
+  assert.ok(route.includes('Promise.allSettled(batch.map((userId) => sendPushToUser(userId, notification)))'));
+});
+
 test('LIVE audience tokens are subscribe-only while creator tokens can publish', () => {
   const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
   for (const canPublish of [false, true]) {
