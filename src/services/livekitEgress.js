@@ -4,25 +4,28 @@ const { getLiveKitConfig } = require('./livekitToken');
 const MAX_REPLAY_SECONDS = 300;
 const MAX_REPLAY_BYTES = 50 * 1024 * 1024;
 
-function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
+function getLiveKitEgressConfig(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
   if (!liveKitConfig) return null;
   let liveKitUrl;
-  let storageEndpoint;
-  try {
-    liveKitUrl = new URL(liveKitConfig.url);
-    storageEndpoint = new URL(String(env.SUPABASE_STORAGE_S3_ENDPOINT || '').trim());
-  } catch {
-    return null;
-  }
+  try { liveKitUrl = new URL(liveKitConfig.url); } catch { return null; }
   if (!['wss:', 'https:'].includes(liveKitUrl.protocol) || !liveKitUrl.hostname.endsWith('.livekit.cloud')) return null;
+  const apiKey = String(env.LIVEKIT_EGRESS_API_KEY || '').trim();
+  const apiSecret = String(env.LIVEKIT_EGRESS_API_SECRET || '').trim();
+  if (!apiKey || !apiSecret) return null;
+  return { url: liveKitConfig.url, apiKey, apiSecret };
+}
+
+function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
+  const egressConfig = getLiveKitEgressConfig(env, liveKitConfig);
+  if (!egressConfig) return null;
+  let storageEndpoint;
+  try { storageEndpoint = new URL(String(env.SUPABASE_STORAGE_S3_ENDPOINT || '').trim()); } catch { return null; }
   if (storageEndpoint.protocol !== 'https:' ||
       !storageEndpoint.hostname.endsWith('.storage.supabase.co') ||
       storageEndpoint.pathname.replace(/\/$/, '') !== '/storage/v1/s3') return null;
   const accessKey = String(env.SUPABASE_STORAGE_S3_ACCESS_KEY_ID || '').trim();
   const secret = String(env.SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY || '').trim();
   const region = String(env.SUPABASE_STORAGE_S3_REGION || '').trim();
-  const egressApiKey = String(env.LIVEKIT_EGRESS_API_KEY || '').trim();
-  const egressApiSecret = String(env.LIVEKIT_EGRESS_API_SECRET || '').trim();
   const webhookUrl = String(env.LIVEKIT_REPLAY_WEBHOOK_URL || '').trim();
   try {
     const webhook = new URL(webhookUrl);
@@ -30,10 +33,10 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
   } catch {
     return null;
   }
-  if (!accessKey || !secret || !region || !egressApiKey || !egressApiSecret) return null;
+  if (!accessKey || !secret || !region) return null;
   return {
     liveKitConfig: { url: liveKitConfig.url },
-    egressConfig: { url: liveKitConfig.url, apiKey: egressApiKey, apiSecret: egressApiSecret },
+    egressConfig,
     storage: {
       endpoint: storageEndpoint.toString().replace(/\/$/, ''),
       accessKey,
@@ -45,7 +48,6 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
     webhookUrl,
   };
 }
-
 function isLiveReplayEnabled(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
   return env.LIVEKIT_REPLAY_ENABLED === 'true' &&
     env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED === 'true' &&
@@ -167,6 +169,7 @@ module.exports = {
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
   getLiveReplayConfig,
+  getLiveKitEgressConfig,
   isLiveReplayEnabled,
   createEgressToken,
   liveKitEgressUrl,
