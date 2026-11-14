@@ -10,6 +10,7 @@ const migration = fs.readFileSync(
 
 test('LIVE replay metadata is private and bounded to one replay per stream', () => {
   assert.match(migration, /create table if not exists public\.live_stream_replays/);
+  assert.match(migration, /room_name text not null/);
   assert.match(migration, /enable row level security/);
   assert.match(migration, /revoke all on table public\.live_stream_replays from public, anon, authenticated/);
   assert.match(migration, /grant all on table public\.live_stream_replays to service_role/);
@@ -29,7 +30,10 @@ test('LIVE replay quota atomically reserves at most 50 minutes per calendar mont
   assert.doesNotMatch(migration, /grant execute on function public\.reserve_live_replay_quota\(uuid\) to authenticated/);
 });
 
-test('LIVE replay storage bucket is private and enforces the Free-plan upload ceiling', () => {
+test('storage headroom RPC is private and the replay bucket is private with a 50 MB cap', () => {
+  assert.match(migration, /create or replace function public\.get_live_replay_storage_bytes/);
+  assert.match(migration, /grant execute on function public\.get_live_replay_storage_bytes\(\) to service_role/);
+  assert.doesNotMatch(migration, /grant execute on function public\.get_live_replay_storage_bytes\(\) to authenticated/);
   assert.match(migration, /values \('live-replays', 'live-replays', false, 52428800, array\['video\/mp4'\]\)/);
   assert.match(migration, /set public = false/);
 });
