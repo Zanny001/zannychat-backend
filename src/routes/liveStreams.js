@@ -217,6 +217,7 @@ router.post('/:streamId/replays/start', async (req, res) => {
       file_path: filePath,
       status: 'starting',
       started_at: now,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
     if (insertError) {
       if (insertError.code === '23505') return res.status(409).json({ error: 'A replay already exists or is being recorded for this stream' });
@@ -225,6 +226,9 @@ router.post('/:streamId/replays/start', async (req, res) => {
 
     const { data: reserved, error: quotaError } = await supabaseAdmin.rpc('reserve_live_replay_quota', { p_replay_id: replayId });
     if (quotaError) {
+      await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
+      }).catch(() => {});
       await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
       throw quotaError;
     }
@@ -253,7 +257,12 @@ router.post('/:streamId/replays/start', async (req, res) => {
       });
     } catch (error) {
       await supabaseAdmin.from('live_stream_replays')
-        .update({ status: 'failed', error_code: 'EGRESS_START_FAILED', completed_at: new Date().toISOString() })
+        .update({
+          status: 'failed',
+          error_code: 'EGRESS_START_FAILED',
+          completed_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
         .eq('id', replayId);
       await supabaseAdmin.rpc('finalize_live_replay_quota', {
         p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
