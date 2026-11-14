@@ -114,9 +114,9 @@ BEGIN
     now()
   )
   ON CONFLICT (creator_id) DO UPDATE SET
-    impact_score = public.live_creator_impact.impact_score + EXCLUDED.impact_score,
-    total_reactions = public.live_creator_impact.total_reactions + 1,
-    unique_supporters = public.live_creator_impact.unique_supporters + EXCLUDED.unique_supporters,
+    impact_score = current_impact.impact_score + EXCLUDED.impact_score,
+    total_reactions = current_impact.total_reactions + 1,
+    unique_supporters = current_impact.unique_supporters + EXCLUDED.unique_supporters,
     updated_at = now();
 
   RETURN QUERY
