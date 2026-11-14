@@ -256,6 +256,40 @@ router.post('/:roomId/join', async (req, res) => {
   }
 });
 
+router.get('/:roomId/participants', async (req, res) => {
+  const roomId = req.params.roomId;
+  if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call room' });
+  try {
+    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id,status')
+      .eq('id', roomId).maybeSingle();
+    if (roomError) throw roomError;
+    if (!room || !['ringing','active'].includes(room.status)) {
+      return res.status(404).json({ error: 'This call is no longer active' });
+    }
+
+    const { data: viewer, error: viewerError } = await supabaseAdmin.from('group_call_participants')
+      .select('status')
+      .eq('room_id', roomId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (viewerError) throw viewerError;
+    if (!viewer || viewer.status !== 'joined') {
+      return res.status(403).json({ error: 'Only connected call participants can view the room roster' });
+    }
+
+    const { data: participants, error: participantsError } = await supabaseAdmin.from('group_call_participants')
+      .select('user_id')
+      .eq('room_id', roomId)
+      .eq('status', 'joined');
+    if (participantsError) throw participantsError;
+    return res.json({ participantIds: (participants || []).map((participant) => participant.user_id).filter(Boolean) });
+  } catch (error) {
+    console.error('[group-calls] participant roster failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load the active call roster' });
+  }
+});
+
 router.post('/:roomId/invite', async (req, res) => {
   const roomId = req.params.roomId;
   const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
