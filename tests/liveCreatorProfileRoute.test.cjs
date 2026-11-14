@@ -27,3 +27,10 @@ test('LIVE creator profile summary exposes limited recent metadata, not private 
   assert.equal(route.includes(".from('live_creator_impact_supporters')"), false);
   assert.equal(route.includes(".from('live_creator_impact_daily')"), false);
 });
+
+test('LIVE creator profile uses exact counts even when recent collections are capped', () => {
+  assert.match(route, /from\('live_streams'\)\.select\([^\n]+\{ count: 'exact' \}\)/);
+  assert.match(route, /from\('live_stream_replays'\)\.select\([^\n]+\{ count: 'exact' \}\)/);
+  assert.match(route, /total: streamResult\.count \?\? streams\.length/);
+  assert.match(route, /total: replayResult\.count \?\? replays\.length/);
+});
