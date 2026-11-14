@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_replays (
   file_path text UNIQUE,
   status text NOT NULL DEFAULT 'starting'
     CHECK (status IN ('starting','recording','processing','ready','failed','deleted')),
-  duration_seconds integer NOT NULL DEFAULT 0 CHECK (duration_seconds BETWEEN 0 AND 300),
+  duration_seconds integer NOT NULL DEFAULT 0 CHECK (duration_seconds BETWEEN 0 AND 305),
   file_size_bytes bigint NOT NULL DEFAULT 0 CHECK (file_size_bytes BETWEEN 0 AND 48000000),
   error_code text,
   started_at timestamptz,
