@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHmac, createHash } = require('node:crypto');
 const {
   getLiveReplayConfig,
+  isLiveReplayEnabled,
   createEgressToken,
   liveKitEgressUrl,
   startRoomCompositeEgress,
@@ -26,8 +27,9 @@ const env = {
 };
 
 test('LIVE replay is fail-closed unless free-tier confirmation and private Supabase S3 credentials exist', () => {
-  assert.equal(getLiveReplayConfig({ ...env, LIVEKIT_REPLAY_ENABLED: 'false' }, liveKitConfig), null);
-  assert.equal(getLiveReplayConfig({ ...env, LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED: 'false' }, liveKitConfig), null);
+  assert.equal(isLiveReplayEnabled({ ...env, LIVEKIT_REPLAY_ENABLED: 'false' }), false);
+  assert.equal(isLiveReplayEnabled({ ...env, LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED: 'false' }), false);
+  assert.ok(getLiveReplayConfig({ ...env, LIVEKIT_REPLAY_ENABLED: 'false' }, liveKitConfig));
   assert.equal(getLiveReplayConfig({ ...env, SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY: '' }, liveKitConfig), null);
   assert.equal(getLiveReplayConfig({ ...env, SUPABASE_STORAGE_S3_ENDPOINT: 'https://evil.example/s3' }, liveKitConfig), null);
   assert.ok(getLiveReplayConfig(env, liveKitConfig));
