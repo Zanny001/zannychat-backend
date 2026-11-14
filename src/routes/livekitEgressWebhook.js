@@ -27,12 +27,28 @@ async function finalizeReplay(event) {
   const info = getEgressInfo(event);
   const egressId = info?.egressId || info?.egress_id;
   if (!egressId) return { ignored: true };
-  const { data: replay, error } = await supabaseAdmin
+  const { data: matchedReplay, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, file_path, status, duration_seconds')
+    .select('id, file_path, status, duration_seconds, room_name')
     .eq('egress_id', egressId)
     .maybeSingle();
   if (error) throw error;
+  let replay = matchedReplay;
+  if (!replay && (info?.roomName || info?.room_name)) {
+    const { data: recovered, error: recoveryError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id, file_path, status, duration_seconds, room_name')
+      .eq('room_name', info.roomName || info.room_name)
+      .in('status', ['starting', 'recording', 'processing'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (recoveryError) throw recoveryError;
+    if (recovered) {
+      replay = recovered;
+      const { error: recoveryUpdateError } = await supabaseAdmin.from('live_stream_replays')
+        .update({ egress_id: egressId, status: 'processing' })
+        .eq('id', replay.id);
+      if (recoveryUpdateError) throw recoveryUpdateError;
+    }
+  }
   if (!replay) return { ignored: true };
   if (replay.status === 'ready') {
     const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
