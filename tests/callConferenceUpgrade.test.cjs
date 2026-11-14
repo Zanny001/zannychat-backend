@@ -7,6 +7,7 @@ const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/2
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const lifecycleMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114180000_call_conference_participant_end_hardening.sql'), 'utf8');
 const triggerPrivilegeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114183000_revoke_call_conference_trigger_execute.sql'), 'utf8');
+const joinGuardsMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114190000_call_conference_join_guards.sql'), 'utf8');
 
 test('direct calls can be atomically promoted to a private SFU conference', () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS source_call_id uuid/);
@@ -84,4 +85,14 @@ test('promoted direct conferences preserve join duration and let either connecte
 test('conference link trigger function is not exposed as an anonymous or authenticated RPC', () => {
   assert.match(triggerPrivilegeMigration, /REVOKE ALL ON FUNCTION public\.guard_call_session_group_room_link\(\) FROM PUBLIC, anon, authenticated/);
   assert.match(triggerPrivilegeMigration, /GRANT EXECUTE ON FUNCTION public\.guard_call_session_group_room_link\(\) TO service_role/);
+});
+
+test('conference admission rechecks blocks and active-call exclusivity at join time', () => {
+  assert.match(joinGuardsMigration, /blocked_users/);
+  assert.match(joinGuardsMigration, /blocked users cannot share a conference call/);
+  assert.match(joinGuardsMigration, /call_sessions c/);
+  assert.match(joinGuardsMigration, /group_call_rooms r/);
+  assert.match(joinGuardsMigration, /user is already in another call/);
+  assert.match(joinGuardsMigration, /REVOKE ALL ON FUNCTION public\.join_direct_call_room\(uuid, uuid\) FROM PUBLIC, anon, authenticated/);
+  assert.match(joinGuardsMigration, /GRANT EXECUTE ON FUNCTION public\.join_direct_call_room\(uuid, uuid\) TO service_role/);
 });
