@@ -115,6 +115,10 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
         force_path_style: true,
       },
     },
+    webhooks: [{
+      url: replayConfig.webhookUrl,
+      signing_key: config.apiKey,
+    }],
     advanced: {
       width: 640,
       height: 360,
