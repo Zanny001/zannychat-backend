@@ -396,9 +396,9 @@ router.get('/replays/:replayId/playback', async (req, res) => {
     }
     const stream = await getStream(replay.stream_id);
     if (!stream || !await canViewLiveReplay(stream, req.user.id)) return res.status(403).json({ error: 'You cannot view this replay' });
-    const { data, error: signedUrlError } = await supabaseAdmin.storage.from('live-replays').createSignedUrl(replay.file_path, 300);
+    const { data, error: signedUrlError } = await supabaseAdmin.storage.from('live-replays').createSignedUrl(replay.file_path, 360);
     if (signedUrlError) throw signedUrlError;
-    return res.json({ url: data.signedUrl, expiresInSeconds: 300 });
+    return res.json({ url: data.signedUrl, expiresInSeconds: 360 });
   } catch (error) {
     console.error('[live-replay] playback URL failed', { replayId, message: error.message });
     return res.status(500).json({ error: 'Could not create replay playback URL' });
