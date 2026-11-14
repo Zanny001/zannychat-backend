@@ -7,6 +7,7 @@ const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitTok
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
+  getLiveKitEgressConfig,
   isLiveReplayEnabled,
   startRoomCompositeEgress,
   stopEgress,
@@ -145,8 +146,8 @@ async function stopActiveLiveReplayForStream(streamId) {
   if (error) throw error;
   const replay = data?.[0];
   if (!replay) return;
-  const replayConfig = getLiveReplayConfig();
-  if (!replay.egress_id || !replayConfig) {
+  const egressConfig = getLiveKitEgressConfig();
+  if (!replay.egress_id || !egressConfig) {
     await supabaseAdmin.from('live_stream_replays')
       .update({ status: 'failed', error_code: 'EGRESS_STOP_UNAVAILABLE', completed_at: new Date().toISOString() })
       .eq('id', replay.id);
@@ -155,7 +156,7 @@ async function stopActiveLiveReplayForStream(streamId) {
     });
     return;
   }
-  await stopEgress(replay.egress_id, replayConfig.egressConfig);
+  await stopEgress(replay.egress_id, egressConfig);
   await supabaseAdmin.from('live_stream_replays')
     .update({ status: 'processing' })
     .eq('id', replay.id)
@@ -287,9 +288,9 @@ router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
     if (replay.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can stop this recording' });
     if (!['starting', 'recording'].includes(replay.status)) return res.json({ replay: { id: replay.id, status: replay.status } });
     if (!replay.egress_id) return res.status(409).json({ error: 'Replay recording is still starting' });
-    const replayConfig = getLiveReplayConfig();
-    if (!replayConfig) return res.status(503).json({ error: 'Replay stop service is temporarily unavailable' });
-    await stopEgress(replay.egress_id, replayConfig.egressConfig);
+    const egressConfig = getLiveKitEgressConfig();
+    if (!egressConfig) return res.status(503).json({ error: 'Replay stop service is temporarily unavailable' });
+    await stopEgress(replay.egress_id, egressConfig);
     await supabaseAdmin.from('live_stream_replays').update({ status: 'processing' }).eq('id', replay.id);
     return res.status(202).json({ replay: { id: replay.id, status: 'processing' } });
   } catch (error) {
