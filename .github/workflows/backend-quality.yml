@@ -49,5 +49,8 @@ jobs:
       - name: Run LIVE stream and stage-management regression tests
         run: yarn run test:live-streams
 
+      - name: Run LIVE and call history deletion regression tests
+        run: yarn run test:history-deletion
+
       - name: Run backend Jest suite
         run: yarn test

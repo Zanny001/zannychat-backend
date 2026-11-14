@@ -61,7 +61,8 @@
     "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs",
     "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs",
     "test:observability": "node --test tests/requestObservability.test.cjs",
-    "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs tests/livekitEgress.test.cjs tests/liveReplayWorkerMount.test.cjs tests/liveReplayRoutes.test.cjs"
+    "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs tests/livekitEgress.test.cjs tests/liveReplayWorkerMount.test.cjs tests/liveReplayRoutes.test.cjs",
+    "test:history-deletion": "node --test tests/liveHistoryDeletion.test.cjs tests/callHistoryDeletion.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

@@ -527,13 +527,13 @@ router.get('/creators/me/profile', async (req, res) => {
       streams: {
         total: streamResult.count ?? streams.length,
         liveNow: streams.filter((row) => row.status === 'live').length,
-        recent: streams.slice(0, 8).map(({ id, title, status, started_at }) => ({ id, title, status, started_at })),
+        recent: streams.map(({ id, title, status, started_at }) => ({ id, title, status, started_at })),
       },
       replays: {
         total: replayResult.count ?? replays.length,
         ready: replays.filter((row) => row.status === 'ready').length,
         processing: replays.filter((row) => ['starting', 'recording', 'processing'].includes(row.status)).length,
-        recent: replays.slice(0, 8).map(({ id, status, duration_seconds, completed_at, stream_id }) => ({ id, status, duration_seconds, completed_at, stream_id })),
+        recent: replays.map(({ id, status, duration_seconds, completed_at, stream_id }) => ({ id, status, duration_seconds, completed_at, stream_id })),
       },
     });
   } catch (error) {
