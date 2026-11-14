@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
+const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -20,6 +21,7 @@ const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveRep
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
 
+const MAX_LIVE_STAGE_GUESTS = 5;
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
 const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support']);
 
@@ -729,8 +731,24 @@ router.post('/:streamId/join', async (req, res) => {
     if (joinError) {
       if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This LIVE audience is full' });
       if (joinError.code === '42501') return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
+      if (joinError.code === 'P0001' && /LIVE stage is full/i.test(joinError.message || '')) {
+        return res.status(409).json({ error: 'The LIVE stage is full. Please try again when a guest leaves.' });
+      }
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
+    }
+    if (role === 'guest') {
+      const { count: stageCount, error: stageCountError } = await supabaseAdmin.from('live_stream_participants')
+        .select('id', { count: 'exact', head: true })
+        .eq('stream_id', streamId).eq('role', 'guest').eq('status', 'joined');
+      if (stageCountError) throw stageCountError;
+      if (Number(stageCount || 0) > MAX_LIVE_STAGE_GUESTS) {
+        const { error: leaveError } = await supabaseAdmin.rpc('leave_live_stream', {
+          p_stream_id: streamId, p_user_id: req.user.id,
+        });
+        if (leaveError) throw leaveError;
+        return res.status(409).json({ error: 'The LIVE stage is full. Please try again when a guest leaves.' });
+      }
     }
     const canPublish = role === 'creator' || role === 'guest';
     const token = issueToken(req.user, stream.room_name, config, canPublish);
@@ -781,6 +799,41 @@ router.post('/:streamId/invites', async (req, res) => {
   } catch (error) {
     console.error('[live] invite creation failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not invite viewers to this LIVE stream' });
+  }
+});
+
+router.post('/:streamId/guests/invite', async (req, res) => {
+  const streamId = req.params.streamId;
+  const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  if (!validId(streamId) || !validId(userId) || userId === req.user.id) {
+    return res.status(400).json({ error: 'Invalid LIVE guest invitation' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can invite guests to the stage' });
+    if (!stream.allow_guests) return res.status(409).json({ error: 'Guest participation is disabled for this LIVE stream' });
+    if (await hasBlockBetween(stream.creator_id, userId)) return res.status(403).json({ error: 'Guest access is unavailable' });
+    const { data: profile, error: profileError } = await supabaseAdmin.from('profiles')
+      .select('id').eq('id', userId).maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile) return res.status(404).json({ error: 'The invited user was not found' });
+    const { error: inviteError } = await supabaseAdmin.from('live_stream_invites').upsert({
+      stream_id: streamId, user_id: userId, invited_by: req.user.id,
+      requested_by: null, invitation_type: 'guest', status: 'accepted',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'stream_id,user_id,invitation_type' });
+    if (inviteError) throw inviteError;
+    const creatorName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'The LIVE creator';
+    await notifyLiveUsers([userId], {
+      title: 'You are invited to the LIVE stage',
+      body: creatorName + ' invited you to join the LIVE as a guest.',
+      data: { type: 'live_guest_invitation', streamId, creatorId: req.user.id },
+    });
+    return res.status(201).json({ invited: true, userId });
+  } catch (error) {
+    console.error('[live] direct guest invitation failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not invite this user to the LIVE stage' });
   }
 });
 
@@ -1052,6 +1105,105 @@ router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error
 });
 
 
+router.patch('/:streamId/guests/:userId/mute', async (req, res) => {
+  const { streamId, userId } = req.params;
+  const muted = req.body?.muted;
+  if (!validId(streamId) || !validId(userId) || typeof muted !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid LIVE guest microphone action' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can control guest microphones' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'guest') return res.status(404).json({ error: 'LIVE stage guest not found' });
+    const room = await listRoomParticipants(stream.room_name);
+    const liveParticipant = (room?.participants || []).find((item) => item.identity === userId);
+    const audioTrack = (liveParticipant?.tracks || []).find((track) =>
+      track.type === 0 || String(track.type || '').toUpperCase() === 'AUDIO');
+    if (!audioTrack?.sid) return res.status(409).json({ error: 'This guest has no active microphone track' });
+    try {
+      await muteRoomParticipantTrack(stream.room_name, userId, audioTrack.sid, muted);
+    } catch (mediaError) {
+      if (!muted) {
+        return res.status(409).json({
+          error: 'Remote unmuting is disabled in the LiveKit project. Enable “Admins can remotely unmute tracks” in LiveKit settings to allow host unmute.',
+        });
+      }
+      throw mediaError;
+    }
+    return res.json({ userId, microphoneMuted: muted });
+  } catch (error) {
+    console.error('[live] guest microphone control failed:', error?.message || error);
+    return res.status(502).json({ error: 'Could not update the guest microphone' });
+  }
+});
+
+router.patch('/:streamId/guests/:userId/spotlight', async (req, res) => {
+  const { streamId, userId } = req.params;
+  const spotlighted = req.body?.spotlighted;
+  if (!validId(streamId) || !validId(userId) || typeof spotlighted !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid LIVE spotlight action' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can manage the LIVE spotlight' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'guest') return res.status(404).json({ error: 'LIVE stage guest not found' });
+    const room = await listRoomParticipants(stream.room_name);
+    const roomParticipants = room?.participants || [];
+    if (spotlighted) {
+      const currentSpotlights = roomParticipants.filter((item) =>
+        item.identity !== userId && item.attributes?.zannychat_spotlight === 'true');
+      for (const current of currentSpotlights) {
+        await updateRoomParticipantAttributes(stream.room_name, current.identity, { zannychat_spotlight: '' });
+      }
+    }
+    await updateRoomParticipantAttributes(stream.room_name, userId, {
+      zannychat_spotlight: spotlighted ? 'true' : '',
+    });
+    return res.json({ userId, spotlighted });
+  } catch (error) {
+    console.error('[live] guest spotlight update failed:', error?.message || error);
+    return res.status(502).json({ error: 'Could not update the LIVE spotlight' });
+  }
+});
+
+router.delete('/:streamId/guests/:userId', async (req, res) => {
+  const { streamId, userId } = req.params;
+  if (!validId(streamId) || !validId(userId)) return res.status(400).json({ error: 'Invalid LIVE stage guest' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can remove a LIVE guest' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'guest') return res.status(404).json({ error: 'LIVE stage guest not found' });
+    try {
+      await removeRoomParticipant(stream.room_name, userId);
+    } catch (mediaError) {
+      // LiveKit revokes the participant token even when it reports that the participant has already left.
+      if (mediaError.status !== 404) throw mediaError;
+    }
+    const { error: leaveError } = await supabaseAdmin.rpc('leave_live_stream', {
+      p_stream_id: streamId, p_user_id: userId,
+    });
+    if (leaveError) throw leaveError;
+    await supabaseAdmin.from('live_stream_invites')
+      .update({ status: 'revoked', updated_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', userId).eq('invitation_type', 'guest');
+    await notifyLiveUsers([userId], {
+      title: 'You left the LIVE stage',
+      body: 'The creator removed you from the stage. You can continue watching the LIVE.',
+      data: { type: 'live_guest_removed', streamId },
+    });
+    return res.json({ removed: true, userId });
+  } catch (error) {
+    console.error('[live] guest removal failed:', error?.message || error);
+    return res.status(502).json({ error: 'Could not remove the guest from the LIVE stage' });
+  }
+});
+
 router.get('/:streamId/participants', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
@@ -1060,7 +1212,7 @@ router.get('/:streamId/participants', async (req, res) => {
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can manage LIVE participants' });
     const { data: joined, error: joinedError } = await supabaseAdmin.from('live_stream_participants')
-      .select('user_id,joined_at').eq('stream_id', streamId).eq('role', 'viewer').eq('status', 'joined')
+      .select('user_id,role,joined_at').eq('stream_id', streamId).in('role', ['viewer','guest']).eq('status', 'joined')
       .order('joined_at', { ascending: true }).limit(500);
     if (joinedError) throw joinedError;
     const { data: moderators, error: moderatorsError } = await supabaseAdmin.from('live_stream_moderators')
@@ -1074,10 +1226,29 @@ router.get('/:streamId/participants', async (req, res) => {
       : { data: [], error: null };
     if (profilesError) throw profilesError;
     const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    let mediaByIdentity = new Map();
+    try {
+      const room = await listRoomParticipants(stream.room_name);
+      mediaByIdentity = new Map((room?.participants || []).map((participant) => {
+        const audio = (participant.tracks || []).find((track) =>
+          track.type === 0 || String(track.type || '').toUpperCase() === 'AUDIO');
+        return [participant.identity, {
+          microphoneMuted: typeof audio?.muted === 'boolean' ? audio.muted : null,
+          spotlighted: participant.attributes?.zannychat_spotlight === 'true',
+        }];
+      }));
+    } catch (mediaError) {
+      console.error('[live] LiveKit participant media state unavailable:', mediaError?.message || mediaError);
+    }
     return res.json({ participants: userIds.map((userId) => ({
       userId, name: names.get(userId) || 'ZannyChat user',
       joinedAt: joinedById.get(userId)?.joined_at || null,
-      joined: joinedById.has(userId), moderator: moderatorIds.has(userId),
+      joined: joinedById.has(userId),
+      role: joinedById.get(userId)?.role || null,
+      stage: joinedById.get(userId)?.role === 'guest',
+      microphoneMuted: mediaByIdentity.get(userId)?.microphoneMuted ?? null,
+      spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false,
+      moderator: moderatorIds.has(userId),
     })) });
   } catch (error) {
     console.error('[live] participants fetch failed:', error?.message || error);

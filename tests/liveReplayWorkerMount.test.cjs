@@ -25,3 +25,10 @@ test('replay expiry and retention worker starts with the production backend proc
   assert.match(index, /startLiveReplayWorker/);
   assert.match(index, /startLiveReplayWorker\(\);/);
 });
+
+test('LIVE replay worker logs configuration readiness without exposing credential values', () => {
+  assert.ok(worker.includes("console.info('[live-replay] configuration status'"));
+  assert.ok(worker.includes('egressCredentialsConfigured: Boolean(getLiveKitEgressConfig())'));
+  assert.ok(worker.includes('storageCredentialsConfigured: Boolean(replayConfig?.storage)'));
+  assert.ok(worker.includes('replayEnabled: isLiveReplayEnabled()'));
+});
