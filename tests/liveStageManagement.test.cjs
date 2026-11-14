@@ -122,6 +122,7 @@ test('creator guest removal preserves audience membership when LiveKit demotion 
   assert.ok(route.includes("update({ role: 'viewer', status: 'joined', left_at: null })"));
   assert.ok(route.includes('returnedToAudience'));
   assert.ok(route.includes('canSubscribe: true'));
+  assert.ok(route.includes("updateRoomParticipantAttributes(stream.room_name, userId, { zannychat_spotlight: '' })"));
   assert.ok(!route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
 

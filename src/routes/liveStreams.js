@@ -1202,6 +1202,7 @@ router.delete('/:streamId/guests/:userId', async (req, res) => {
     try {
       // Remove publishing permission, not room membership: LiveKit unpublishes the guest tracks and
       // keeps the participant connected as a viewer with subscribe permission.
+      await updateRoomParticipantAttributes(stream.room_name, userId, { zannychat_spotlight: '' });
       await updateRoomParticipantPermissions(stream.room_name, userId, {
         canPublish: false,
         canSubscribe: true,
