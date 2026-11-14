@@ -1,5 +1,5 @@
 const { supabaseAdmin } = require('../config/supabaseAdmin');
-const { getLiveKitEgressConfig, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, getLiveReplayConfig, isLiveReplayEnabled, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 
 const RECOVERY_SCAN_MS = 60 * 1000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
@@ -178,6 +178,12 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
 function startLiveReplayWorker() {
   if (started || !supabaseAdmin) return;
   started = true;
+  const replayConfig = getLiveReplayConfig();
+  console.info('[live-replay] configuration status', {
+    egressCredentialsConfigured: Boolean(getLiveKitEgressConfig()),
+    storageCredentialsConfigured: Boolean(replayConfig?.storage),
+    replayEnabled: isLiveReplayEnabled(),
+  });
   const safeRun = (label, fn) => fn().catch((error) => {
     console.error('[live-replay] ' + label + ' failed', { message: error.message });
   });
