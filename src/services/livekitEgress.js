@@ -74,7 +74,7 @@ function createEgressToken(config, nowSeconds = Math.floor(Date.now() / 1000)) {
 }
 
 function liveKitEgressUrl(liveKitUrl, method) {
-  if (!/^StartRoomCompositeEgress$|^StopEgress$/.test(method)) throw new Error('Unsupported LiveKit Egress method');
+  if (!/^StartRoomCompositeEgress$|^StopEgress$|^ListEgress$/.test(method)) throw new Error('Unsupported LiveKit Egress method');
   const url = new URL(String(liveKitUrl || '').trim());
   if (!['wss:', 'https:'].includes(url.protocol) || !url.hostname.endsWith('.livekit.cloud')) {
     throw new Error('LIVE replay requires the managed LiveKit Cloud Egress service');
@@ -141,6 +141,11 @@ async function stopEgress(egressId, config, fetchImpl) {
   return requestLiveKitEgress('StopEgress', { egress_id: egressId }, config, fetchImpl);
 }
 
+async function listEgress(roomName, config, fetchImpl) {
+  if (!roomName) throw new Error('Room name is required');
+  return requestLiveKitEgress('ListEgress', { room_name: roomName, active: true }, config, fetchImpl);
+}
+
 function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.floor(Date.now() / 1000)) {
   const token = String(authorization || '').replace(/^Bearer\s+/i, '').trim();
   const parts = token.split('.');
@@ -176,5 +181,6 @@ module.exports = {
   requestLiveKitEgress,
   startRoomCompositeEgress,
   stopEgress,
+  listEgress,
   verifyLiveKitWebhook,
 };
