@@ -2,6 +2,7 @@ const express = require('express');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_OUTPUT_SECONDS } = require('../services/livekitEgress');
 const { clearLiveReplayStop } = require('../jobs/liveReplayWorker');
+const { sendPushToUser } = require('../config/pushClient');
 
 const router = express.Router();
 const rawBody = express.raw({ type: ['application/webhook+json', 'application/json'], limit: '1mb' });
@@ -24,20 +25,34 @@ function isComplete(status) {
   return status === 'EGRESS_COMPLETE' || status === 3;
 }
 
+async function notifyReplayReady(replay) {
+  if (replay.notification_sent_at) return;
+  await sendPushToUser(replay.creator_id, {
+    title: 'Your LIVE replay is ready',
+    body: 'Your private replay is ready to watch for the next seven days.',
+    data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
+  });
+  const { error } = await supabaseAdmin.from('live_stream_replays')
+    .update({ notification_sent_at: new Date().toISOString() })
+    .eq('id', replay.id)
+    .is('notification_sent_at', null);
+  if (error) throw error;
+}
+
 async function finalizeReplay(event) {
   const info = getEgressInfo(event);
   const egressId = info?.egressId || info?.egress_id;
   if (!egressId) return { ignored: true };
   const { data: matchedReplay, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, file_path, status, duration_seconds, room_name')
+    .select('id, file_path, status, duration_seconds, room_name, creator_id, stream_id, notification_sent_at')
     .eq('egress_id', egressId)
     .maybeSingle();
   if (error) throw error;
   let replay = matchedReplay;
   if (!replay && (info?.roomName || info?.room_name)) {
     const { data: recovered, error: recoveryError } = await supabaseAdmin.from('live_stream_replays')
-      .select('id, file_path, status, duration_seconds, room_name')
+      .select('id, file_path, status, duration_seconds, room_name, creator_id, stream_id, notification_sent_at')
       .eq('room_name', info.roomName || info.room_name)
       .in('status', ['starting', 'recording', 'processing'])
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -59,6 +74,7 @@ async function finalizeReplay(event) {
       p_success: true,
     });
     if (quotaError) throw quotaError;
+    await notifyReplayReady(replay);
     return { alreadyReady: true };
   }
   if (replay.status === 'failed') {
@@ -104,6 +120,7 @@ async function finalizeReplay(event) {
       p_success: true,
     });
     if (quotaError) throw quotaError;
+    await notifyReplayReady({ ...replay, notification_sent_at: null });
     return { ready: true };
   }
 
