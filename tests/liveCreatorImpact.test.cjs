@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const migration = fs.readFileSync(new URL('../supabase/migrations/20261114100000_live_creator_impact_score.sql', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../supabase/migrations/20261114085407_live_creator_impact_score.sql', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../src/routes/liveStreams.js', import.meta.url), 'utf8');
 
 test('LIVE impact awards at most one point per supporter per creator per UTC day', () => {
