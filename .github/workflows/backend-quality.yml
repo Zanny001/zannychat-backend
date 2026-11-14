@@ -46,5 +46,8 @@ jobs:
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
 
+      - name: Run LIVE stream and stage-management regression tests
+        run: yarn run test:live-streams
+
       - name: Run backend Jest suite
         run: yarn test
