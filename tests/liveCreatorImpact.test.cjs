@@ -31,12 +31,18 @@ test('LIVE reaction route persists through the transactional impact RPC', () => 
   assert.doesNotMatch(handler, /from\('live_stream_reactions'\)\.insert/);
 });
 
-test('creator impact endpoint checks profile visibility and blocks before returning public stats', () => {
+test('creator impact endpoint delegates to a fail-closed profile and block visibility guard', () => {
   const start = routes.indexOf("router.get('/creators/:creatorId/impact'");
   assert.ok(start >= 0);
   const end = routes.indexOf("router.", start + 10);
   const handler = routes.slice(start, end < 0 ? undefined : end);
-  assert.match(handler, /profile_visibility/);
-  assert.match(handler, /hasBlockBetween/);
+  const guardStart = routes.indexOf('async function canViewCreatorImpact');
+  const guardEnd = routes.indexOf('\nasync function ', guardStart + 10);
+  const guard = routes.slice(guardStart, guardEnd < 0 ? undefined : guardEnd);
+  assert.match(handler, /canViewCreatorImpact/);
   assert.match(handler, /live_creator_impact/);
+  assert.match(guard, /profile_visibility/);
+  assert.match(guard, /hasBlockBetween/);
+  assert.match(guard, /conversation_participants/);
+  assert.match(guard, /visibility !== 'contacts'\) return false/);
 });
