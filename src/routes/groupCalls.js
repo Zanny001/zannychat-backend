@@ -41,6 +41,63 @@ async function getGroupMembership(conversationId, userId) {
   return { conversation, membership, members: members || [] };
 }
 
+router.post('/upgrade/:callId', async (req, res) => {
+  const callId = String(req.params.callId || '');
+  const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+  if (!validId(callId) || userIds.length < 1 || userIds.length > 14
+      || userIds.some((id) => !validId(id)) || new Set(userIds).size !== userIds.length) {
+    return res.status(400).json({ error: 'Choose one to fourteen valid people to add' });
+  }
+  const config = getLiveKitConfig();
+  if (!config) return res.status(503).json({ error: 'Group calling is not enabled on this server yet' });
+  try {
+    const { data: call, error: callError } = await supabaseAdmin.from('call_sessions')
+      .select('id,conversation_id,caller_id,callee_id,call_type,status,group_room_id,last_activity_at')
+      .eq('id', callId).maybeSingle();
+    if (callError) throw callError;
+    if (!call || ![call.caller_id, call.callee_id].includes(req.user.id)) {
+      return res.status(404).json({ error: 'Active call not found' });
+    }
+    if (call.status !== 'accepted' || call.group_room_id) {
+      return res.status(409).json({ error: 'This call can no longer be upgraded' });
+    }
+
+    const roomId = randomUUID();
+    const roomName = 'zgc_' + roomId.replace(/-/g, '');
+    const { data: room, error: promoteError } = await supabaseAdmin.rpc('promote_direct_call_to_group_room', {
+      p_call_id: callId,
+      p_actor_user_id: req.user.id,
+      p_room_id: roomId,
+      p_room_name: roomName,
+      p_invited_user_ids: userIds,
+    });
+    if (promoteError) {
+      if (promoteError.code === 'P0001') return res.status(409).json({ error: 'The call is no longer active. Start a new call and try again.' });
+      if (promoteError.code === '23505') return res.status(409).json({ error: 'One of the selected people is already in another call.' });
+      if (promoteError.code === '42501') return res.status(403).json({ error: 'One or more selected people cannot be added to this call.' });
+      if (promoteError.code === '22023') return res.status(400).json({ error: 'The selected people or call settings are invalid.' });
+      throw promoteError;
+    }
+
+    const invitationResults = await Promise.allSettled(userIds.map((userId) => sendPushToUser(userId, {
+      title: call.call_type === 'video' ? 'Video call invitation' : 'Voice call invitation',
+      body: `${req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat member'} added you to an ongoing ${call.call_type} call`,
+      data: { type: 'group_call_invite', groupCallId: roomId, conversationId: call.conversation_id, callType: call.call_type },
+    })));
+    const pushAccepted = invitationResults.filter((result) => result.status === 'fulfilled' && Number(result.value?.sent) > 0).length;
+    return res.status(201).json({
+      room,
+      livekitUrl: config.url,
+      token: tokenFor(req.user, roomName, config),
+      invitedCount: userIds.length,
+      pushAcceptedDevices: pushAccepted,
+    });
+  } catch (error) {
+    console.error('[group-calls] direct-call upgrade failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not add people to this call' });
+  }
+});
+
 router.post('/', async (req, res) => {
   const conversationId = String(req.body?.conversationId || '');
   const callType = req.body?.callType === 'video' ? 'video' : 'audio';
@@ -166,16 +223,25 @@ router.post('/:roomId/join', async (req, res) => {
   if (!config) return res.status(503).json({ error: 'Group calling is not enabled on this server yet' });
   try {
     const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
-      .select('id,conversation_id,host_user_id,room_name,status,max_participants')
+      .select('id,conversation_id,host_user_id,room_name,status,max_participants,source_call_id')
       .eq('id', roomId).maybeSingle();
     if (roomError) throw roomError;
     if (!room || !['ringing','active'].includes(room.status)) return res.status(404).json({ error: 'Group call is no longer active' });
-    const group = await getGroupMembership(room.conversation_id, req.user.id);
-    if (group.error) return res.status(group.status).json({ error: group.error });
     const token = tokenFor(req.user, room.room_name, config);
-    const { error: joinError } = await supabaseAdmin.rpc('join_group_call_room', {
-      p_room_id: roomId, p_user_id: req.user.id,
-    });
+    let joinError = null;
+    if (room.source_call_id) {
+      const { error } = await supabaseAdmin.rpc('join_direct_call_room', {
+        p_room_id: roomId, p_user_id: req.user.id,
+      });
+      joinError = error;
+    } else {
+      const group = await getGroupMembership(room.conversation_id, req.user.id);
+      if (group.error) return res.status(group.status).json({ error: group.error });
+      const { error } = await supabaseAdmin.rpc('join_group_call_room', {
+        p_room_id: roomId, p_user_id: req.user.id,
+      });
+      joinError = error;
+    }
     if (joinError) {
       if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This group call is full' });
       if (joinError.code === 'P0001' && /invitation has expired/i.test(joinError.message || '')) return res.status(410).json({ error: 'This group-call invitation has expired' });
@@ -187,6 +253,63 @@ router.post('/:roomId/join', async (req, res) => {
   } catch (error) {
     console.error('[group-calls] join failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not join this group call' });
+  }
+});
+
+router.post('/:roomId/invite', async (req, res) => {
+  const roomId = req.params.roomId;
+  const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+  if (!validId(roomId) || userIds.length < 1 || userIds.length > 14
+      || userIds.some((id) => !validId(id)) || new Set(userIds).size !== userIds.length) {
+    return res.status(400).json({ error: 'Choose one to fourteen valid people to invite' });
+  }
+  try {
+    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id,conversation_id,host_user_id,call_type,status,source_call_id')
+      .eq('id', roomId).maybeSingle();
+    if (roomError) throw roomError;
+    if (!room || !['ringing','active'].includes(room.status)) {
+      return res.status(404).json({ error: 'This call is no longer active' });
+    }
+    if (!room.source_call_id) {
+      const group = await getGroupMembership(room.conversation_id, req.user.id);
+      if (group.error) return res.status(group.status).json({ error: group.error });
+      if (req.user.id !== room.host_user_id && !group.membership.is_admin) {
+        return res.status(403).json({ error: 'Only the call host or a group admin can invite members' });
+      }
+    } else if (req.user.id !== room.host_user_id) {
+      return res.status(403).json({ error: 'Only the call host can invite people to this conference' });
+    }
+
+    const { data: invitedIds, error: inviteError } = await supabaseAdmin.rpc('invite_group_call_participants', {
+      p_room_id: roomId,
+      p_actor_user_id: req.user.id,
+      p_user_ids: userIds,
+    });
+    if (inviteError) {
+      if (inviteError.code === 'P0001') return res.status(409).json({ error: 'This call has reached its participant limit or is no longer active.' });
+      if (inviteError.code === '23505') return res.status(409).json({ error: 'One of the selected people is already in another call or this call.' });
+      if (inviteError.code === '42501') return res.status(403).json({ error: 'One or more selected people cannot be invited to this call.' });
+      if (inviteError.code === '22023') return res.status(400).json({ error: 'The selected invitees are invalid.' });
+      throw inviteError;
+    }
+
+    const { data: conversation } = await supabaseAdmin.from('conversations')
+      .select('name').eq('id', room.conversation_id).maybeSingle();
+    const inviterName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat member';
+    const body = room.source_call_id
+      ? `${inviterName} invited you to join an ongoing ${room.call_type} call`
+      : `${inviterName} invited you to a call in ${conversation?.name || 'your group'}`;
+    const deliveries = await Promise.allSettled((invitedIds || userIds).map((userId) => sendPushToUser(userId, {
+      title: room.call_type === 'video' ? 'Incoming video call' : 'Incoming voice call',
+      body,
+      data: { type: 'group_call_invite', groupCallId: roomId, conversationId: room.conversation_id, callType: room.call_type || 'audio' },
+    })));
+    const pushAccepted = deliveries.filter((result) => result.status === 'fulfilled' && Number(result.value?.sent) > 0).length;
+    return res.json({ invited: invitedIds || userIds, invitedCount: (invitedIds || userIds).length, pushAcceptedDevices: pushAccepted });
+  } catch (error) {
+    console.error('[group-calls] invite failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not invite people to this call' });
   }
 });
 
@@ -209,11 +332,17 @@ router.post('/:roomId/end', async (req, res) => {
   const roomId = req.params.roomId;
   if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call id' });
   try {
-    const { data: ended, error } = await supabaseAdmin.rpc('end_group_call_room', {
-      p_room_id: roomId, p_user_id: req.user.id,
-    });
+    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id,source_call_id').eq('id', roomId).maybeSingle();
+    if (roomError) throw roomError;
+    if (!room) return res.status(404).json({ error: 'Group call is no longer active' });
+    const { data: ended, error } = room.source_call_id
+      ? await supabaseAdmin.rpc('end_direct_call_room', { p_room_id: roomId, p_user_id: req.user.id })
+      : await supabaseAdmin.rpc('end_group_call_room', { p_room_id: roomId, p_user_id: req.user.id });
     if (error) {
-      if (error.code === '42501') return res.status(403).json({ error: 'Only the call host or a group admin can end this call' });
+      if (error.code === '42501') return res.status(403).json({ error: room.source_call_id
+        ? 'Only the conference host can end this call'
+        : 'Only the call host or a group admin can end this call' });
       throw error;
     }
     if (!ended) return res.status(404).json({ error: 'Group call is no longer active' });
