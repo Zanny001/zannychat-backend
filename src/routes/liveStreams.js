@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
+const { sendPushToUser } = require('../config/pushClient');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
@@ -49,6 +50,33 @@ async function getBlockedUserIds(userId, otherIds) {
     ...(blockedByUser.data || []).map((row) => row.blocked_id),
     ...(blockedUser.data || []).map((row) => row.blocker_id),
   ]);
+}
+
+async function notifyLiveUsers(userIds, notification) {
+  const ids = [...new Set((userIds || []).filter(validId))];
+  for (let offset = 0; offset < ids.length; offset += 20) {
+    const batch = ids.slice(offset, offset + 20);
+    const results = await Promise.allSettled(batch.map((userId) => sendPushToUser(userId, notification)));
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.error('[live] push notification failed:', result.reason?.message || result.reason);
+      }
+    });
+  }
+}
+
+async function notifyCreatorFollowers(creatorId, notification) {
+  try {
+    const { data, error } = await supabaseAdmin.from('live_creator_follows')
+      .select('follower_id').eq('creator_id', creatorId).limit(500);
+    if (error) throw error;
+    const followerIds = [...new Set((data || []).map((row) => row.follower_id))];
+    const blockedIds = await getBlockedUserIds(creatorId, followerIds);
+    await notifyLiveUsers(followerIds.filter((id) => !blockedIds.has(id)), notification);
+  } catch (error) {
+    // A push outage must never turn a committed LIVE start into an API failure.
+    console.error('[live] follower notification lookup failed:', error?.message || error);
+  }
 }
 
 async function getProfileNames(userIds) {
@@ -97,10 +125,18 @@ router.post('/creators/:creatorId/follow', async (req, res) => {
       .select('id').eq('id', creatorId).maybeSingle();
     if (creatorError) throw creatorError;
     if (!creator) return res.status(404).json({ error: 'Creator not found' });
-    const { error } = await supabaseAdmin.from('live_creator_follows').upsert(
+    const { data: newFollow, error } = await supabaseAdmin.from('live_creator_follows').upsert(
       { follower_id: req.user.id, creator_id: creatorId }, { onConflict: 'follower_id,creator_id', ignoreDuplicates: true }
-    );
+    ).select('follower_id').maybeSingle();
     if (error) throw error;
+    if (newFollow) {
+      const followerName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat member';
+      await notifyLiveUsers([creatorId], {
+        title: 'New LIVE follower',
+        body: followerName + ' started following your creator profile.',
+        data: { type: 'live_creator_follow', creatorId, followerId: req.user.id },
+      });
+    }
     return res.json({ following: true, creatorId });
   } catch (error) {
     console.error('[live] follow failed:', error?.message || error);
@@ -262,6 +298,20 @@ router.post('/', async (req, res) => {
       p_invited_user_ids: inviteeIds,
     });
     if (error) throw error;
+    const creatorName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat creator';
+    if (visibility === 'private') {
+      await notifyLiveUsers(inviteeIds, {
+        title: 'Private LIVE invitation',
+        body: creatorName + ' invited you to join ' + title + '.',
+        data: { type: 'live_invitation', streamId: id, creatorId: req.user.id },
+      });
+    } else {
+      await notifyCreatorFollowers(req.user.id, {
+        title: creatorName + ' is LIVE',
+        body: title,
+        data: { type: 'live_stream_started', streamId: id, creatorId: req.user.id },
+      });
+    }
     return res.status(201).json({
       stream, livekitUrl: config.url,
       token, role: 'creator', canModerate: true,
@@ -334,6 +384,12 @@ router.post('/:streamId/invites', async (req, res) => {
     }));
     const { error } = await supabaseAdmin.from('live_stream_invites').upsert(rows, { onConflict: 'stream_id,user_id,invitation_type' });
     if (error) throw error;
+    const creatorName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat creator';
+    await notifyLiveUsers(invitees, {
+      title: 'Private LIVE invitation',
+      body: creatorName + ' invited you to join ' + stream.title + '.',
+      data: { type: 'live_invitation', streamId, creatorId: req.user.id },
+    });
     return res.json({ invited: invitees.length });
   } catch (error) {
     console.error('[live] invite creation failed:', error?.message || error);
@@ -372,6 +428,12 @@ router.post('/:streamId/guest-requests', async (req, res) => {
       requested_by: req.user.id, invitation_type: 'guest', status: 'requested',
     }, { onConflict: 'stream_id,user_id,invitation_type' });
     if (error) throw error;
+    const requesterName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A LIVE viewer';
+    await notifyLiveUsers([stream.creator_id], {
+      title: 'LIVE guest request',
+      body: requesterName + ' requested to join your LIVE as a guest.',
+      data: { type: 'live_guest_request', streamId, requesterId: req.user.id },
+    });
     return res.status(202).json({ requested: true });
   } catch (error) {
     console.error('[live] guest request failed:', error?.message || error);
@@ -425,6 +487,13 @@ router.patch('/:streamId/guest-requests/:userId', async (req, res) => {
       .select('user_id,status').maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Pending guest request not found' });
+    await notifyLiveUsers([userId], {
+      title: status === 'accepted' ? 'You can join as a LIVE guest' : 'LIVE guest request update',
+      body: status === 'accepted'
+        ? 'The creator approved your guest request. You can now join the LIVE as a guest.'
+        : 'The creator declined your request to join the LIVE as a guest.',
+      data: { type: 'live_guest_decision', streamId, creatorId: req.user.id, status },
+    });
     return res.json({ request: data });
   } catch (error) {
     console.error('[live] guest request decision failed:', error?.message || error);
