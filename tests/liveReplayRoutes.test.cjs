@@ -58,7 +58,7 @@ test('Egress webhook verifies raw signed payloads and validates output before ma
 });
 
 test('server worker stops expired recordings and deletes expired private objects', () => {
-  assert.match(worker, /RECOVERY_SCAN_MS = 60 \\* 1000/);
+  assert.match(worker, /RECOVERY_SCAN_MS = 60 \* 1000/);
   assert.match(worker, /MAX_REPLAY_SECONDS \* 1000/);
   assert.match(worker, /stopEgress/);
   assert.match(worker, /scheduleLiveReplayStop/);
