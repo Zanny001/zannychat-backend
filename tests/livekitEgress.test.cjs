@@ -45,7 +45,7 @@ test('LIVE replay Egress only targets managed LiveKit Cloud and uses a roomRecor
   assert.equal(MAX_REPLAY_BYTES, 50 * 1024 * 1024);
 });
 
-test('LIVE replay starts a private 360p MP4 in Supabase S3 with signed Egress webhook', async () => {
+test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
   let request;
   const replayConfig = getLiveReplayConfig(env, liveKitConfig);
   const result = await startRoomCompositeEgress({
@@ -87,7 +87,7 @@ test('LIVE replay webhook verifies issuer, signature and exact raw-body digest',
     exp: 2000,
   })).toString('base64url');
   const unsigned = header + '.' + payload;
-  const signature = createHmac('sha256', liveKitConfig.apiSecret).update(unsigned).digest('base64url');
+  const signature = createHmac('sha256', env.LIVEKIT_EGRESS_API_SECRET).update(unsigned).digest('base64url');
   const egressConfig = { apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET };
   const verified = verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.' + signature, egressConfig, 1000);
   assert.ok(verified);
