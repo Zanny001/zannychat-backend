@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHmac, createHash } = require('node:crypto');
 const {
   getLiveReplayConfig,
+  getLiveKitEgressConfig,
   isLiveReplayEnabled,
   createEgressToken,
   liveKitEgressUrl,
@@ -34,6 +35,7 @@ test('LIVE replay is fail-closed unless free-tier confirmation and private Supab
   assert.equal(getLiveReplayConfig({ ...env, SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY: '' }, liveKitConfig), null);
   assert.equal(getLiveReplayConfig({ ...env, SUPABASE_STORAGE_S3_ENDPOINT: 'https://evil.example/s3' }, liveKitConfig), null);
   assert.ok(getLiveReplayConfig(env, liveKitConfig));
+  assert.ok(getLiveKitEgressConfig({ ...env, SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY: '' }, liveKitConfig));
 });
 
 test('LIVE replay Egress only targets managed LiveKit Cloud and uses a roomRecord grant', () => {
@@ -67,7 +69,8 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
   assert.equal(request.body.file.s3.force_path_style, true);
   assert.equal(request.body.advanced.width, 640);
   assert.equal(request.body.advanced.height, 360);
-  assert.equal(request.body.webhooks[0].url, env.LIVEKIT_REPLAY_WEBHOOK_URL);\n  assert.equal(request.body.webhooks[0].signing_key, env.LIVEKIT_EGRESS_API_KEY);
+  assert.equal(request.body.webhooks[0].url, env.LIVEKIT_REPLAY_WEBHOOK_URL);
+  assert.equal(request.body.webhooks[0].signing_key, env.LIVEKIT_EGRESS_API_KEY);
   assert.match(request.options.headers.Authorization, /^Bearer /);
 });
 
