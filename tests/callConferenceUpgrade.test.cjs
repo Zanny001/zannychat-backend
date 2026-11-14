@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114173000_call_conference_upgrade_and_invites.sql'), 'utf8');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
+const lifecycleMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114180000_call_conference_participant_end_hardening.sql'), 'utf8');
 
 test('direct calls can be atomically promoted to a private SFU conference', () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS source_call_id uuid/);
@@ -68,4 +69,13 @@ test('backend exposes direct-call upgrade, invite, join and end routes with Live
   assert.match(route, /rpc\('invite_group_call_participants'/);
   assert.match(route, /rpc\('end_direct_call_room'/);
   assert.match(route, /cleanupEndedGroupCallMedia/);
+});
+
+test('promoted direct conferences preserve join duration and let either connected participant end', () => {
+  assert.match(lifecycleMigration, /joined_at = COALESCE\(public\.group_call_participants\.joined_at, EXCLUDED\.joined_at\)/);
+  assert.match(lifecycleMigration, /p\.user_id = p_user_id/);
+  assert.match(lifecycleMigration, /p\.status = 'joined'/);
+  assert.match(lifecycleMigration, /only a connected participant can end this conference/);
+  assert.doesNotMatch(lifecycleMigration, /p_user_id <> v_room\.host_user_id/);
+  assert.match(route, /Only a connected participant can end this conference/);
 });
