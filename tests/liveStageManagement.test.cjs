@@ -9,6 +9,7 @@ const {
   removeRoomParticipant,
   muteRoomParticipantTrack,
   updateRoomParticipantAttributes,
+  updateRoomParticipantPermissions,
 } = require('../src/services/livekitRoomAdmin');
 const route = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
@@ -83,6 +84,27 @@ test('spotlight changes are creator-only, stage-guest-only and clear any previou
   assert.ok(route.includes("participant.attributes?.zannychat_spotlight === 'true'"));
   assert.ok(route.includes("zannychat_spotlight: spotlighted ? 'true' : ''"));
   assert.ok(route.includes('spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false'));
+});
+
+test('guest removal demotes the guest to a subscribed viewer without removing the room participant', async () => {
+  let captured;
+  const fetchImpl = async (url, options) => {
+    captured = { url, body: JSON.parse(options.body) };
+    return { ok: true, json: async () => ({ identity: 'guest-3' }) };
+  };
+  await updateRoomParticipantPermissions('room-5', 'guest-3', {
+    canPublish: false, canSubscribe: true, canPublishData: true,
+  }, config, fetchImpl);
+  assert.ok(captured.url.endsWith('/UpdateParticipant'));
+  assert.deepEqual(captured.body.permission, { canPublish: false, canSubscribe: true, canPublishData: true });
+});
+
+test('creator guest removal preserves audience membership when LiveKit demotion succeeds', () => {
+  assert.ok(route.includes('updateRoomParticipantPermissions(stream.room_name, userId'));
+  assert.ok(route.includes("update({ role: 'viewer', status: 'joined', left_at: null })"));
+  assert.ok(route.includes('returnedToAudience'));
+  assert.ok(route.includes('canSubscribe: true'));
+  assert.ok(!route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
 
 test('only the creator can directly invite, mute, or remove guests and guest publishers are capped', () => {
