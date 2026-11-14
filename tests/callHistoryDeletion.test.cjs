@@ -1,0 +1,20 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const route = fs.readFileSync(new URL('../src/routes/callHistory.js', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../supabase/migrations/20261115090000_call_history_user_hiding.sql', import.meta.url), 'utf8');
+
+test('call history deletion verifies participant ownership for direct and group calls', () => {
+  assert.match(route, /router\.delete\('\/:kind\/:callId'/);
+  assert.match(route, /call_sessions/);
+  assert.match(route, /group_call_participants/);
+  assert.match(route, /req\.user\.id/);
+});
+
+test('call history deletion is private to one user and does not delete the call itself', () => {
+  assert.match(route, /call_history_hidden/);
+  assert.doesNotMatch(route, /from\('call_sessions'\)\.delete/);
+  assert.match(migration, /PRIMARY KEY \(user_id, call_id, call_kind\)/);
+  assert.match(migration, /REVOKE ALL ON public\.call_history_hidden FROM PUBLIC, anon, authenticated/);
+});
