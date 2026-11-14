@@ -597,13 +597,13 @@ router.get('/invite-candidates', async (req, res) => {
 
 router.get('/invitations', async (req, res) => {
   try {
-    const { data: inviteRows, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
+    const { data: rawInvites, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
       .select('stream_id,invited_by,created_at,invitation_type,status').eq('user_id', req.user.id)
       .in('invitation_type', ['viewer','guest']).in('status', ['pending','accepted'])
       .order('created_at', { ascending: false }).limit(100);
     if (inviteError) throw inviteError;
     const preferredInvites = new Map();
-    for (const invite of (inviteRows || []).filter((row) =>
+    for (const invite of (rawInvites || []).filter((row) =>
       (row.invitation_type === 'viewer' && row.status === 'pending')
       || (row.invitation_type === 'guest' && row.status === 'accepted'))) {
       const current = preferredInvites.get(invite.stream_id);
