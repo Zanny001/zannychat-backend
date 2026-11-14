@@ -24,7 +24,12 @@ async function stopExpiredLiveReplays(now = Date.now()) {
   for (const replay of data || []) {
     if (!replay.egress_id) {
       await supabaseAdmin.from('live_stream_replays')
-        .update({ status: 'failed', error_code: 'EGRESS_START_TIMEOUT', completed_at: new Date(now).toISOString() })
+        .update({
+          status: 'failed',
+          error_code: 'EGRESS_START_TIMEOUT',
+          completed_at: new Date(now).toISOString(),
+          expires_at: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
         .eq('id', replay.id)
         .in('status', ['starting', 'recording']);
       await supabaseAdmin.rpc('finalize_live_replay_quota', {
@@ -52,8 +57,8 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
   const cutoff = new Date(now).toISOString();
   const { data, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, file_path')
-    .in('status', ['ready', 'failed'])
+    .select('id, file_path, status')
+    .in('status', ['ready', 'failed', 'processing'])
     .not('expires_at', 'is', null)
     .lte('expires_at', cutoff)
     .limit(50);
@@ -63,6 +68,13 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
   if (paths.length) {
     const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove(paths);
     if (removeError) throw removeError;
+  }
+  for (const row of rows.filter((item) => item.status === 'processing')) {
+    await supabaseAdmin.rpc('finalize_live_replay_quota', {
+      p_replay_id: row.id,
+      p_actual_seconds: MAX_REPLAY_SECONDS,
+      p_success: true,
+    });
   }
   if (rows.length) {
     const { error: deleteError } = await supabaseAdmin
