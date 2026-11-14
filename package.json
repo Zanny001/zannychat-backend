@@ -61,7 +61,7 @@
     "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs",
     "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs",
     "test:observability": "node --test tests/requestObservability.test.cjs",
-    "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs"
+    "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs tests/livekitEgress.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
