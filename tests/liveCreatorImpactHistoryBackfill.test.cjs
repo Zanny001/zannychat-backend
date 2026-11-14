@@ -20,9 +20,9 @@ test('historical creator impact counts every reaction but awards at most one poi
 });
 
 test('historical backfill increments any existing live ledger rather than overwriting it', () => {
-  assert.ok(migration.includes('ON CONFLICT (creator_id) DO UPDATE SET'));
-  assert.ok(migration.includes('public.live_creator_impact.impact_score + EXCLUDED.impact_score'));
-  assert.ok(migration.includes('public.live_creator_impact.total_reactions + EXCLUDED.total_reactions'));
+  assert.ok(migration.includes('INSERT INTO public.live_creator_impact AS current_impact'));
+  assert.ok(migration.includes('current_impact.impact_score + EXCLUDED.impact_score'));
+  assert.ok(migration.includes('current_impact.total_reactions + EXCLUDED.total_reactions'));
 });
 
 test('the primary LIVE test command includes creator-impact behavior and history backfill tests', () => {
