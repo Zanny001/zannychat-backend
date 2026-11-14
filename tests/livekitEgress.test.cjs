@@ -21,6 +21,8 @@ const env = {
   SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY: 'secret',
   SUPABASE_STORAGE_S3_REGION: 'eu-central-1',
   LIVEKIT_REPLAY_WEBHOOK_URL: 'https://api.example.com/webhooks/livekit/egress',
+  LIVEKIT_EGRESS_API_KEY: 'egress-key',
+  LIVEKIT_EGRESS_API_SECRET: 'egress-secret',
 };
 
 test('LIVE replay is fail-closed unless free-tier confirmation and private Supabase S3 credentials exist', () => {
@@ -32,7 +34,8 @@ test('LIVE replay is fail-closed unless free-tier confirmation and private Supab
 });
 
 test('LIVE replay Egress only targets managed LiveKit Cloud and uses a roomRecord grant', () => {
-  const token = createEgressToken(liveKitConfig, 1000);
+  const egressConfig = { apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET };
+  const token = createEgressToken(egressConfig, 1000);
   const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(payload.video.roomRecord, true);
   assert.equal(payload.exp - payload.nbf, 65);
@@ -48,7 +51,6 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3 with signed Egress we
   const result = await startRoomCompositeEgress({
     roomName: 'zlive_01234567890123456789012345678901',
     filePath: 'creator/stream/replay.mp4',
-    webhookUrl: env.LIVEKIT_REPLAY_WEBHOOK_URL,
     replayConfig,
     fetchImpl: async (url, options) => {
       request = { url, options, body: JSON.parse(options.body) };
@@ -62,7 +64,7 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3 with signed Egress we
   assert.equal(request.body.file_outputs[0].s3.force_path_style, true);
   assert.equal(request.body.advanced.width, 640);
   assert.equal(request.body.advanced.height, 360);
-  assert.equal(request.body.webhooks[0].signing_key, 'test-key');
+  assert.equal(request.body.webhooks, undefined);
   assert.match(request.options.headers.Authorization, /^Bearer /);
 });
 
@@ -80,14 +82,15 @@ test('LIVE replay webhook verifies issuer, signature and exact raw-body digest',
   const raw = Buffer.from(JSON.stringify({ event: 'egress_ended' }));
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({
-    iss: liveKitConfig.apiKey,
-    sha256: createHash('sha256').update(raw).digest('hex'),
+    iss: env.LIVEKIT_EGRESS_API_KEY,
+    sha256: createHash('sha256').update(raw).digest('base64'),
     exp: 2000,
   })).toString('base64url');
   const unsigned = header + '.' + payload;
   const signature = createHmac('sha256', liveKitConfig.apiSecret).update(unsigned).digest('base64url');
-  const verified = verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.' + signature, liveKitConfig, 1000);
+  const egressConfig = { apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET };
+  const verified = verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.' + signature, egressConfig, 1000);
   assert.ok(verified);
-  assert.equal(verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.bad', liveKitConfig, 1000), null);
-  assert.equal(verifyLiveKitWebhook(Buffer.from('tampered'), 'Bearer ' + unsigned + '.' + signature, liveKitConfig, 1000), null);
+  assert.equal(verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.bad', egressConfig, 1000), null);
+  assert.equal(verifyLiveKitWebhook(Buffer.from('tampered'), 'Bearer ' + unsigned + '.' + signature, egressConfig, 1000), null);
 });
