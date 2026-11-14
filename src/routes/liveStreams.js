@@ -159,17 +159,7 @@ async function stopActiveLiveReplayForStream(streamId) {
     egressId = found?.egress_id || found?.egressId || null;
   }
   if (!egressId) {
-    await supabaseAdmin.from('live_stream_replays')
-      .update({
-        status: 'failed',
-        error_code: 'EGRESS_NOT_FOUND',
-        completed_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .eq('id', replay.id);
-    await supabaseAdmin.rpc('finalize_live_replay_quota', {
-      p_replay_id: replay.id, p_actual_seconds: 0, p_success: false,
-    });
+    // Give the signed completion webhook time to reconcile a just-finished Egress.
     return;
   }
   await supabaseAdmin.from('live_stream_replays')
