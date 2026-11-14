@@ -1,0 +1,91 @@
+const supabaseAdmin = require('../config/supabaseAdmin');
+const { getLiveReplayConfig, stopEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+
+const STOP_SCAN_MS = 15000;
+const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
+const EXPIRY_MS = MAX_REPLAY_SECONDS * 1000;
+const RETENTION_DAYS = 7;
+let started = false;
+
+async function stopExpiredLiveReplays(now = Date.now()) {
+  const replayConfig = getLiveReplayConfig();
+  if (!replayConfig) return { scanned: 0, stopped: 0 };
+  const cutoff = new Date(now - EXPIRY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('live_stream_replays')
+    .select('id, egress_id, status, started_at')
+    .in('status', ['starting', 'recording'])
+    .lte('started_at', cutoff)
+    .order('started_at', { ascending: true })
+    .limit(25);
+  if (error) throw error;
+
+  let stopped = 0;
+  for (const replay of data || []) {
+    if (!replay.egress_id) {
+      await supabaseAdmin.from('live_stream_replays')
+        .update({ status: 'failed', error_code: 'EGRESS_START_TIMEOUT', completed_at: new Date(now).toISOString() })
+        .eq('id', replay.id)
+        .in('status', ['starting', 'recording']);
+      await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replay.id,
+        p_actual_seconds: 0,
+        p_success: false,
+      });
+      continue;
+    }
+    try {
+      await stopEgress(replay.egress_id, replayConfig.egressConfig);
+      await supabaseAdmin.from('live_stream_replays')
+        .update({ status: 'processing' })
+        .eq('id', replay.id)
+        .in('status', ['starting', 'recording']);
+      stopped += 1;
+    } catch (error) {
+      console.error('[live-replay] expiry stop failed', { replayId: replay.id, message: error.message });
+    }
+  }
+  return { scanned: (data || []).length, stopped };
+}
+
+async function cleanupExpiredLiveReplays(now = Date.now()) {
+  const cutoff = new Date(now).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('live_stream_replays')
+    .select('id, file_path')
+    .in('status', ['ready', 'failed'])
+    .not('expires_at', 'is', null)
+    .lte('expires_at', cutoff)
+    .limit(50);
+  if (error) throw error;
+  const rows = data || [];
+  const paths = rows.map((row) => row.file_path).filter(Boolean);
+  if (paths.length) {
+    const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove(paths);
+    if (removeError) throw removeError;
+  }
+  if (rows.length) {
+    const { error: deleteError } = await supabaseAdmin
+      .from('live_stream_replays')
+      .delete()
+      .in('id', rows.map((row) => row.id));
+    if (deleteError) throw deleteError;
+  }
+  return { deleted: rows.length };
+}
+
+function startLiveReplayWorker() {
+  if (started) return;
+  started = true;
+  const safeRun = (label, fn) => fn().catch((error) => {
+    console.error('[live-replay] ' + label + ' failed', { message: error.message });
+  });
+  safeRun('startup expiry recovery', () => stopExpiredLiveReplays());
+  safeRun('startup retention cleanup', () => cleanupExpiredLiveReplays());
+  const stopTimer = setInterval(() => safeRun('expiry scan', () => stopExpiredLiveReplays()), STOP_SCAN_MS);
+  const cleanupTimer = setInterval(() => safeRun('retention cleanup', () => cleanupExpiredLiveReplays()), CLEANUP_SCAN_MS);
+  stopTimer.unref?.();
+  cleanupTimer.unref?.();
+}
+
+module.exports = { stopExpiredLiveReplays, cleanupExpiredLiveReplays, startLiveReplayWorker };
