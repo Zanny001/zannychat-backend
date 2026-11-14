@@ -121,7 +121,7 @@ test('appointed LIVE moderators can hide comments but cannot end the stream', ()
 test('only the LIVE creator can list joined viewers and manage stream moderators', () => {
   assert.ok(route.includes("router.get('/:streamId/participants'"));
   assert.ok(route.includes("stream.creator_id !== req.user.id"));
-  assert.ok(route.includes("eq('role', 'viewer').eq('status', 'joined')"));
+  assert.ok(route.includes("in('role', ['viewer','guest']).eq('status', 'joined')"));
   assert.ok(route.includes("router.post('/:streamId/moderators'"));
   assert.ok(route.includes("router.delete('/:streamId/moderators/:userId'"));
 });
