@@ -149,7 +149,12 @@ async function stopActiveLiveReplayForStream(streamId) {
   const egressConfig = getLiveKitEgressConfig();
   if (!replay.egress_id || !egressConfig) {
     await supabaseAdmin.from('live_stream_replays')
-      .update({ status: 'failed', error_code: 'EGRESS_STOP_UNAVAILABLE', completed_at: new Date().toISOString() })
+      .update({
+        status: 'failed',
+        error_code: 'EGRESS_STOP_UNAVAILABLE',
+        completed_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
       .eq('id', replay.id);
     await supabaseAdmin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id, p_actual_seconds: 0, p_success: false,
