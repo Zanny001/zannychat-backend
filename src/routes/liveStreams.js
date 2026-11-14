@@ -218,7 +218,7 @@ router.post('/:streamId/replays/start', async (req, res) => {
     const { data: storageBytes, error: storageError } = await supabaseAdmin.rpc('get_live_replay_storage_bytes');
     if (storageError) throw storageError;
     const currentStorageBytes = Number(storageBytes || 0);
-    const storageCapBytes = 700 * 1024 * 1024;
+    const storageCapBytes = 700_000_000;
     if (!Number.isFinite(currentStorageBytes) || currentStorageBytes + MAX_REPLAY_BYTES > storageCapBytes) {
       return res.status(507).json({ error: 'Replay storage is at its safe free-tier limit' });
     }
