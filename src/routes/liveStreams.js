@@ -278,6 +278,22 @@ router.post('/:streamId/replays/start', async (req, res) => {
         replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
       });
     } catch (error) {
+      const definitiveFailure = /HTTP (400|401|403|404|409|422|429)\\b/.test(String(error.message || ''));
+      if (!egressId && definitiveFailure) {
+        await supabaseAdmin.from('live_stream_replays')
+          .update({
+            status: 'failed',
+            error_code: 'EGRESS_START_FAILED',
+            completed_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          })
+          .eq('id', replayId);
+        const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+          p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
+        });
+        if (quotaError) console.error('[live-replay] failed-start quota release deferred', { replayId, message: quotaError.message });
+        return res.status(502).json({ error: 'Could not start the replay recording' });
+      }
       if (!egressId) {
         try {
           const listed = await listEgress(stream.room_name, replayConfig.egressConfig);
