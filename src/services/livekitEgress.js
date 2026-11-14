@@ -5,7 +5,6 @@ const MAX_REPLAY_SECONDS = 300;
 const MAX_REPLAY_BYTES = 50 * 1024 * 1024;
 
 function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
-  if (env.LIVEKIT_REPLAY_ENABLED !== 'true' || env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED !== 'true') return null;
   if (!liveKitConfig) return null;
   let liveKitUrl;
   let storageEndpoint;
@@ -45,6 +44,10 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
     },
     webhookUrl,
   };
+}
+
+function isLiveReplayEnabled(env = process.env) {
+  return env.LIVEKIT_REPLAY_ENABLED === 'true' && env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED === 'true' && Boolean(getLiveReplayConfig(env));
 }
 
 function encode(value) {
@@ -160,6 +163,7 @@ module.exports = {
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
   getLiveReplayConfig,
+  isLiveReplayEnabled,
   createEgressToken,
   liveKitEgressUrl,
   requestLiveKitEgress,
