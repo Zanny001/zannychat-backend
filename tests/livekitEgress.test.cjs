@@ -12,6 +12,7 @@ const {
   listEgress,
   verifyLiveKitWebhook,
   MAX_REPLAY_SECONDS,
+  MAX_REPLAY_OUTPUT_SECONDS,
   MAX_REPLAY_BYTES,
 } = require('../src/services/livekitEgress');
 
@@ -48,7 +49,8 @@ test('LIVE replay Egress only targets managed LiveKit Cloud and uses a roomRecor
   assert.equal(liveKitEgressUrl(liveKitConfig.url, 'StartRoomCompositeEgress'), 'https://zannychat-test.livekit.cloud/twirp/livekit.Egress/StartRoomCompositeEgress');
   assert.throws(() => liveKitEgressUrl('wss://self-hosted.example', 'StartRoomCompositeEgress'), /managed LiveKit Cloud/);
   assert.equal(MAX_REPLAY_SECONDS, 300);
-  assert.equal(MAX_REPLAY_BYTES, 50 * 1024 * 1024);
+  assert.equal(MAX_REPLAY_BYTES, 48_000_000);
+  assert.equal(MAX_REPLAY_OUTPUT_SECONDS, 305);
 });
 
 test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
