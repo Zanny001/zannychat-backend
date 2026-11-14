@@ -540,7 +540,15 @@ router.get('/:streamId/comments', async (req, res) => {
       const { user_id: _userId, ...comment } = row;
       return { ...comment, user_name: names.get(_userId) || 'ZannyChat user' };
     });
-    return res.json({ comments });
+    const reactionSince = new Date(Date.now() - 12 * 1000).toISOString();
+    const { data: recentReactions, error: reactionError } = await supabaseAdmin.from('live_stream_reactions')
+      .select('id,reaction,created_at')
+      .eq('stream_id', streamId)
+      .gt('created_at', reactionSince)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (reactionError) throw reactionError;
+    return res.json({ comments, reactions: recentReactions || [] });
   } catch (error) {
     console.error('[live] comments fetch failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE comments' });
@@ -593,7 +601,7 @@ router.post('/:streamId/comments/:commentId/hide', async (req, res) => {
   }
 });
 
-router.post('/:streamId/react', async (req, res) => {
+router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error: 'Please slow down before sending another LIVE reaction.' }), async (req, res) => {
   const streamId = req.params.streamId;
   const reaction = req.body?.reaction;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
