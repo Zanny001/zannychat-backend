@@ -337,6 +337,7 @@ router.get('/replays', async (req, res) => {
     const byId = new Map([...(readyRows || []), ...(ownerRows || [])].map((row) => [row.id, row]));
     const visible = [];
     for (const replay of byId.values()) {
+      if (replay.status === 'ready' && (!replay.expires_at || new Date(replay.expires_at).getTime() <= Date.now())) continue;
       if (replay.stream && await canViewLiveReplay(replay.stream, req.user.id)) {
         visible.push({
           id: replay.id,
@@ -376,7 +377,8 @@ router.get('/:streamId/replays', async (req, res) => {
       : query.eq('status', 'ready').gt('expires_at', new Date().toISOString());
     const { data, error } = await query;
     if (error) throw error;
-    return res.json({ replays: data || [] });
+    const visible = (data || []).filter((item) => item.status !== 'ready' || (item.expires_at && new Date(item.expires_at).getTime() > Date.now()));
+    return res.json({ replays: visible });
   } catch (error) {
     console.error('[live-replay] list failed', { streamId, message: error.message });
     return res.status(500).json({ error: 'Could not load replays' });
