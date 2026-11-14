@@ -34,7 +34,7 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
   if (!accessKey || !secret || !region || !egressApiKey || !egressApiSecret) return null;
   return {
     liveKitConfig: { url: liveKitConfig.url },
-    egressConfig: { apiKey: egressApiKey, apiSecret: egressApiSecret },
+    egressConfig: { url: liveKitConfig.url, apiKey: egressApiKey, apiSecret: egressApiSecret },
     storage: {
       endpoint: storageEndpoint.toString().replace(/\/$/, ''),
       accessKey,
@@ -99,7 +99,7 @@ async function requestLiveKitEgress(method, body, config, fetchImpl = globalThis
 
 async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetchImpl }) {
   if (!roomName || !filePath || !replayConfig?.storage) throw new Error('LIVE replay output is not configured');
-  const config = replayConfig.liveKitConfig;
+  const config = replayConfig.egressConfig;
   return requestLiveKitEgress('StartRoomCompositeEgress', {
     room_name: roomName,
     layout: 'grid',
@@ -123,7 +123,6 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
       audio_bitrate: 64,
       audio_frequency: 44100,
     },
-    webhooks: webhookUrl ? [{ url: webhookUrl, signing_key: config.apiKey }] : [],
   }, config, fetchImpl);
 }
 
