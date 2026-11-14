@@ -63,6 +63,13 @@ async function stopExpiredLiveReplays(now = Date.now()) {
         .in('status', ['starting', 'recording']);
       stopped += 1;
     } catch (error) {
+      if (error.message.includes('HTTP 404')) {
+        await supabaseAdmin.from('live_stream_replays')
+          .update({ status: 'processing' })
+          .eq('id', replay.id)
+          .in('status', ['starting', 'recording']);
+        continue;
+      }
       console.error('[live-replay] expiry stop failed', { replayId: replay.id, message: error.message });
     }
   }
