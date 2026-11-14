@@ -512,8 +512,8 @@ router.get('/creators/me/profile', async (req, res) => {
       supabaseAdmin.from('profiles').select('id,name,avatar_color').eq('id', creatorId).maybeSingle(),
       supabaseAdmin.from('live_creator_impact').select('impact_score,total_reactions,unique_supporters,updated_at').eq('creator_id', creatorId).maybeSingle(),
       supabaseAdmin.from('live_creator_follows').select('follower_id', { count: 'exact', head: true }).eq('creator_id', creatorId),
-      supabaseAdmin.from('live_streams').select('id,status,started_at,title').eq('creator_id', creatorId).order('started_at', { ascending: false }).limit(100),
-      supabaseAdmin.from('live_stream_replays').select('id,status,duration_seconds,file_size_bytes,completed_at,stream_id').eq('creator_id', creatorId).order('created_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('live_streams').select('id,status,started_at,title', { count: 'exact' }).eq('creator_id', creatorId).order('started_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('live_stream_replays').select('id,status,duration_seconds,file_size_bytes,completed_at,stream_id', { count: 'exact' }).eq('creator_id', creatorId).order('created_at', { ascending: false }).limit(100),
     ]);
     for (const result of [profileResult, impactResult, followerResult, streamResult, replayResult]) {
       if (result.error) throw result.error;
@@ -525,12 +525,12 @@ router.get('/creators/me/profile', async (req, res) => {
       impact: impactResult.data || { impact_score: 0, total_reactions: 0, unique_supporters: 0 },
       followers: followerResult.count || 0,
       streams: {
-        total: streams.length,
+        total: streamResult.count ?? streams.length,
         liveNow: streams.filter((row) => row.status === 'live').length,
         recent: streams.slice(0, 8).map(({ id, title, status, started_at }) => ({ id, title, status, started_at })),
       },
       replays: {
-        total: replays.length,
+        total: replayResult.count ?? replays.length,
         ready: replays.filter((row) => row.status === 'ready').length,
         processing: replays.filter((row) => ['starting', 'recording', 'processing'].includes(row.status)).length,
         recent: replays.slice(0, 8).map(({ id, status, duration_seconds, completed_at, stream_id }) => ({ id, status, duration_seconds, completed_at, stream_id })),
