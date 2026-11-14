@@ -46,8 +46,10 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
   };
 }
 
-function isLiveReplayEnabled(env = process.env) {
-  return env.LIVEKIT_REPLAY_ENABLED === 'true' && env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED === 'true' && Boolean(getLiveReplayConfig(env));
+function isLiveReplayEnabled(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
+  return env.LIVEKIT_REPLAY_ENABLED === 'true' &&
+    env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED === 'true' &&
+    Boolean(getLiveReplayConfig(env, liveKitConfig));
 }
 
 function encode(value) {
