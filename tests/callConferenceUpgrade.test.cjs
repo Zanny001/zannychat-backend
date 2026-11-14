@@ -64,7 +64,7 @@ test('direct conference end is restricted to its host and tears down participant
 
 test('backend exposes direct-call upgrade, invite, join and end routes with LiveKit tokens and push delivery', () => {
   assert.match(route, /router\.post\('\/upgrade\/:callId'/);
-  assert.match(route, /rpc\('promote_direct_call_to_group_room'/);
+  assert.match(route, /rpc\('promote_direct_call_to_group_room_with_media'/);
   assert.match(route, /data: \{ type: 'group_call_invite', groupCallId: roomId/);
   assert.match(route, /rpc\('join_direct_call_room'/);
   assert.match(route, /router\.post\('\/:roomId\/invite'/);
