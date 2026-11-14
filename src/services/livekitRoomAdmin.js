@@ -156,6 +156,17 @@ async function updateRoomParticipantAttributes(roomName, identity, attributes, c
   }, config, fetchImpl);
 }
 
+async function updateRoomParticipantPermissions(roomName, identity, permission, config = getRoomAdminConfig(), fetchImpl) {
+  if (!identity || !permission || typeof permission !== 'object' || Array.isArray(permission)) {
+    throw new Error('A valid participant identity and permission object are required');
+  }
+  return requestRoomService('UpdateParticipant', {
+    room: roomName,
+    identity,
+    permission,
+  }, config, fetchImpl);
+}
+
 module.exports = {
   createRoomDeletionToken,
   liveKitHttpUrl,
@@ -167,4 +178,5 @@ module.exports = {
   removeRoomParticipant,
   muteRoomParticipantTrack,
   updateRoomParticipantAttributes,
+  updateRoomParticipantPermissions,
 };

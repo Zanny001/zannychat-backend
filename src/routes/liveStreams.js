@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
-const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes } = require('../services/livekitRoomAdmin');
+const { listRoomParticipants, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -1198,25 +1198,39 @@ router.delete('/:streamId/guests/:userId', async (req, res) => {
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can remove a LIVE guest' });
     const participant = await requireJoined(streamId, userId);
     if (!participant || participant.role !== 'guest') return res.status(404).json({ error: 'LIVE stage guest not found' });
+    let returnedToAudience = true;
     try {
-      await removeRoomParticipant(stream.room_name, userId);
+      // Remove publishing permission, not room membership: LiveKit unpublishes the guest tracks and
+      // keeps the participant connected as a viewer with subscribe permission.
+      await updateRoomParticipantPermissions(stream.room_name, userId, {
+        canPublish: false,
+        canSubscribe: true,
+        canPublishData: true,
+      });
+      const { error: demoteError } = await supabaseAdmin.from('live_stream_participants')
+        .update({ role: 'viewer', status: 'joined', left_at: null })
+        .eq('stream_id', streamId).eq('user_id', userId).eq('role', 'guest');
+      if (demoteError) throw demoteError;
     } catch (mediaError) {
-      // LiveKit revokes the participant token even when it reports that the participant has already left.
       if (mediaError.status !== 404) throw mediaError;
+      returnedToAudience = false;
+      const { error: leaveError } = await supabaseAdmin.rpc('leave_live_stream', {
+        p_stream_id: streamId, p_user_id: userId,
+      });
+      if (leaveError) throw leaveError;
     }
-    const { error: leaveError } = await supabaseAdmin.rpc('leave_live_stream', {
-      p_stream_id: streamId, p_user_id: userId,
-    });
-    if (leaveError) throw leaveError;
-    await supabaseAdmin.from('live_stream_invites')
+    const { error: revokeInviteError } = await supabaseAdmin.from('live_stream_invites')
       .update({ status: 'revoked', updated_at: new Date().toISOString() })
       .eq('stream_id', streamId).eq('user_id', userId).eq('invitation_type', 'guest');
+    if (revokeInviteError) throw revokeInviteError;
     await notifyLiveUsers([userId], {
-      title: 'You left the LIVE stage',
-      body: 'The creator removed you from the stage. You can continue watching the LIVE.',
-      data: { type: 'live_guest_removed', streamId },
+      title: 'You were moved off the LIVE stage',
+      body: returnedToAudience
+        ? 'The creator moved you to the audience. You can keep watching the LIVE.'
+        : 'The creator removed you from the LIVE stage after your connection had already ended.',
+      data: { type: 'live_guest_removed', streamId, returnedToAudience },
     });
-    return res.json({ removed: true, userId });
+    return res.json({ removed: true, userId, returnedToAudience });
   } catch (error) {
     console.error('[live] guest removal failed:', error?.message || error);
     return res.status(502).json({ error: 'Could not remove the guest from the LIVE stage' });
