@@ -96,8 +96,7 @@ async function requestLiveKitEgress(method, body, config, fetchImpl = globalThis
     signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error('LiveKit Egress request failed with HTTP ' + response.status + (detail ? ': ' + detail.slice(0, 180) : ''));
+    throw new Error('LiveKit Egress request failed with HTTP ' + response.status);
   }
   return response.json();
 }
@@ -144,6 +143,9 @@ function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.
   const token = String(authorization || '').replace(/^Bearer\s+/i, '').trim();
   const parts = token.split('.');
   if (parts.length !== 3 || !config?.apiKey || !config?.apiSecret || !Buffer.isBuffer(rawBody)) return null;
+  let header;
+  try { header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); } catch { return null; }
+  if (header.alg !== 'HS256') return null;
   const unsigned = parts[0] + '.' + parts[1];
   const expected = createHmac('sha256', config.apiSecret).update(unsigned).digest();
   let provided;
