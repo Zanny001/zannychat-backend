@@ -1,6 +1,7 @@
 const express = require('express');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
 const router = express.Router();
 const rawBody = express.raw({ type: ['application/webhook+json', 'application/json'], limit: '1mb' });
@@ -50,6 +51,7 @@ async function finalizeReplay(event) {
     }
   }
   if (!replay) return { ignored: true };
+  clearLiveReplayStop(replay.id);
   if (replay.status === 'ready') {
     const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id,
