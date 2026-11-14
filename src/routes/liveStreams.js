@@ -505,6 +505,43 @@ router.delete('/replays/:replayId', async (req, res) => {
   }
 });
 
+router.get('/creators/me/profile', async (req, res) => {
+  const creatorId = req.user.id;
+  try {
+    const [profileResult, impactResult, followerResult, streamResult, replayResult] = await Promise.all([
+      supabaseAdmin.from('profiles').select('id,name,avatar_color').eq('id', creatorId).maybeSingle(),
+      supabaseAdmin.from('live_creator_impact').select('impact_score,total_reactions,unique_supporters,updated_at').eq('creator_id', creatorId).maybeSingle(),
+      supabaseAdmin.from('live_creator_follows').select('follower_id', { count: 'exact', head: true }).eq('creator_id', creatorId),
+      supabaseAdmin.from('live_streams').select('id,status,started_at,title').eq('creator_id', creatorId).order('started_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('live_stream_replays').select('id,status,duration_seconds,file_size_bytes,completed_at,stream_id').eq('creator_id', creatorId).order('created_at', { ascending: false }).limit(100),
+    ]);
+    for (const result of [profileResult, impactResult, followerResult, streamResult, replayResult]) {
+      if (result.error) throw result.error;
+    }
+    const streams = streamResult.data || [];
+    const replays = replayResult.data || [];
+    return res.json({
+      profile: profileResult.data || { id: creatorId, name: req.user.user_metadata?.name || 'LIVE Creator', avatar_color: null },
+      impact: impactResult.data || { impact_score: 0, total_reactions: 0, unique_supporters: 0 },
+      followers: followerResult.count || 0,
+      streams: {
+        total: streams.length,
+        liveNow: streams.filter((row) => row.status === 'live').length,
+        recent: streams.slice(0, 8).map(({ id, title, status, started_at }) => ({ id, title, status, started_at })),
+      },
+      replays: {
+        total: replays.length,
+        ready: replays.filter((row) => row.status === 'ready').length,
+        processing: replays.filter((row) => ['starting', 'recording', 'processing'].includes(row.status)).length,
+        recent: replays.slice(0, 8).map(({ id, status, duration_seconds, completed_at, stream_id }) => ({ id, status, duration_seconds, completed_at, stream_id })),
+      },
+    });
+  } catch (error) {
+    console.error('[live] creator profile summary failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load your LIVE creator profile' });
+  }
+});
+
 router.post('/creators/:creatorId/follow', async (req, res) => {
   const creatorId = req.params.creatorId;
   if (!validId(creatorId) || creatorId === req.user.id) return res.status(400).json({ error: 'Invalid LIVE creator' });
