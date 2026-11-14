@@ -45,6 +45,10 @@ test('creator can delete only completed replay files and stream end stops active
   assert.match(liveRoutes, /Only the creator can delete this replay/);
   assert.match(liveRoutes, /\['starting', 'recording', 'processing'\]/);
   assert.match(liveRoutes, /stopActiveLiveReplayForStream\(streamId\)/);
+  const stopHelper = liveRoutes.indexOf('async function stopActiveLiveReplayForStream');
+  const configGuard = liveRoutes.indexOf('if (!egressConfig) return;', stopHelper);
+  const replayLookup = liveRoutes.indexOf("from('live_stream_replays')", stopHelper);
+  assert.ok(configGuard > stopHelper && replayLookup > configGuard, 'stream end must not query replay tables before Egress is configured');
 });
 
 test('Egress webhook verifies raw signed payloads and validates output before marking ready', () => {
