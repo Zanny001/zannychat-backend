@@ -36,18 +36,13 @@ async function stopExpiredLiveReplays(now = Date.now()) {
         if (now - startedAt >= 15 * 60 * 1000) {
           await supabaseAdmin.from('live_stream_replays')
             .update({
-              status: 'failed',
-              error_code: 'EGRESS_START_TIMEOUT',
+              status: 'processing',
+              error_code: 'EGRESS_RECOVERY_PENDING',
               completed_at: new Date(now).toISOString(),
               expires_at: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
             })
             .eq('id', replay.id)
             .in('status', ['starting', 'recording']);
-          await supabaseAdmin.rpc('finalize_live_replay_quota', {
-            p_replay_id: replay.id,
-            p_actual_seconds: 0,
-            p_success: false,
-          });
         }
         continue;
       }
