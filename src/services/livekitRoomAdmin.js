@@ -167,6 +167,18 @@ async function updateRoomParticipantPermissions(roomName, identity, permission, 
   }, config, fetchImpl);
 }
 
+async function validateRoomAdminCredentials(config = getRoomAdminConfig(), fetchImpl) {
+  if (!config) throw new Error('LiveKit room administration is not configured');
+  try {
+    await listRoomParticipants('zannychat-room-admin-credential-probe', config, fetchImpl);
+    return true;
+  } catch (error) {
+    // A missing probe room proves the API accepted the signed room-scoped request; auth failures remain errors.
+    if (error.status === 404) return true;
+    throw error;
+  }
+}
+
 module.exports = {
   createRoomDeletionToken,
   liveKitHttpUrl,
@@ -179,4 +191,5 @@ module.exports = {
   muteRoomParticipantTrack,
   updateRoomParticipantAttributes,
   updateRoomParticipantPermissions,
+  validateRoomAdminCredentials,
 };

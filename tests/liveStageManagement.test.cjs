@@ -10,6 +10,7 @@ const {
   muteRoomParticipantTrack,
   updateRoomParticipantAttributes,
   updateRoomParticipantPermissions,
+  validateRoomAdminCredentials,
 } = require('../src/services/livekitRoomAdmin');
 const route = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
@@ -84,6 +85,23 @@ test('spotlight changes are creator-only, stage-guest-only and clear any previou
   assert.ok(route.includes("participant.attributes?.zannychat_spotlight === 'true'"));
   assert.ok(route.includes("zannychat_spotlight: spotlighted ? 'true' : ''"));
   assert.ok(route.includes('spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false'));
+});
+
+test('room-admin credential validation uses a read-only participant lookup and treats a missing probe room as authenticated', async () => {
+  let requestedUrl = '';
+  const authenticated = await validateRoomAdminCredentials(config, async (url) => {
+    requestedUrl = url;
+    return { ok: false, status: 404 };
+  });
+  assert.equal(authenticated, true);
+  assert.ok(requestedUrl.endsWith('/ListParticipants'));
+});
+
+test('room-admin credential validation does not hide authentication failures', async () => {
+  await assert.rejects(
+    validateRoomAdminCredentials(config, async () => ({ ok: false, status: 401 })),
+    /HTTP 401/,
+  );
 });
 
 test('guest removal demotes the guest to a subscribed viewer without removing the room participant', async () => {

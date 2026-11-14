@@ -1,5 +1,6 @@
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, getLiveReplayConfig, isLiveReplayEnabled, validateReplayCredentials, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { validateRoomAdminCredentials } = require('../services/livekitRoomAdmin');
 
 const RECOVERY_SCAN_MS = 60 * 1000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
@@ -186,6 +187,10 @@ function startLiveReplayWorker() {
   });
   const safeRun = (label, fn) => fn().catch((error) => {
     console.error('[live-replay] ' + label + ' failed', { message: error.message });
+  });
+  safeRun('read-only room admin credential validation', async () => {
+    const authenticated = await validateRoomAdminCredentials();
+    console.info('[live-stage] room admin credential validation', { authenticated });
   });
   if (replayConfig) {
     safeRun('read-only credential validation', async () => {

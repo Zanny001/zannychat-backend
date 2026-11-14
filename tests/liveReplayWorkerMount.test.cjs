@@ -39,3 +39,9 @@ test('LIVE replay worker performs read-only credential validation without enabli
   assert.ok(worker.includes("console.info('[live-replay] credential validation'"));
   assert.ok(worker.includes('replayEnabled: isLiveReplayEnabled()'));
 });
+
+test('startup validates room-admin credentials through a read-only ListParticipants call', () => {
+  assert.ok(worker.includes('validateRoomAdminCredentials'));
+  assert.ok(worker.includes("safeRun('read-only room admin credential validation'"));
+  assert.ok(worker.includes("console.info('[live-stage] room admin credential validation'"));
+});
