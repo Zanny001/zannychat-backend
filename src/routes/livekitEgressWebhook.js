@@ -27,16 +27,37 @@ function isComplete(status) {
 
 async function notifyReplayReady(replay) {
   if (replay.notification_sent_at) return;
-  await sendPushToUser(replay.creator_id, {
-    title: 'Your LIVE replay is ready',
-    body: 'Your private replay is ready to watch for the next seven days.',
-    data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
-  });
-  const { error } = await supabaseAdmin.from('live_stream_replays')
-    .update({ notification_sent_at: new Date().toISOString() })
+  const claimedAt = new Date().toISOString();
+  const leaseExpiredBefore = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data: claim, error: claimError } = await supabaseAdmin.from('live_stream_replays')
+    .update({ notification_claimed_at: claimedAt })
     .eq('id', replay.id)
-    .is('notification_sent_at', null);
-  if (error) throw error;
+    .is('notification_sent_at', null)
+    .or('notification_claimed_at.is.null,notification_claimed_at.lt.' + leaseExpiredBefore)
+    .select('id')
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!claim) return;
+
+  try {
+    await sendPushToUser(replay.creator_id, {
+      title: 'Your LIVE replay is ready',
+      body: 'Your private replay is ready to watch for the next seven days.',
+      data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
+    });
+    const { error: sentError } = await supabaseAdmin.from('live_stream_replays')
+      .update({ notification_sent_at: new Date().toISOString(), notification_claimed_at: null })
+      .eq('id', replay.id)
+      .eq('notification_claimed_at', claimedAt);
+    if (sentError) throw sentError;
+  } catch (error) {
+    const { error: releaseError } = await supabaseAdmin.from('live_stream_replays')
+      .update({ notification_claimed_at: null })
+      .eq('id', replay.id)
+      .eq('notification_claimed_at', claimedAt);
+    if (releaseError) console.error('[live-replay] notification claim release failed', { replayId: replay.id });
+    throw error;
+  }
 }
 
 async function finalizeReplay(event) {
