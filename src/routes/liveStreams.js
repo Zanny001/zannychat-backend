@@ -331,7 +331,7 @@ router.get('/replays', async (req, res) => {
     if (readyError) throw readyError;
     const { data: ownerRows, error: ownerError } = await supabaseAdmin.from('live_stream_replays')
       .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,stream:live_streams(id,creator_id,title,visibility,status)')
-      .eq('creator_id', req.user.id).in('status', ['starting', 'recording', 'processing', 'failed'])
+      .eq('creator_id', req.user.id).in('status', ['ready', 'starting', 'recording', 'processing', 'failed'])
       .order('created_at', { ascending: false }).limit(10);
     if (ownerError) throw ownerError;
     const byId = new Map([...(readyRows || []), ...(ownerRows || [])].map((row) => [row.id, row]));
