@@ -16,6 +16,7 @@ test('only the live creator can start and stop a replay, and only during an acti
   assert.match(liveRoutes, /storageCapBytes/);
   assert.match(liveRoutes, /reserve_live_replay_quota/);
   assert.match(liveRoutes, /startRoomCompositeEgress/);
+  assert.match(liveRoutes, /room_name: stream\\.room_name/);
   assert.match(liveRoutes, /router\.post\('\/:streamId\/replays\/:replayId\/stop'/);
   assert.match(liveRoutes, /replay\.creator_id !== req\.user\.id/);
   assert.match(liveRoutes, /stopEgress/);
