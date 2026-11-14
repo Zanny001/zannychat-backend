@@ -56,8 +56,8 @@ async function canViewCreatorImpact(viewerId, creatorId) {
     .select('profile_visibility').eq('user_id', creatorId).maybeSingle();
   if (detailsError) throw detailsError;
   const visibility = details?.profile_visibility || 'everyone';
-  if (visibility === 'nobody') return false;
-  if (visibility !== 'contacts') return true;
+  if (visibility === 'everyone') return true;
+  if (visibility !== 'contacts') return false;
   const { data: mine, error: mineError } = await supabaseAdmin.from('conversation_participants')
     .select('conversation_id').eq('user_id', viewerId);
   if (mineError) throw mineError;
@@ -995,6 +995,10 @@ router.get('/creators/:creatorId/impact', async (req, res) => {
     if (!await canViewCreatorImpact(req.user.id, creatorId)) {
       return res.status(404).json({ error: 'Creator impact is unavailable' });
     }
+    const { data: creatorProfile, error: profileError } = await supabaseAdmin.from('profiles')
+      .select('id').eq('id', creatorId).maybeSingle();
+    if (profileError) throw profileError;
+    if (!creatorProfile) return res.status(404).json({ error: 'Creator impact is unavailable' });
     const { data, error } = await supabaseAdmin.from('live_creator_impact')
       .select('impact_score,total_reactions,unique_supporters,updated_at')
       .eq('creator_id', creatorId).maybeSingle();
