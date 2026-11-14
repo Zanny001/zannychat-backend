@@ -341,7 +341,7 @@ router.post('/:roomId/end', async (req, res) => {
       : await supabaseAdmin.rpc('end_group_call_room', { p_room_id: roomId, p_user_id: req.user.id });
     if (error) {
       if (error.code === '42501') return res.status(403).json({ error: room.source_call_id
-        ? 'Only the conference host can end this call'
+        ? 'Only a connected participant can end this conference'
         : 'Only the call host or a group admin can end this call' });
       throw error;
     }
