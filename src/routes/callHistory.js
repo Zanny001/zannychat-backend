@@ -13,7 +13,7 @@ function validId(value) {
 router.get('/hidden', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('call_history_hidden')
-      .select('call_id,call_kind').eq('user_id', req.user.id).limit(500);
+      .select('call_id,call_kind').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(500);
     if (error) throw error;
     const rows = data || [];
     return res.json({
