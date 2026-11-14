@@ -64,7 +64,7 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
   assert.equal(request.body.file.s3.force_path_style, true);
   assert.equal(request.body.advanced.width, 640);
   assert.equal(request.body.advanced.height, 360);
-  assert.equal(request.body.webhooks, undefined);
+  assert.equal(request.body.webhooks[0].url, env.LIVEKIT_REPLAY_WEBHOOK_URL);\n  assert.equal(request.body.webhooks[0].signing_key, env.LIVEKIT_EGRESS_API_KEY);
   assert.match(request.options.headers.Authorization, /^Bearer /);
 });
 
