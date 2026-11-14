@@ -2,7 +2,8 @@ const { createHash, createHmac, timingSafeEqual } = require('node:crypto');
 const { getLiveKitConfig } = require('./livekitToken');
 
 const MAX_REPLAY_SECONDS = 300;
-const MAX_REPLAY_BYTES = 50 * 1024 * 1024;
+const MAX_REPLAY_OUTPUT_SECONDS = 305;
+const MAX_REPLAY_BYTES = 48_000_000;
 
 function getLiveKitEgressConfig(env = process.env, liveKitConfig = getLiveKitConfig(env)) {
   if (!liveKitConfig) return null;
@@ -172,6 +173,7 @@ function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.
 
 module.exports = {
   MAX_REPLAY_SECONDS,
+  MAX_REPLAY_OUTPUT_SECONDS,
   MAX_REPLAY_BYTES,
   getLiveReplayConfig,
   getLiveKitEgressConfig,
