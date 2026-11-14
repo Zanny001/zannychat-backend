@@ -54,7 +54,7 @@
     "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs tests/usernameDiscoveryMigrations.test.cjs tests/profileReadPrivacyHardeningMigration.test.cjs tests/liveReplayStorageQuotaMigration.test.cjs tests/liveReplayWorkerMount.test.cjs tests/liveReplayRoutes.test.cjs tests/livekitEgress.test.cjs",
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
     "test:group-calls": "node --test tests/groupCalls.test.cjs",
-    "test:live-streams": "node --test tests/liveStreams.test.cjs tests/liveStageManagement.test.cjs tests/liveCreatorImpactMigration.test.cjs",
+    "test:live-streams": "node --test tests/liveStreams.test.cjs tests/liveStageManagement.test.cjs tests/liveCreatorImpactMigration.test.cjs tests/liveCreatorImpact.test.cjs tests/liveCreatorImpactHistoryBackfill.test.cjs tests/liveCreatorImpactUpsertAlias.test.cjs",
     "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs",
     "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
     "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs",
