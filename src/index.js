@@ -16,6 +16,8 @@ const accountRouter = require('./routes/account');
 const channelsRouter = require('./routes/channels');
 const discoveryRouter = require('./routes/discovery');
 const callsRouter = require('./routes/calls');
+const callHistoryRouter = require('./routes/callHistory');
+const liveHistoryRouter = require('./routes/liveHistory');
 const groupCallsRouter = require('./routes/groupCalls');
 const liveStreamsRouter = require('./routes/liveStreams');
 
@@ -145,9 +147,11 @@ app.use('/safety', safetyRouter);
 app.use('/account', accountRouter);
 app.use('/channels', channelsRouter);
 app.use('/discovery', discoveryRouter);
+app.use('/calls/history', callHistoryRouter);
 app.use('/calls', callsRouter);
 app.use('/group-calls', groupCallsRouter);
 app.use('/live', liveStreamsRouter);
+app.use('/live', liveHistoryRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
 // secret auth. See internal.js / requireInternalSecret.
