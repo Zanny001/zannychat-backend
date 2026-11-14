@@ -70,7 +70,7 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3 with signed Egress we
 
 test('LIVE replay stop calls the Egress stop endpoint', async () => {
   let request;
-  await stopEgress('EG_test', liveKitConfig, async (url, options) => {
+  await stopEgress('EG_test', { url: liveKitConfig.url, apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET }, async (url, options) => {
     request = { url, body: JSON.parse(options.body) };
     return { ok: true, json: async () => ({ egress_id: 'EG_test', status: 'EGRESS_ENDING' }) };
   });
