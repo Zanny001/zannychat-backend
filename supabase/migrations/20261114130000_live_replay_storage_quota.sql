@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_replays (
   duration_seconds integer NOT NULL DEFAULT 0 CHECK (duration_seconds BETWEEN 0 AND 305),
   file_size_bytes bigint NOT NULL DEFAULT 0 CHECK (file_size_bytes BETWEEN 0 AND 48000000),
   error_code text,
+  notification_sent_at timestamptz,
   started_at timestamptz,
   completed_at timestamptz,
   expires_at timestamptz,
@@ -29,7 +30,7 @@ CREATE INDEX IF NOT EXISTS live_stream_replays_creator_created_idx
   ON public.live_stream_replays(creator_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS live_stream_replays_expiry_idx
   ON public.live_stream_replays(expires_at)
-  WHERE status IN ('ready','failed');
+  WHERE status IN ('ready','failed','processing','deleted');
 
 ALTER TABLE public.live_stream_replays ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.live_stream_replays FROM PUBLIC, anon, authenticated;
