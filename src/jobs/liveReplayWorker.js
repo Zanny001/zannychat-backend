@@ -95,15 +95,22 @@ async function stopExpiredLiveReplays(now = Date.now()) {
       if (!egressId) {
         const startedMs = new Date(replay.started_at || now).getTime();
         if (now - startedMs >= START_RECOVERY_GRACE_MS) {
-          await supabaseAdmin.from('live_stream_replays')
+          const { error: updateError } = await supabaseAdmin.from('live_stream_replays')
             .update({
-              status: 'processing',
-              error_code: 'EGRESS_RECOVERY_PENDING',
+              status: 'failed',
+              error_code: 'EGRESS_NOT_FOUND',
               completed_at: new Date(now).toISOString(),
-              expires_at: new Date(now + RETENTION_MS).toISOString(),
+              expires_at: new Date(now + 10 * 60 * 1000).toISOString(),
             })
             .eq('id', replay.id)
             .in('status', ['starting', 'recording']);
+          if (updateError) throw updateError;
+          const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+            p_replay_id: replay.id,
+            p_actual_seconds: 0,
+            p_success: false,
+          });
+          if (quotaError) throw quotaError;
         }
         continue;
       }
