@@ -118,6 +118,20 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.get_live_replay_storage_bytes()
+RETURNS bigint
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT coalesce(sum(nullif(metadata->>'size', '')::bigint), 0)::bigint
+  FROM storage.objects
+  WHERE bucket_id = 'live-replays';
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_live_replay_storage_bytes() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_live_replay_storage_bytes() TO service_role;
+
 REVOKE ALL ON FUNCTION public.reserve_live_replay_quota(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.finalize_live_replay_quota(uuid, integer, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.reserve_live_replay_quota(uuid) TO service_role;
