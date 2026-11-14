@@ -1,5 +1,5 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getLiveReplayConfig, stopEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, stopEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 
 const STOP_SCAN_MS = 15000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
@@ -8,8 +8,8 @@ const RETENTION_DAYS = 7;
 let started = false;
 
 async function stopExpiredLiveReplays(now = Date.now()) {
-  const replayConfig = getLiveReplayConfig();
-  if (!replayConfig) return { scanned: 0, stopped: 0 };
+  const egressConfig = getLiveKitEgressConfig();
+  if (!egressConfig) return { scanned: 0, stopped: 0 };
   const cutoff = new Date(now - EXPIRY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('live_stream_replays')
@@ -40,7 +40,7 @@ async function stopExpiredLiveReplays(now = Date.now()) {
       continue;
     }
     try {
-      await stopEgress(replay.egress_id, replayConfig.egressConfig);
+      await stopEgress(replay.egress_id, egressConfig);
       await supabaseAdmin.from('live_stream_replays')
         .update({ status: 'processing' })
         .eq('id', replay.id)
