@@ -29,7 +29,7 @@ async function finalizeReplay(event) {
   if (!egressId) return { ignored: true };
   const { data: replay, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, file_path, status')
+    .select('id, file_path, status, duration_seconds')
     .eq('egress_id', egressId)
     .maybeSingle();
   if (error) throw error;
