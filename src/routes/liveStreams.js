@@ -597,12 +597,20 @@ router.get('/invite-candidates', async (req, res) => {
 
 router.get('/invitations', async (req, res) => {
   try {
-    const { data: invites, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
-      .select('stream_id,invited_by,created_at').eq('user_id', req.user.id)
-      .eq('invitation_type', 'viewer').eq('status', 'pending')
-      .order('created_at', { ascending: false }).limit(50);
+    const { data: inviteRows, error: inviteError } = await supabaseAdmin.from('live_stream_invites')
+      .select('stream_id,invited_by,created_at,invitation_type,status').eq('user_id', req.user.id)
+      .in('invitation_type', ['viewer','guest']).in('status', ['pending','accepted'])
+      .order('created_at', { ascending: false }).limit(100);
     if (inviteError) throw inviteError;
-    const streamIds = (invites || []).map((row) => row.stream_id);
+    const preferredInvites = new Map();
+    for (const invite of (inviteRows || []).filter((row) =>
+      (row.invitation_type === 'viewer' && row.status === 'pending')
+      || (row.invitation_type === 'guest' && row.status === 'accepted'))) {
+      const current = preferredInvites.get(invite.stream_id);
+      if (!current || invite.invitation_type === 'guest') preferredInvites.set(invite.stream_id, invite);
+    }
+    const invites = [...preferredInvites.values()];
+    const streamIds = invites.map((row) => row.stream_id);
     const { data: streams, error: streamError } = streamIds.length
       ? await supabaseAdmin.from('live_streams')
         .select('id,creator_id,title,description,allow_guests,visibility,status,started_at')

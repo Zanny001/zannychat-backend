@@ -193,3 +193,10 @@ test('LIVE comments response includes a bounded recent reaction feed for floatin
 test('LIVE reaction writes have a dedicated per-user rate limit', () => {
   assert.ok(route.includes("router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8"));
 });
+
+test('LIVE invitations include accepted guest-stage invitations and prefer stage access per stream', () => {
+  assert.ok(route.includes(".in('invitation_type', ['viewer','guest']).in('status', ['pending','accepted'])"));
+  assert.ok(route.includes("row.invitation_type === 'viewer' && row.status === 'pending'"));
+  assert.ok(route.includes("row.invitation_type === 'guest' && row.status === 'accepted'"));
+  assert.ok(route.includes("type: 'live_guest_invitation'"));
+});
