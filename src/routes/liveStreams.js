@@ -403,7 +403,12 @@ router.delete('/replays/:replayId', async (req, res) => {
       if (removeError) throw removeError;
     }
     const { error: updateError } = await supabaseAdmin.from('live_stream_replays')
-      .update({ status: 'deleted', file_path: null, file_size_bytes: 0 })
+      .update({
+        status: 'deleted',
+        file_path: null,
+        file_size_bytes: 0,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
       .eq('id', replayId);
     if (updateError) throw updateError;
     return res.json({ deleted: true });
