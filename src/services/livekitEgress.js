@@ -22,9 +22,19 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
   const accessKey = String(env.SUPABASE_STORAGE_S3_ACCESS_KEY_ID || '').trim();
   const secret = String(env.SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY || '').trim();
   const region = String(env.SUPABASE_STORAGE_S3_REGION || '').trim();
-  if (!accessKey || !secret || !region) return null;
+  const egressApiKey = String(env.LIVEKIT_EGRESS_API_KEY || '').trim();
+  const egressApiSecret = String(env.LIVEKIT_EGRESS_API_SECRET || '').trim();
+  const webhookUrl = String(env.LIVEKIT_REPLAY_WEBHOOK_URL || '').trim();
+  try {
+    const webhook = new URL(webhookUrl);
+    if (webhook.protocol !== 'https:' || !webhook.pathname.endsWith('/webhooks/livekit/egress')) return null;
+  } catch {
+    return null;
+  }
+  if (!accessKey || !secret || !region || !egressApiKey || !egressApiSecret) return null;
   return {
-    liveKitConfig,
+    liveKitConfig: { url: liveKitConfig.url },
+    egressConfig: { apiKey: egressApiKey, apiSecret: egressApiSecret },
     storage: {
       endpoint: storageEndpoint.toString().replace(/\/$/, ''),
       accessKey,
@@ -33,7 +43,7 @@ function getLiveReplayConfig(env = process.env, liveKitConfig = getLiveKitConfig
       bucket: 'live-replays',
       forcePathStyle: true,
     },
-    webhookUrl: String(env.LIVEKIT_REPLAY_WEBHOOK_URL || '').trim(),
+    webhookUrl,
   };
 }
 
@@ -87,7 +97,7 @@ async function requestLiveKitEgress(method, body, config, fetchImpl = globalThis
   return response.json();
 }
 
-async function startRoomCompositeEgress({ roomName, filePath, webhookUrl, replayConfig, fetchImpl }) {
+async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetchImpl }) {
   if (!roomName || !filePath || !replayConfig?.storage) throw new Error('LIVE replay output is not configured');
   const config = replayConfig.liveKitConfig;
   return requestLiveKitEgress('StartRoomCompositeEgress', {
@@ -136,8 +146,10 @@ function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.
   if (payload.iss !== config.apiKey) return null;
   if (Number.isFinite(payload.exp) && payload.exp < nowSeconds - 30) return null;
   if (Number.isFinite(payload.nbf) && payload.nbf > nowSeconds + 30) return null;
-  const digest = createHash('sha256').update(rawBody).digest('hex');
-  if (payload.sha256 !== digest) return null;
+  let claimedDigest;
+  try { claimedDigest = Buffer.from(payload.sha256 || '', 'base64'); } catch { return null; }
+  const bodyDigest = createHash('sha256').update(rawBody).digest();
+  if (claimedDigest.length !== bodyDigest.length || !timingSafeEqual(claimedDigest, bodyDigest)) return null;
   return payload;
 }
 
