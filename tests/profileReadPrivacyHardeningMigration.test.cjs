@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const rpcs = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261114110000_profile_scoped_read_rpcs.sql'),
+  path.join(__dirname, '../supabase/migrations/20261114072706_profile_scoped_read_rpcs.sql'),
   'utf8',
 );
 const hardening = fs.readFileSync(
