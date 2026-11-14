@@ -66,12 +66,17 @@ async function notifyLiveUsers(userIds, notification) {
 }
 
 async function notifyCreatorFollowers(creatorId, notification) {
-  const { data, error } = await supabaseAdmin.from('live_creator_follows')
-    .select('follower_id').eq('creator_id', creatorId).limit(500);
-  if (error) throw error;
-  const followerIds = [...new Set((data || []).map((row) => row.follower_id))];
-  const blockedIds = await getBlockedUserIds(creatorId, followerIds);
-  await notifyLiveUsers(followerIds.filter((id) => !blockedIds.has(id)), notification);
+  try {
+    const { data, error } = await supabaseAdmin.from('live_creator_follows')
+      .select('follower_id').eq('creator_id', creatorId).limit(500);
+    if (error) throw error;
+    const followerIds = [...new Set((data || []).map((row) => row.follower_id))];
+    const blockedIds = await getBlockedUserIds(creatorId, followerIds);
+    await notifyLiveUsers(followerIds.filter((id) => !blockedIds.has(id)), notification);
+  } catch (error) {
+    // A push outage must never turn a committed LIVE start into an API failure.
+    console.error('[live] follower notification lookup failed:', error?.message || error);
+  }
 }
 
 async function getProfileNames(userIds) {
