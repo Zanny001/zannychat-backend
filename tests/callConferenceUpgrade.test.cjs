@@ -96,3 +96,10 @@ test('conference admission rechecks blocks and active-call exclusivity at join t
   assert.match(joinGuardsMigration, /REVOKE ALL ON FUNCTION public\.join_direct_call_room\(uuid, uuid\) FROM PUBLIC, anon, authenticated/);
   assert.match(joinGuardsMigration, /GRANT EXECUTE ON FUNCTION public\.join_direct_call_room\(uuid, uuid\) TO service_role/);
 });
+
+test('only joined call participants can read the current room roster', () => {
+  assert.match(route, /router\.get\('\/:roomId\/participants'/);
+  assert.match(route, /Only connected call participants can view the room roster/);
+  assert.match(route, /\.eq\('status', 'joined'\)/);
+  assert.match(route, /participantIds:/);
+});
