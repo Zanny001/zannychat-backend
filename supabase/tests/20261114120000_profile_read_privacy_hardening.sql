@@ -21,6 +21,17 @@ BEGIN
     RAISE EXCEPTION 'relationship-scoped profiles SELECT policy is missing';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'profiles'
+      AND policyname = 'Users can view own and related profiles'
+      AND position('status_views' in qual) > 0
+      AND position('status_replies' in qual) > 0
+  ) THEN
+    RAISE EXCEPTION 'status viewers and private reply senders must retain profile labels';
+  END IF;
+
   IF has_table_privilege('authenticated', 'public.profiles', 'SELECT') THEN
     RAISE EXCEPTION 'authenticated must not have table-wide profiles SELECT';
   END IF;
