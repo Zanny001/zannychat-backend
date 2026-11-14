@@ -110,7 +110,7 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
   return requestLiveKitEgress('StartRoomCompositeEgress', {
     room_name: roomName,
     layout: 'grid',
-    file: {
+    file_outputs: [{
       file_type: 1,
       filepath: filePath,
       s3: {
@@ -121,7 +121,7 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
         endpoint: replayConfig.storage.endpoint,
         force_path_style: true,
       },
-    },
+    }],
     webhooks: [{
       url: replayConfig.webhookUrl,
       signing_key: config.apiKey,
