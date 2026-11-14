@@ -1065,18 +1065,29 @@ router.get('/creators/:creatorId/impact', async (req, res) => {
       .eq('creator_id', creatorId).maybeSingle();
     if (error) throw error;
     const impactScore = Number(data?.impact_score || 0);
-    const badges = [
+    const milestones = [
       { threshold: 10, id: 'first-spark', label: 'First Spark' },
       { threshold: 50, id: 'community-favorite', label: 'Community Favorite' },
       { threshold: 250, id: 'stage-star', label: 'Stage Star' },
       { threshold: 1000, id: 'iconic-voice', label: 'Iconic Voice' },
-    ].filter((badge) => impactScore >= badge.threshold).map(({ id, label }) => ({ id, label }));
+      { threshold: 5000, id: 'legendary-presence', label: 'Legendary Presence' },
+      { threshold: 10000, id: 'hall-of-fame', label: 'Hall of Fame' },
+    ];
+    const badges = milestones.filter((badge) => impactScore >= badge.threshold)
+      .map(({ id, label, threshold }) => ({ id, label, threshold }));
+    const nextMilestone = milestones.find((badge) => impactScore < badge.threshold) || null;
+    const { data: reactionBreakdown, error: reactionBreakdownError } = await supabaseAdmin.rpc(
+      'get_live_creator_reaction_breakdown', { p_creator_id: creatorId },
+    );
+    if (reactionBreakdownError) throw reactionBreakdownError;
     return res.json({
       impact: {
         impactScore,
         totalReactions: Number(data?.total_reactions || 0),
         uniqueSupporters: Number(data?.unique_supporters || 0),
+        reactionBreakdown: Array.isArray(reactionBreakdown) ? reactionBreakdown : [],
         badges,
+        nextMilestone: nextMilestone ? { id: nextMilestone.id, label: nextMilestone.label, threshold: nextMilestone.threshold } : null,
         updatedAt: data?.updated_at || null,
       },
     });
