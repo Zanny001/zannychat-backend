@@ -59,9 +59,9 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
   });
   assert.equal(result.egress_id, 'EG_test');
   assert.equal(request.body.room_name, 'zlive_01234567890123456789012345678901');
-  assert.equal(request.body.file_outputs[0].file_type, 0);
-  assert.equal(request.body.file_outputs[0].s3.bucket, 'live-replays');
-  assert.equal(request.body.file_outputs[0].s3.force_path_style, true);
+  assert.equal(request.body.file.file_type, 1);
+  assert.equal(request.body.file.s3.bucket, 'live-replays');
+  assert.equal(request.body.file.s3.force_path_style, true);
   assert.equal(request.body.advanced.width, 640);
   assert.equal(request.body.advanced.height, 360);
   assert.equal(request.body.webhooks, undefined);
