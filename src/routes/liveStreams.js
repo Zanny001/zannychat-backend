@@ -139,6 +139,8 @@ async function canViewLiveReplay(stream, userId) {
 }
 
 async function stopActiveLiveReplayForStream(streamId) {
+  const egressConfig = getLiveKitEgressConfig();
+  if (!egressConfig) return;
   const { data, error } = await supabaseAdmin.from('live_stream_replays')
     .select('id,egress_id,status,room_name')
     .eq('stream_id', streamId)
@@ -147,11 +149,6 @@ async function stopActiveLiveReplayForStream(streamId) {
   if (error) throw error;
   const replay = data?.[0];
   if (!replay) return;
-  const egressConfig = getLiveKitEgressConfig();
-  if (!egressConfig) {
-    console.error('[live-replay] Egress credentials unavailable while ending stream', { streamId });
-    return;
-  }
   let egressId = replay.egress_id;
   if (!egressId) {
     const listed = await listEgress(replay.room_name, egressConfig);
