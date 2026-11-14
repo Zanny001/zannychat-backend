@@ -149,6 +149,14 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
     });
     if (quotaError) throw quotaError;
   }
+  for (const row of rows.filter((item) => item.status === 'failed' || item.status === 'deleted')) {
+    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+      p_replay_id: row.id,
+      p_actual_seconds: 0,
+      p_success: false,
+    });
+    if (quotaError) throw quotaError;
+  }
   for (const row of rows) clearLiveReplayStop(row.id);
   if (rows.length) {
     const { error: deleteError } = await supabaseAdmin
