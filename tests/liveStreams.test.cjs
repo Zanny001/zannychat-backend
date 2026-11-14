@@ -200,3 +200,11 @@ test('LIVE invitations include accepted guest-stage invitations and prefer stage
   assert.ok(route.includes("row.invitation_type === 'guest' && row.status === 'accepted'"));
   assert.ok(route.includes("type: 'live_guest_invitation'"));
 });
+
+test('creator impact API exposes per-emoji reaction collection and future milestones', () => {
+  assert.ok(route.includes("'get_live_creator_reaction_breakdown'"));
+  assert.ok(route.includes('reactionBreakdown: Array.isArray(reactionBreakdown)'));
+  assert.ok(route.includes("id: 'legendary-presence'"));
+  assert.ok(route.includes("id: 'hall-of-fame'"));
+  assert.ok(route.includes('nextMilestone'));
+});
