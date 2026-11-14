@@ -162,7 +162,7 @@ function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.
   let payload;
   try { payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); } catch { return null; }
   if (payload.iss !== config.apiKey) return null;
-  if (Number.isFinite(payload.exp) && payload.exp < nowSeconds - 30) return null;
+  if (!Number.isFinite(payload.exp) || payload.exp < nowSeconds - 30) return null;
   if (Number.isFinite(payload.nbf) && payload.nbf > nowSeconds + 30) return null;
   let claimedDigest;
   try { claimedDigest = Buffer.from(payload.sha256 || '', 'base64'); } catch { return null; }
