@@ -731,6 +731,9 @@ router.post('/:streamId/join', async (req, res) => {
     if (joinError) {
       if (joinError.code === 'P0001' && /full/i.test(joinError.message || '')) return res.status(409).json({ error: 'This LIVE audience is full' });
       if (joinError.code === '42501') return res.status(403).json({ error: 'This LIVE stream is not publicly available' });
+      if (joinError.code === 'P0001' && /LIVE stage is full/i.test(joinError.message || '')) {
+        return res.status(409).json({ error: 'The LIVE stage is full. Please try again when a guest leaves.' });
+      }
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
     }

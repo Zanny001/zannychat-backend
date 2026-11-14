@@ -80,3 +80,14 @@ test('guest microphone controls target only the published audio track and expose
   assert.ok(route.includes('microphoneMuted'));
   assert.ok(route.includes('stage: joinedById.get(userId)?.role === \'guest\''));
 });
+
+test('guest publisher capacity is enforced atomically inside the locked join RPC', () => {
+  const migration = require('node:fs').readFileSync(require('node:path').join(__dirname, '../supabase/migrations/20261114123057_live_stage_guest_capacity.sql'), 'utf8');
+  assert.ok(migration.includes('FOR UPDATE'));
+  assert.ok(migration.includes("IF v_role = 'guest' THEN"));
+  assert.ok(migration.includes("AND role = 'guest'"));
+  assert.ok(migration.includes("AND status = 'joined'"));
+  assert.ok(migration.includes('AND user_id <> p_user_id'));
+  assert.ok(migration.includes('IF v_stage_joined >= 5 THEN'));
+  assert.ok(route.includes("/LIVE stage is full/i"));
+});
