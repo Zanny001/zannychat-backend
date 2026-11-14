@@ -1,5 +1,5 @@
 const express = require('express');
-const supabaseAdmin = require('../config/supabaseAdmin');
+const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_OUTPUT_SECONDS } = require('../services/livekitEgress');
 const { clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 const { sendPushToUser } = require('../config/pushClient');
@@ -145,7 +145,7 @@ async function finalizeReplay(event) {
 
 router.post('/egress', rawBody, async (req, res) => {
   const egressConfig = getLiveKitEgressConfig();
-  if (!egressConfig || !Buffer.isBuffer(req.body)) return res.status(503).json({ error: 'LIVE replay webhook is not configured' });
+  if (!supabaseAdmin || !egressConfig || !Buffer.isBuffer(req.body)) return res.status(503).json({ error: 'LIVE replay webhook is not configured' });
   const verified = verifyLiveKitWebhook(req.body, req.get('authorization'), egressConfig);
   if (!verified) return res.status(401).json({ error: 'Invalid LiveKit webhook signature' });
   let event;

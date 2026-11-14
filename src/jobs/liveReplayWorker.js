@@ -1,4 +1,4 @@
-const supabaseAdmin = require('../config/supabaseAdmin');
+const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 
 const RECOVERY_SCAN_MS = 60 * 1000;
@@ -176,7 +176,7 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
 }
 
 function startLiveReplayWorker() {
-  if (started) return;
+  if (started || !supabaseAdmin) return;
   started = true;
   const safeRun = (label, fn) => fn().catch((error) => {
     console.error('[live-replay] ' + label + ' failed', { message: error.message });
