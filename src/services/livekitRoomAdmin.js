@@ -86,7 +86,7 @@ function createRoomAdminToken(config, roomName, nowSeconds = Math.floor(Date.now
 }
 
 function roomServiceUrl(liveKitUrl, method) {
-  if (!['ListParticipants', 'RemoveParticipant', 'MutePublishedTrack'].includes(method)) {
+  if (!['ListParticipants', 'RemoveParticipant', 'MutePublishedTrack', 'UpdateParticipant'].includes(method)) {
     throw new Error('Unsupported LiveKit room service method');
   }
   const url = new URL(String(liveKitUrl || '').trim());
@@ -145,6 +145,17 @@ async function muteRoomParticipantTrack(roomName, identity, trackSid, muted, con
   }, config, fetchImpl);
 }
 
+async function updateRoomParticipantAttributes(roomName, identity, attributes, config = getRoomAdminConfig(), fetchImpl) {
+  if (!identity || !attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+    throw new Error('A valid participant identity and attribute map are required');
+  }
+  return requestRoomService('UpdateParticipant', {
+    room: roomName,
+    identity,
+    attributes,
+  }, config, fetchImpl);
+}
+
 module.exports = {
   createRoomDeletionToken,
   liveKitHttpUrl,
@@ -155,4 +166,5 @@ module.exports = {
   listRoomParticipants,
   removeRoomParticipant,
   muteRoomParticipantTrack,
+  updateRoomParticipantAttributes,
 };

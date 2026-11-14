@@ -8,6 +8,7 @@ const {
   listRoomParticipants,
   removeRoomParticipant,
   muteRoomParticipantTrack,
+  updateRoomParticipantAttributes,
 } = require('../src/services/livekitRoomAdmin');
 const route = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 
@@ -29,6 +30,7 @@ test('room service URLs allow only the three required administration methods', (
   assert.equal(roomServiceUrl(config.url, 'ListParticipants'), 'https://zanny-test.livekit.cloud/twirp/livekit.RoomService/ListParticipants');
   assert.equal(roomServiceUrl(config.url, 'RemoveParticipant'), 'https://zanny-test.livekit.cloud/twirp/livekit.RoomService/RemoveParticipant');
   assert.equal(roomServiceUrl(config.url, 'MutePublishedTrack'), 'https://zanny-test.livekit.cloud/twirp/livekit.RoomService/MutePublishedTrack');
+  assert.equal(roomServiceUrl(config.url, 'UpdateParticipant'), 'https://zanny-test.livekit.cloud/twirp/livekit.RoomService/UpdateParticipant');
   assert.throws(() => roomServiceUrl(config.url, 'StartRoomCompositeEgress'), /Unsupported/);
   assert.throws(() => roomServiceUrl('https://example.com', 'ListParticipants'), /managed LiveKit Cloud/);
 });
@@ -62,6 +64,25 @@ test('participant helpers call only the expected room-scoped operations', async 
   assert.ok(calls[1].body.revoke_token_ts > 0);
   assert.equal(calls[2].body.track_sid, 'TR_AUDIO');
   assert.equal(calls[2].body.muted, true);
+});
+
+test('participant helper can update a single room-scoped spotlight attribute', async () => {
+  let captured;
+  const fetchImpl = async (url, options) => {
+    captured = { url, body: JSON.parse(options.body) };
+    return { ok: true, json: async () => ({ identity: 'guest-2' }) };
+  };
+  await updateRoomParticipantAttributes('room-4', 'guest-2', { zannychat_spotlight: 'true' }, config, fetchImpl);
+  assert.equal(captured.url.endsWith('/UpdateParticipant'), true);
+  assert.deepEqual(captured.body, { room: 'room-4', identity: 'guest-2', attributes: { zannychat_spotlight: 'true' } });
+});
+
+test('spotlight changes are creator-only, stage-guest-only and clear any previous spotlight', () => {
+  assert.ok(route.includes("router.patch('/:streamId/guests/:userId/spotlight'"));
+  assert.ok(route.includes("Only the creator can manage the LIVE spotlight"));
+  assert.ok(route.includes("participant.attributes?.zannychat_spotlight === 'true'"));
+  assert.ok(route.includes("zannychat_spotlight: spotlighted ? 'true' : ''"));
+  assert.ok(route.includes('spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false'));
 });
 
 test('only the creator can directly invite, mute, or remove guests and guest publishers are capped', () => {

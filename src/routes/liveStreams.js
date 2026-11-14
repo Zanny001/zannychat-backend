@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
-const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack } = require('../services/livekitRoomAdmin');
+const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -1139,6 +1139,37 @@ router.patch('/:streamId/guests/:userId/mute', async (req, res) => {
   }
 });
 
+router.patch('/:streamId/guests/:userId/spotlight', async (req, res) => {
+  const { streamId, userId } = req.params;
+  const spotlighted = req.body?.spotlighted;
+  if (!validId(streamId) || !validId(userId) || typeof spotlighted !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid LIVE spotlight action' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can manage the LIVE spotlight' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || participant.role !== 'guest') return res.status(404).json({ error: 'LIVE stage guest not found' });
+    const room = await listRoomParticipants(stream.room_name);
+    const roomParticipants = room?.participants || [];
+    if (spotlighted) {
+      const currentSpotlights = roomParticipants.filter((item) =>
+        item.identity !== userId && item.attributes?.zannychat_spotlight === 'true');
+      for (const current of currentSpotlights) {
+        await updateRoomParticipantAttributes(stream.room_name, current.identity, { zannychat_spotlight: '' });
+      }
+    }
+    await updateRoomParticipantAttributes(stream.room_name, userId, {
+      zannychat_spotlight: spotlighted ? 'true' : '',
+    });
+    return res.json({ userId, spotlighted });
+  } catch (error) {
+    console.error('[live] guest spotlight update failed:', error?.message || error);
+    return res.status(502).json({ error: 'Could not update the LIVE spotlight' });
+  }
+});
+
 router.delete('/:streamId/guests/:userId', async (req, res) => {
   const { streamId, userId } = req.params;
   if (!validId(streamId) || !validId(userId)) return res.status(400).json({ error: 'Invalid LIVE stage guest' });
@@ -1201,7 +1232,10 @@ router.get('/:streamId/participants', async (req, res) => {
       mediaByIdentity = new Map((room?.participants || []).map((participant) => {
         const audio = (participant.tracks || []).find((track) =>
           track.type === 0 || String(track.type || '').toUpperCase() === 'AUDIO');
-        return [participant.identity, { microphoneMuted: typeof audio?.muted === 'boolean' ? audio.muted : null }];
+        return [participant.identity, {
+          microphoneMuted: typeof audio?.muted === 'boolean' ? audio.muted : null,
+          spotlighted: participant.attributes?.zannychat_spotlight === 'true',
+        }];
       }));
     } catch (mediaError) {
       console.error('[live] LiveKit participant media state unavailable:', mediaError?.message || mediaError);
@@ -1213,6 +1247,7 @@ router.get('/:streamId/participants', async (req, res) => {
       role: joinedById.get(userId)?.role || null,
       stage: joinedById.get(userId)?.role === 'guest',
       microphoneMuted: mediaByIdentity.get(userId)?.microphoneMuted ?? null,
+      spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false,
       moderator: moderatorIds.has(userId),
     })) });
   } catch (error) {
