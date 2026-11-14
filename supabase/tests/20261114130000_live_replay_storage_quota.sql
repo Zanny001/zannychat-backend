@@ -30,7 +30,7 @@ BEGIN
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM storage.buckets
-    WHERE id = 'live-replays' AND public = false AND file_size_limit = 52428800
+    WHERE id = 'live-replays' AND public = false AND file_size_limit = 48000000
   ) THEN
     RAISE EXCEPTION 'private live-replays bucket with 50 MB cap is missing';
   END IF;
