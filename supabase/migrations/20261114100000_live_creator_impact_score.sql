@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS public.live_creator_impact (
 CREATE TABLE IF NOT EXISTS public.live_creator_impact_supporters (
   creator_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   supporter_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  first_stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   first_supported_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (creator_id, supporter_id),
   CHECK (creator_id <> supporter_id)
@@ -27,7 +26,6 @@ CREATE TABLE IF NOT EXISTS public.live_creator_impact_daily (
   creator_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   supporter_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   impact_day date NOT NULL,
-  first_stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (creator_id, supporter_id, impact_day),
   CHECK (creator_id <> supporter_id)
@@ -95,13 +93,13 @@ BEGIN
   INSERT INTO public.live_stream_reactions (stream_id, user_id, reaction)
   VALUES (p_stream_id, p_user_id, p_reaction);
 
-  INSERT INTO public.live_creator_impact_supporters (creator_id, supporter_id, first_stream_id)
-  VALUES (v_creator_id, p_user_id, p_stream_id)
+  INSERT INTO public.live_creator_impact_supporters (creator_id, supporter_id)
+  VALUES (v_creator_id, p_user_id)
   ON CONFLICT (creator_id, supporter_id) DO NOTHING;
   GET DIAGNOSTICS v_supporter_rows = ROW_COUNT;
 
-  INSERT INTO public.live_creator_impact_daily (creator_id, supporter_id, impact_day, first_stream_id)
-  VALUES (v_creator_id, p_user_id, (now() AT TIME ZONE 'UTC')::date, p_stream_id)
+  INSERT INTO public.live_creator_impact_daily (creator_id, supporter_id, impact_day)
+  VALUES (v_creator_id, p_user_id, (now() AT TIME ZONE 'UTC')::date)
   ON CONFLICT (creator_id, supporter_id, impact_day) DO NOTHING;
   GET DIAGNOSTICS v_daily_rows = ROW_COUNT;
 
