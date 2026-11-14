@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_replays (
   status text NOT NULL DEFAULT 'starting'
     CHECK (status IN ('starting','recording','processing','ready','failed','deleted')),
   duration_seconds integer NOT NULL DEFAULT 0 CHECK (duration_seconds BETWEEN 0 AND 300),
-  file_size_bytes bigint NOT NULL DEFAULT 0 CHECK (file_size_bytes BETWEEN 0 AND 52428800),
+  file_size_bytes bigint NOT NULL DEFAULT 0 CHECK (file_size_bytes BETWEEN 0 AND 48000000),
   error_code text,
   started_at timestamptz,
   completed_at timestamptz,
@@ -139,10 +139,10 @@ GRANT EXECUTE ON FUNCTION public.reserve_live_replay_quota(uuid) TO service_role
 GRANT EXECUTE ON FUNCTION public.finalize_live_replay_quota(uuid, integer, boolean) TO service_role;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('live-replays', 'live-replays', false, 52428800, ARRAY['video/mp4'])
+VALUES ('live-replays', 'live-replays', false, 48000000, ARRAY['video/mp4'])
 ON CONFLICT (id) DO UPDATE
 SET public = false,
-    file_size_limit = 52428800,
+    file_size_limit = 48000000,
     allowed_mime_types = ARRAY['video/mp4'];
 
 COMMIT;
