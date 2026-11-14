@@ -165,7 +165,11 @@ async function stopActiveLiveReplayForStream(streamId) {
   await supabaseAdmin.from('live_stream_replays')
     .update({ egress_id: egressId, status: 'recording' })
     .eq('id', replay.id);
-  await stopEgress(egressId, egressConfig);
+  try {
+    await stopEgress(egressId, egressConfig);
+  } catch (error) {
+    if (!error.message.includes('HTTP 404')) throw error;
+  }
   await supabaseAdmin.from('live_stream_replays')
     .update({ status: 'processing' })
     .eq('id', replay.id)
@@ -300,7 +304,11 @@ router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
     if (!replay.egress_id) return res.status(409).json({ error: 'Replay recording is still starting' });
     const egressConfig = getLiveKitEgressConfig();
     if (!egressConfig) return res.status(503).json({ error: 'Replay stop service is temporarily unavailable' });
-    await stopEgress(replay.egress_id, egressConfig);
+    try {
+      await stopEgress(replay.egress_id, egressConfig);
+    } catch (error) {
+      if (!error.message.includes('HTTP 404')) throw error;
+    }
     await supabaseAdmin.from('live_stream_replays').update({ status: 'processing' }).eq('id', replay.id);
     return res.status(202).json({ replay: { id: replay.id, status: 'processing' } });
   } catch (error) {
