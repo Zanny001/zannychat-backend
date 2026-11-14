@@ -1,6 +1,6 @@
 const express = require('express');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_OUTPUT_SECONDS } = require('../services/livekitEgress');
 const { clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
 const router = express.Router();
@@ -80,7 +80,7 @@ async function finalizeReplay(event) {
   const durationSeconds = getDurationSeconds(file);
   const valid = isComplete(info?.status) && Boolean(file) &&
     size > 0 && size <= MAX_REPLAY_BYTES &&
-    durationSeconds > 0 && durationSeconds <= MAX_REPLAY_SECONDS;
+    durationSeconds > 0 && durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS;
 
   if (valid) {
     const completedAt = new Date().toISOString();
