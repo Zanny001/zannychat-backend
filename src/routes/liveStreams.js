@@ -5,6 +5,17 @@ const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
 const { sendPushToUser } = require('../config/pushClient');
+const {
+  getLiveReplayConfig,
+  getLiveKitEgressConfig,
+  listEgress,
+  isLiveReplayEnabled,
+  startRoomCompositeEgress,
+  stopEgress,
+  MAX_REPLAY_SECONDS,
+  MAX_REPLAY_BYTES,
+} = require('../services/livekitEgress');
+const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
@@ -101,6 +112,68 @@ async function getStream(streamId) {
   return data;
 }
 
+async function canViewLiveReplay(stream, userId) {
+  if (stream.creator_id === userId) return true;
+  if (await hasBlockBetween(stream.creator_id, userId)) return false;
+  if (stream.visibility === 'public') return true;
+  if (await canModerateLive(stream, userId)) return true;
+
+  const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
+    .select('id').eq('stream_id', stream.id).eq('user_id', userId).maybeSingle();
+  if (participantError) throw participantError;
+  if (participant) return true;
+  if (stream.visibility === 'followers') {
+    const { data, error } = await supabaseAdmin.from('live_creator_follows')
+      .select('creator_id').eq('creator_id', stream.creator_id).eq('follower_id', userId).maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+  if (stream.visibility === 'private') {
+    const { data, error } = await supabaseAdmin.from('live_stream_invites')
+      .select('id').eq('stream_id', stream.id).eq('user_id', userId)
+      .in('status', ['accepted', 'approved']).maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+  return false;
+}
+
+async function stopActiveLiveReplayForStream(streamId) {
+  const egressConfig = getLiveKitEgressConfig();
+  if (!egressConfig) return;
+  const { data, error } = await supabaseAdmin.from('live_stream_replays')
+    .select('id,egress_id,status,room_name')
+    .eq('stream_id', streamId)
+    .in('status', ['starting', 'recording'])
+    .limit(1);
+  if (error) throw error;
+  const replay = data?.[0];
+  if (!replay) return;
+  let egressId = replay.egress_id;
+  if (!egressId) {
+    const listed = await listEgress(replay.room_name, egressConfig);
+    const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+    egressId = found?.egress_id || found?.egressId || null;
+  }
+  if (!egressId) {
+    // Give the signed completion webhook time to reconcile a just-finished Egress.
+    return;
+  }
+  await supabaseAdmin.from('live_stream_replays')
+    .update({ egress_id: egressId, status: 'recording' })
+    .eq('id', replay.id);
+  try {
+    await stopEgress(egressId, egressConfig);
+  } catch (error) {
+    if (!error.message.includes('HTTP 404')) throw error;
+  }
+  await supabaseAdmin.from('live_stream_replays')
+    .update({ status: 'processing' })
+    .eq('id', replay.id)
+    .in('status', ['starting', 'recording']);
+  clearLiveReplayStop(replay.id);
+}
+
 async function requireJoined(streamId, userId) {
   const { data, error } = await supabaseAdmin.from('live_stream_participants')
     .select('id,role,status').eq('stream_id', streamId).eq('user_id', userId).maybeSingle();
@@ -115,6 +188,300 @@ async function canModerateLive(stream, userId) {
   if (error) throw error;
   return Boolean(data);
 }
+
+router.get('/replays/config', async (req, res) => {
+  res.json({
+    enabled: isLiveReplayEnabled(),
+    maxDurationSeconds: MAX_REPLAY_SECONDS,
+    maxFileBytes: MAX_REPLAY_BYTES,
+    retentionDays: 7,
+  });
+});
+
+router.post('/:streamId/replays/start', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream' });
+  if (!isLiveReplayEnabled()) return res.status(503).json({ error: 'Creator replay is not enabled on this server yet' });
+  const replayConfig = getLiveReplayConfig();
+  if (!replayConfig) return res.status(503).json({ error: 'Creator replay storage is not configured' });
+
+  try {
+    const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the LIVE creator can record a replay' });
+    if (stream.status !== 'live' || !stream.room_name) return res.status(409).json({ error: 'The LIVE stream is not active' });
+
+    const { data: storageBytes, error: storageError } = await supabaseAdmin.rpc('get_live_replay_storage_bytes');
+    if (storageError) throw storageError;
+    const currentStorageBytes = Number(storageBytes || 0);
+    const storageCapBytes = 700_000_000;
+    if (!Number.isFinite(currentStorageBytes) || currentStorageBytes + MAX_REPLAY_BYTES > storageCapBytes) {
+      return res.status(507).json({ error: 'Replay storage is at its safe free-tier limit' });
+    }
+
+    const replayId = randomUUID();
+    const filePath = req.user.id + '/' + streamId + '/' + replayId + '.mp4';
+    const now = new Date().toISOString();
+    const { error: insertError } = await supabaseAdmin.from('live_stream_replays').insert({
+      id: replayId,
+      stream_id: streamId,
+      creator_id: req.user.id,
+      room_name: stream.room_name,
+      file_path: filePath,
+      status: 'starting',
+      started_at: now,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (insertError) {
+      if (insertError.code === '23505') return res.status(409).json({ error: 'A replay already exists or is being recorded for this stream' });
+      throw insertError;
+    }
+
+    const { data: reserved, error: quotaError } = await supabaseAdmin.rpc('reserve_live_replay_quota', { p_replay_id: replayId });
+    if (quotaError) {
+      await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
+      }).catch(() => {});
+      await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
+      throw quotaError;
+    }
+    if (reserved !== true) {
+      await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
+      return res.status(429).json({ error: 'The monthly replay allowance is exhausted or another replay is active' });
+    }
+
+    let egressId = null;
+    try {
+      const egress = await startRoomCompositeEgress({
+        roomName: stream.room_name,
+        filePath,
+        replayConfig,
+      });
+      egressId = egress?.egress_id || egress?.egressId || null;
+      if (!egressId) {
+        const listed = await listEgress(stream.room_name, replayConfig.egressConfig);
+        const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+        egressId = found?.egress_id || found?.egressId || null;
+        if (!egressId) {
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+      }
+      const { error: updateError } = await supabaseAdmin.from('live_stream_replays')
+        .update({ egress_id: egressId, status: 'recording' })
+        .eq('id', replayId);
+      if (updateError) throw updateError;
+      scheduleLiveReplayStop(replayId, egressId, now);
+      return res.status(201).json({
+        replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
+      });
+    } catch (error) {
+      const definitiveFailure = /HTTP (400|401|403|404|409|422|429)\b/.test(String(error.message || ''));
+      if (!egressId && definitiveFailure) {
+        await supabaseAdmin.from('live_stream_replays')
+          .update({
+            status: 'failed',
+            error_code: 'EGRESS_START_FAILED',
+            completed_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          })
+          .eq('id', replayId);
+        const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+          p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
+        });
+        if (quotaError) console.error('[live-replay] failed-start quota release deferred', { replayId, message: quotaError.message });
+        return res.status(502).json({ error: 'Could not start the replay recording' });
+      }
+      if (!egressId) {
+        try {
+          const listed = await listEgress(stream.room_name, replayConfig.egressConfig);
+          const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+          egressId = found?.egress_id || found?.egressId || null;
+        } catch (lookupError) {
+          console.error('[live-replay] ambiguous Egress start; recovery lookup failed', { streamId, message: lookupError.message });
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+      }
+
+      if (egressId) {
+        let stopConfirmed = false;
+        try {
+          await stopEgress(egressId, replayConfig.egressConfig);
+          stopConfirmed = true;
+        } catch (stopError) {
+          if (stopError.message.includes('HTTP 404')) stopConfirmed = true;
+          else console.error('[live-replay] Egress recovery stop deferred', { replayId, message: stopError.message });
+        }
+        const recoveryStatus = stopConfirmed ? 'processing' : 'recording';
+        const { error: recoveryError } = await supabaseAdmin.from('live_stream_replays')
+          .update({ egress_id: egressId, status: recoveryStatus })
+          .eq('id', replayId);
+        if (recoveryError) {
+          console.error('[live-replay] Egress id could not be persisted; room recovery will retry', { replayId, message: recoveryError.message });
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+        if (stopConfirmed) {
+          clearLiveReplayStop(replayId);
+          return res.status(202).json({ replay: { id: replayId, status: 'processing' } });
+        }
+        scheduleLiveReplayStop(replayId, egressId, now);
+        return res.status(201).json({
+          replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
+        });
+      }
+
+      if (!egressId) {
+        console.error('[live-replay] ambiguous Egress start retained for recovery', { replayId, message: error.message });
+        return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+      }
+    }
+  } catch (error) {
+    console.error('[live-replay] start request failed', { streamId, message: error.message });
+    return res.status(500).json({ error: 'Could not start the replay recording' });
+  }
+});
+
+router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
+  const { streamId, replayId } = req.params;
+  if (!validId(streamId) || !validId(replayId)) return res.status(400).json({ error: 'Invalid replay' });
+  try {
+    const { data: replay, error } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,creator_id,egress_id,status').eq('id', replayId).eq('stream_id', streamId).maybeSingle();
+    if (error) throw error;
+    if (!replay) return res.status(404).json({ error: 'Replay not found' });
+    if (replay.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can stop this recording' });
+    if (!['starting', 'recording'].includes(replay.status)) return res.json({ replay: { id: replay.id, status: replay.status } });
+    if (!replay.egress_id) return res.status(409).json({ error: 'Replay recording is still starting' });
+    const egressConfig = getLiveKitEgressConfig();
+    if (!egressConfig) return res.status(503).json({ error: 'Replay stop service is temporarily unavailable' });
+    try {
+      await stopEgress(replay.egress_id, egressConfig);
+    } catch (error) {
+      if (!error.message.includes('HTTP 404')) throw error;
+    }
+    await supabaseAdmin.from('live_stream_replays').update({ status: 'processing' }).eq('id', replay.id);
+    clearLiveReplayStop(replay.id);
+    return res.status(202).json({ replay: { id: replay.id, status: 'processing' } });
+  } catch (error) {
+    console.error('[live-replay] stop failed', { replayId, message: error.message });
+    return res.status(502).json({ error: 'Could not stop the replay recording' });
+  }
+});
+
+router.get('/replays', async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const { data: readyRows, error: readyError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,stream:live_streams(id,creator_id,title,visibility,status)')
+      .eq('status', 'ready').gt('expires_at', now)
+      .order('completed_at', { ascending: false }).limit(20);
+    if (readyError) throw readyError;
+    const { data: ownerRows, error: ownerError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,stream:live_streams(id,creator_id,title,visibility,status)')
+      .eq('creator_id', req.user.id).in('status', ['ready', 'starting', 'recording', 'processing', 'failed'])
+      .order('created_at', { ascending: false }).limit(10);
+    if (ownerError) throw ownerError;
+    const byId = new Map([...(readyRows || []), ...(ownerRows || [])].map((row) => [row.id, row]));
+    const visible = [];
+    for (const replay of byId.values()) {
+      if (replay.status === 'ready' && (!replay.expires_at || new Date(replay.expires_at).getTime() <= Date.now())) continue;
+      if (replay.stream && await canViewLiveReplay(replay.stream, req.user.id)) {
+        visible.push({
+          id: replay.id,
+          streamId: replay.stream_id,
+          creatorId: replay.creator_id,
+          status: replay.status,
+          durationSeconds: replay.duration_seconds,
+          fileSizeBytes: replay.file_size_bytes,
+          completedAt: replay.completed_at,
+          expiresAt: replay.expires_at,
+          streamTitle: replay.stream.title,
+          visibility: replay.stream.visibility,
+        });
+      }
+    }
+    return res.json({ replays: visible });
+  } catch (error) {
+    console.error('[live-replay] discovery failed', { message: error.message });
+    return res.status(500).json({ error: 'Could not load LIVE replays' });
+  }
+});
+
+router.get('/:streamId/replays', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (!await canViewLiveReplay(stream, req.user.id)) return res.status(403).json({ error: 'You cannot view this replay' });
+    const isCreator = stream.creator_id === req.user.id;
+    let query = supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,error_code')
+      .eq('stream_id', streamId)
+      .order('created_at', { ascending: false }).limit(10);
+    query = isCreator
+      ? query.in('status', ['ready', 'starting', 'recording', 'processing', 'failed'])
+      : query.eq('status', 'ready').gt('expires_at', new Date().toISOString());
+    const { data, error } = await query;
+    if (error) throw error;
+    const visible = (data || []).filter((item) => item.status !== 'ready' || (item.expires_at && new Date(item.expires_at).getTime() > Date.now()));
+    return res.json({ replays: visible });
+  } catch (error) {
+    console.error('[live-replay] list failed', { streamId, message: error.message });
+    return res.status(500).json({ error: 'Could not load replays' });
+  }
+});
+
+router.get('/replays/:replayId/playback', async (req, res) => {
+  const replayId = req.params.replayId;
+  if (!validId(replayId)) return res.status(400).json({ error: 'Invalid replay' });
+  try {
+    const { data: replay, error } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,file_path,status,expires_at')
+      .eq('id', replayId).maybeSingle();
+    if (error) throw error;
+    if (!replay || replay.status !== 'ready' || !replay.file_path || !replay.expires_at || new Date(replay.expires_at).getTime() <= Date.now()) {
+      return res.status(404).json({ error: 'Replay is unavailable or has expired' });
+    }
+    const stream = await getStream(replay.stream_id);
+    if (!stream || !await canViewLiveReplay(stream, req.user.id)) return res.status(403).json({ error: 'You cannot view this replay' });
+    const { data, error: signedUrlError } = await supabaseAdmin.storage.from('live-replays').createSignedUrl(replay.file_path, 360);
+    if (signedUrlError) throw signedUrlError;
+    return res.json({ url: data.signedUrl, expiresInSeconds: 360 });
+  } catch (error) {
+    console.error('[live-replay] playback URL failed', { replayId, message: error.message });
+    return res.status(500).json({ error: 'Could not create replay playback URL' });
+  }
+});
+
+router.delete('/replays/:replayId', async (req, res) => {
+  const replayId = req.params.replayId;
+  if (!validId(replayId)) return res.status(400).json({ error: 'Invalid replay' });
+  try {
+    const { data: replay, error } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,creator_id,file_path,status').eq('id', replayId).maybeSingle();
+    if (error) throw error;
+    if (!replay) return res.status(404).json({ error: 'Replay not found' });
+    if (replay.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete this replay' });
+    if (['starting', 'recording', 'processing'].includes(replay.status)) return res.status(409).json({ error: 'Wait for the recording to finish before deleting it' });
+    if (replay.file_path) {
+      const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove([replay.file_path]);
+      if (removeError) throw removeError;
+    }
+    const { error: updateError } = await supabaseAdmin.from('live_stream_replays')
+      .update({
+        status: 'deleted',
+        file_path: null,
+        file_size_bytes: 0,
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      })
+      .eq('id', replayId);
+    if (updateError) throw updateError;
+    return res.json({ deleted: true });
+  } catch (error) {
+    console.error('[live-replay] delete failed', { replayId, message: error.message });
+    return res.status(500).json({ error: 'Could not delete replay' });
+  }
+});
 
 router.post('/creators/:creatorId/follow', async (req, res) => {
   const creatorId = req.params.creatorId;
@@ -764,6 +1131,9 @@ router.post('/:streamId/end', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
+    await stopActiveLiveReplayForStream(streamId).catch((error) => {
+      console.error('[live-replay] stop on stream end failed', { streamId, message: error.message });
+    });
     const { data: ended, error } = await supabaseAdmin.rpc('end_live_stream', {
       p_stream_id: streamId, p_creator_id: req.user.id,
     });

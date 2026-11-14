@@ -8,6 +8,8 @@ const healthRouter = require('./routes/health');
 const conversationsRouter = require('./routes/conversations');
 const aiRouter = require('./routes/ai');
 const internalRouter = require('./routes/internal');
+const liveKitEgressWebhookRouter = require('./routes/livekitEgressWebhook');
+const { startLiveReplayWorker } = require('./jobs/liveReplayWorker');
 const linkPreviewRouter = require('./routes/linkPreview');
 const safetyRouter = require('./routes/safety');
 const accountRouter = require('./routes/account');
@@ -123,6 +125,9 @@ app.set('trust proxy', 1);
 app.use(cors(createCorsOptions()));
 // Keep API payloads deliberately small: media uploads go directly to private storage,
 // so application JSON should never need large request bodies.
+// LiveKit signs the raw webhook bytes; mount before express.json consumes the body.
+app.use('/webhooks/livekit', liveKitEgressWebhookRouter);
+
 app.use(express.json({ limit: '100kb', strict: true }));
 
 // Root discovery endpoint: useful for platform smoke checks and avoids an
@@ -172,6 +177,7 @@ if (require.main === module) {
     startCallInvitationWorker();
     startCallEndNotificationWorker();
     startGroupCallMediaCleanupWorker();
+    startLiveReplayWorker();
   });
 }
 
