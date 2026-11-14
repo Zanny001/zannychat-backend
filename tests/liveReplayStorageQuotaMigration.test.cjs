@@ -11,6 +11,7 @@ const migration = fs.readFileSync(
 test('LIVE replay metadata is private and bounded to one replay per stream', () => {
   assert.match(migration, /create table if not exists public\.live_stream_replays/);
   assert.match(migration, /room_name text not null/);
+  assert.match(migration, /notification_sent_at timestamptz/);
   assert.match(migration, /enable row level security/);
   assert.match(migration, /revoke all on table public\.live_stream_replays from public, anon, authenticated/);
   assert.match(migration, /grant all on table public\.live_stream_replays to service_role/);
