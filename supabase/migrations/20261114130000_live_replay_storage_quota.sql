@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_replays (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   creator_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  room_name text NOT NULL,
   egress_id text UNIQUE,
   file_path text UNIQUE,
   status text NOT NULL DEFAULT 'starting'
