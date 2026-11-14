@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 
-const route = fs.readFileSync(new URL('../src/routes/liveHistory.js', import.meta.url), 'utf8');
+const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveHistory.js'), 'utf8');
 
 test('past LIVE deletion is creator-only and refuses active streams', () => {
   assert.match(route, /router\.delete\('\/:streamId'/);
