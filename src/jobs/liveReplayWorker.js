@@ -57,7 +57,7 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
   const { data, error } = await supabaseAdmin
     .from('live_stream_replays')
     .select('id, file_path, status')
-    .in('status', ['ready', 'failed', 'processing'])
+    .in('status', ['ready', 'failed', 'processing', 'deleted'])
     .not('expires_at', 'is', null)
     .lte('expires_at', cutoff)
     .limit(50);
