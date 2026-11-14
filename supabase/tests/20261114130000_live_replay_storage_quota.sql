@@ -28,11 +28,19 @@ BEGIN
      OR has_function_privilege('anon', 'public.reserve_live_replay_quota(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'replay quota reservation must be service-role only';
   END IF;
+  IF NOT has_function_privilege('service_role', 'public.finalize_live_replay_quota(uuid, integer, boolean)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.finalize_live_replay_quota(uuid, integer, boolean)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.finalize_live_replay_quota(uuid, integer, boolean)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'replay quota finalization must be service-role only';
+  END IF;
   IF NOT EXISTS (
     SELECT 1 FROM storage.buckets
-    WHERE id = 'live-replays' AND public = false AND file_size_limit = 48000000
+    WHERE id = 'live-replays'
+      AND public = false
+      AND file_size_limit = 48000000
+      AND allowed_mime_types = ARRAY['video/mp4']::text[]
   ) THEN
-    RAISE EXCEPTION 'private live-replays bucket with 50 MB cap is missing';
+    RAISE EXCEPTION 'private live-replays bucket with 48 MB MP4 cap is missing';
   END IF;
 END;
 $$;
