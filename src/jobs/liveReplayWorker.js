@@ -4,7 +4,6 @@ const { getLiveKitEgressConfig, stopEgress, MAX_REPLAY_SECONDS } = require('../s
 const STOP_SCAN_MS = 15000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
 const EXPIRY_MS = MAX_REPLAY_SECONDS * 1000;
-const RETENTION_DAYS = 7;
 let started = false;
 
 async function stopExpiredLiveReplays(now = Date.now()) {
