@@ -1,5 +1,5 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getLiveKitEgressConfig, stopEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 
 const STOP_SCAN_MS = 15000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
@@ -12,7 +12,7 @@ async function stopExpiredLiveReplays(now = Date.now()) {
   const cutoff = new Date(now - EXPIRY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, egress_id, status, started_at')
+    .select('id, egress_id, room_name, status, started_at')
     .in('status', ['starting', 'recording'])
     .lte('started_at', cutoff)
     .order('started_at', { ascending: true })
@@ -21,25 +21,39 @@ async function stopExpiredLiveReplays(now = Date.now()) {
 
   let stopped = 0;
   for (const replay of data || []) {
-    if (!replay.egress_id) {
+    let egressId = replay.egress_id;
+    if (!egressId) {
+      try {
+        const listed = await listEgress(replay.room_name, egressConfig);
+        const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+        egressId = found?.egress_id || found?.egressId || null;
+      } catch (error) {
+        console.error('[live-replay] Egress recovery lookup failed', { replayId: replay.id, message: error.message });
+        continue;
+      }
+      if (!egressId) {
+        await supabaseAdmin.from('live_stream_replays')
+          .update({
+            status: 'failed',
+            error_code: 'EGRESS_START_TIMEOUT',
+            completed_at: new Date(now).toISOString(),
+            expires_at: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .eq('id', replay.id)
+          .in('status', ['starting', 'recording']);
+        await supabaseAdmin.rpc('finalize_live_replay_quota', {
+          p_replay_id: replay.id,
+          p_actual_seconds: 0,
+          p_success: false,
+        });
+        continue;
+      }
       await supabaseAdmin.from('live_stream_replays')
-        .update({
-          status: 'failed',
-          error_code: 'EGRESS_START_TIMEOUT',
-          completed_at: new Date(now).toISOString(),
-          expires_at: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq('id', replay.id)
-        .in('status', ['starting', 'recording']);
-      await supabaseAdmin.rpc('finalize_live_replay_quota', {
-        p_replay_id: replay.id,
-        p_actual_seconds: 0,
-        p_success: false,
-      });
-      continue;
+        .update({ egress_id: egressId, status: 'recording' })
+        .eq('id', replay.id);
     }
     try {
-      await stopEgress(replay.egress_id, egressConfig);
+      await stopEgress(egressId, egressConfig);
       await supabaseAdmin.from('live_stream_replays')
         .update({ status: 'processing' })
         .eq('id', replay.id)
