@@ -51,7 +51,7 @@
     "test:chat-directory-rpcs": "node --test tests/chatDirectoryReadCursorsMigration.test.cjs",
     "test:database-hardening": "node --test tests/databaseHardeningMigrations.test.cjs tests/definerSearchPathHardeningMigration.test.cjs tests/securityDefinerInventoryAudit.test.cjs",
     "test:contact-directory-privacy": "node --test tests/contactDirectorySharedConversationPrivacy.test.cjs",
-    "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs tests/usernameDiscoveryMigrations.test.cjs tests/profileReadPrivacyHardeningMigration.test.cjs",
+    "test:migration-reconciliation": "node --test tests/messageDeletionModesMigration.test.cjs tests/messageRetractionPayloadMigration.test.cjs tests/profileDirectoryPrivacyMigration.test.cjs tests/chatDirectoryReadCursorsMigration.test.cjs tests/contactDirectorySharedConversationPrivacy.test.cjs tests/legacyMigrationCollision.test.cjs tests/migrationVersionUniqueness.test.cjs tests/usernameDiscoveryMigrations.test.cjs tests/profileReadPrivacyHardeningMigration.test.cjs tests/liveReplayStorageQuotaMigration.test.cjs",
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
     "test:group-calls": "node --test tests/groupCalls.test.cjs",
     "test:live-streams": "node --test tests/liveStreams.test.cjs",
@@ -60,7 +60,8 @@
     "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs",
     "test:status-block-privacy": "node --test tests/statusBlockPrivacyMigration.test.cjs",
     "test:ai-provider-failure": "node --test tests/aiProviderFailure.test.cjs",
-    "test:observability": "node --test tests/requestObservability.test.cjs"
+    "test:observability": "node --test tests/requestObservability.test.cjs",
+    "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
