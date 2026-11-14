@@ -1,5 +1,5 @@
 const { supabaseAdmin } = require('../config/supabaseAdmin');
-const { getLiveKitEgressConfig, getLiveReplayConfig, isLiveReplayEnabled, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, getLiveReplayConfig, isLiveReplayEnabled, validateReplayCredentials, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 
 const RECOVERY_SCAN_MS = 60 * 1000;
 const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
@@ -187,6 +187,12 @@ function startLiveReplayWorker() {
   const safeRun = (label, fn) => fn().catch((error) => {
     console.error('[live-replay] ' + label + ' failed', { message: error.message });
   });
+  if (replayConfig) {
+    safeRun('read-only credential validation', async () => {
+      const validation = await validateReplayCredentials(replayConfig);
+      console.info('[live-replay] credential validation', validation);
+    });
+  }
   safeRun('startup expiry recovery', () => stopExpiredLiveReplays());
   safeRun('startup retention cleanup', () => cleanupExpiredLiveReplays());
   const recoveryTimer = setInterval(() => safeRun('recovery scan', () => stopExpiredLiveReplays()), RECOVERY_SCAN_MS);

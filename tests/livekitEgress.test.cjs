@@ -11,6 +11,7 @@ const {
   stopEgress,
   listEgress,
   verifyLiveKitWebhook,
+  validateReplayCredentials,
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_OUTPUT_SECONDS,
   MAX_REPLAY_BYTES,
@@ -116,3 +117,37 @@ test('LIVE replay can recover an active Egress by its persisted room name', asyn
   assert.equal(request.body.active, true);
   assert.equal(result.items[0].egress_id, 'EG_recovered');
 });
+
+test('read-only replay credential validation authenticates Egress and Supabase S3 without starting a recording', async () => {
+  const calls = [];
+  const replayConfig = getLiveReplayConfig(env, liveKitConfig);
+  const result = await validateReplayCredentials(replayConfig, async (url, options) => {
+    calls.push({ url, options });
+    if (url.includes('/twirp/livekit.Egress/ListEgress')) {
+      return { ok: true, json: async () => ({ items: [] }) };
+    }
+    return { ok: true, status: 200 };
+  }, new Date('2026-11-14T12:00:00.000Z'));
+  assert.deepEqual(result, { configured: true, egressApiAuthenticated: true, storageListAuthorized: true });
+  assert.equal(calls.length, 2);
+  assert.ok(calls[0].url.endsWith('/twirp/livekit.Egress/ListEgress'));
+  assert.equal(calls[1].options.method, 'GET');
+  assert.ok(calls[1].url.includes('/storage/v1/s3/live-replays?list-type=2&max-keys=1'));
+  assert.match(calls[1].options.headers.Authorization, /^AWS4-HMAC-SHA256 Credential=access\/20261114\/eu-central-1\/s3\/aws4_request/);
+  assert.equal(calls.some((call) => call.url.includes('StartRoomCompositeEgress')), false);
+});
+
+test('read-only replay credential validation fails closed when the S3 key cannot list the private bucket', async () => {
+  const replayConfig = getLiveReplayConfig(env, liveKitConfig);
+  let calls = 0;
+  await assert.rejects(
+    validateReplayCredentials(replayConfig, async (url) => {
+      calls += 1;
+      if (url.includes('/twirp/livekit.Egress/ListEgress')) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: false, status: 403 };
+    }),
+    /Supabase S3 credential validation failed with HTTP 403/,
+  );
+  assert.equal(calls, 2);
+});
+
