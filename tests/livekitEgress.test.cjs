@@ -9,6 +9,7 @@ const {
   liveKitEgressUrl,
   startRoomCompositeEgress,
   stopEgress,
+  listEgress,
   verifyLiveKitWebhook,
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
@@ -99,4 +100,17 @@ test('LIVE replay webhook verifies issuer, signature and exact raw-body digest',
   assert.ok(verified);
   assert.equal(verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.bad', egressConfig, 1000), null);
   assert.equal(verifyLiveKitWebhook(Buffer.from('tampered'), 'Bearer ' + unsigned + '.' + signature, egressConfig, 1000), null);
+});
+
+test('LIVE replay can recover an active Egress by its persisted room name', async () => {
+  let request;
+  const egressConfig = { url: liveKitConfig.url, apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET };
+  const result = await listEgress('zlive_recovery_room', egressConfig, async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { ok: true, json: async () => ({ items: [{ egress_id: 'EG_recovered', status: 'EGRESS_ACTIVE' }] }) };
+  });
+  assert.equal(request.url, 'https://zannychat-test.livekit.cloud/twirp/livekit.Egress/ListEgress');
+  assert.equal(request.body.room_name, 'zlive_recovery_room');
+  assert.equal(request.body.active, true);
+  assert.equal(result.items[0].egress_id, 'EG_recovered');
 });
