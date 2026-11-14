@@ -33,11 +33,30 @@ async function finalizeReplay(event) {
     .eq('egress_id', egressId)
     .maybeSingle();
   if (error) throw error;
-  if (!replay || ['ready', 'failed', 'deleted'].includes(replay.status)) return { ignored: true };
+  if (!replay) return { ignored: true };
+  if (replay.status === 'ready') {
+    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+      p_replay_id: replay.id,
+      p_actual_seconds: replay.duration_seconds || 0,
+      p_success: true,
+    });
+    if (quotaError) throw quotaError;
+    return { alreadyReady: true };
+  }
+  if (replay.status === 'failed') {
+    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+      p_replay_id: replay.id,
+      p_actual_seconds: 0,
+      p_success: false,
+    });
+    if (quotaError) throw quotaError;
+    return { alreadyFailed: true };
+  }
+  if (replay.status === 'deleted') return { ignored: true };
 
   const file = getFileResults(info).find((item) => {
     const filename = item?.filename || item?.filepath || '';
-    return filename === replay.file_path || filename.endsWith('/' + replay.file_path);
+    return filename === replay.file_path || filename.endsWith('/' + replay.file_path) || filename.endsWith(replay.file_path);
   });
   const size = Number(file?.size || file?.sizeBytes || file?.size_bytes || 0);
   const durationSeconds = getDurationSeconds(file);
@@ -61,11 +80,12 @@ async function finalizeReplay(event) {
       .eq('id', replay.id)
       .in('status', ['starting', 'recording', 'processing']);
     if (updateError) throw updateError;
-    await supabaseAdmin.rpc('finalize_live_replay_quota', {
+    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id,
       p_actual_seconds: durationSeconds,
       p_success: true,
     });
+    if (quotaError) throw quotaError;
     return { ready: true };
   }
 
@@ -79,11 +99,12 @@ async function finalizeReplay(event) {
     .eq('id', replay.id)
     .in('status', ['starting', 'recording', 'processing']);
   if (updateError) throw updateError;
-  await supabaseAdmin.rpc('finalize_live_replay_quota', {
+  const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
     p_replay_id: replay.id,
     p_actual_seconds: 0,
     p_success: false,
   });
+  if (quotaError) throw quotaError;
   return { failed: true };
 }
 
