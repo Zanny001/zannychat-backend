@@ -171,6 +171,62 @@ function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.
   return payload;
 }
 
+async function validateReplayCredentials(replayConfig = getLiveReplayConfig(), fetchImpl = globalThis.fetch, now = new Date()) {
+  if (!replayConfig?.egressConfig || !replayConfig?.storage) {
+    return { configured: false, egressApiAuthenticated: false, storageListAuthorized: false };
+  }
+  if (typeof fetchImpl !== 'function') throw new Error('Replay credential validation requires fetch');
+
+  // Read-only Egress API request: this validates the dedicated Egress key without starting a recording.
+  await requestLiveKitEgress('ListEgress', { active: true }, replayConfig.egressConfig, fetchImpl);
+
+  // Read-only S3 ListObjectsV2 request: this validates the Supabase S3 key and bucket access without writing objects.
+  const storage = replayConfig.storage;
+  const url = new URL(storage.endpoint);
+  url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(storage.bucket);
+  const canonicalQuery = 'list-type=2&max-keys=1';
+  url.search = canonicalQuery;
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = createHash('sha256').update('').digest('hex');
+  const canonicalHeaders = [
+    'host:' + url.host,
+    'x-amz-content-sha256:' + payloadHash,
+    'x-amz-date:' + amzDate,
+    '',
+  ].join('\n');
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    'GET', url.pathname, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash,
+  ].join('\n');
+  const scope = dateStamp + '/' + storage.region + '/s3/aws4_request';
+  const stringToSign = [
+    'AWS4-HMAC-SHA256', amzDate, scope,
+    createHash('sha256').update(canonicalRequest).digest('hex'),
+  ].join('\n');
+  const hmac = (key, value, encoding) => createHmac('sha256', key).update(value).digest(encoding);
+  const dateKey = hmac('AWS4' + storage.secret, dateStamp);
+  const regionKey = hmac(dateKey, storage.region);
+  const serviceKey = hmac(regionKey, 's3');
+  const signingKey = hmac(serviceKey, 'aws4_request');
+  const signature = hmac(signingKey, stringToSign, 'hex');
+  const authorization = 'AWS4-HMAC-SHA256 Credential=' + storage.accessKey + '/' + scope
+    + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  const response = await fetchImpl(url.toString(), {
+    method: 'GET',
+    headers: {
+      Authorization: authorization,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    throw new Error('Supabase S3 credential validation failed with HTTP ' + response.status);
+  }
+  return { configured: true, egressApiAuthenticated: true, storageListAuthorized: true };
+}
+
 module.exports = {
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_OUTPUT_SECONDS,
@@ -185,4 +241,5 @@ module.exports = {
   stopEgress,
   listEgress,
   verifyLiveKitWebhook,
+  validateReplayCredentials,
 };

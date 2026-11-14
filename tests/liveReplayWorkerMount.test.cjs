@@ -32,3 +32,10 @@ test('LIVE replay worker logs configuration readiness without exposing credentia
   assert.ok(worker.includes('storageCredentialsConfigured: Boolean(replayConfig?.storage)'));
   assert.ok(worker.includes('replayEnabled: isLiveReplayEnabled()'));
 });
+
+test('LIVE replay worker performs read-only credential validation without enabling recording', () => {
+  assert.ok(worker.includes('validateReplayCredentials'));
+  assert.ok(worker.includes("safeRun('read-only credential validation'"));
+  assert.ok(worker.includes("console.info('[live-replay] credential validation'"));
+  assert.ok(worker.includes('replayEnabled: isLiveReplayEnabled()'));
+});
