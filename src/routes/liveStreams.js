@@ -475,7 +475,7 @@ router.delete('/replays/:replayId', async (req, res) => {
         status: 'deleted',
         file_path: null,
         file_size_bytes: 0,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       })
       .eq('id', replayId);
     if (updateError) throw updateError;
