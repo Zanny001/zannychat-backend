@@ -102,6 +102,31 @@ test('LIVE replay webhook verifies issuer, signature and exact raw-body digest',
   assert.ok(verified);
   assert.equal(verifyLiveKitWebhook(raw, 'Bearer ' + unsigned + '.bad', egressConfig, 1000), null);
   assert.equal(verifyLiveKitWebhook(Buffer.from('tampered'), 'Bearer ' + unsigned + '.' + signature, egressConfig, 1000), null);
+
+  const missingExpiryPayload = Buffer.from(JSON.stringify({
+    iss: env.LIVEKIT_EGRESS_API_KEY,
+    sha256: createHash('sha256').update(raw).digest('base64'),
+  })).toString('base64url');
+  const missingExpiryUnsigned = header + '.' + missingExpiryPayload;
+  const missingExpirySignature = createHmac('sha256', env.LIVEKIT_EGRESS_API_SECRET)
+    .update(missingExpiryUnsigned).digest('base64url');
+  assert.equal(
+    verifyLiveKitWebhook(raw, 'Bearer ' + missingExpiryUnsigned + '.' + missingExpirySignature, egressConfig, 1000),
+    null,
+  );
+
+  const expiredPayload = Buffer.from(JSON.stringify({
+    iss: env.LIVEKIT_EGRESS_API_KEY,
+    sha256: createHash('sha256').update(raw).digest('base64'),
+    exp: 900,
+  })).toString('base64url');
+  const expiredUnsigned = header + '.' + expiredPayload;
+  const expiredSignature = createHmac('sha256', env.LIVEKIT_EGRESS_API_SECRET)
+    .update(expiredUnsigned).digest('base64url');
+  assert.equal(
+    verifyLiveKitWebhook(raw, 'Bearer ' + expiredUnsigned + '.' + expiredSignature, egressConfig, 1000),
+    null,
+  );
 });
 
 test('LIVE replay can recover an active Egress by its persisted room name', async () => {
