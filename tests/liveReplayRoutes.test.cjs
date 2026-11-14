@@ -36,7 +36,7 @@ test('replay listing and playback preserve stream visibility and bidirectional b
   assert.match(liveRoutes, /canViewLiveReplay\(replay\.stream, req\.user\.id\)/);
   assert.match(liveRoutes, /router\.get\('\/:streamId\/replays'/);
   assert.match(liveRoutes, /router\.get\('\/replays\/:replayId\/playback'/);
-  assert.match(liveRoutes, /createSignedUrl\(replay\.file_path, 300\)/);
+  assert.match(liveRoutes, /createSignedUrl\(replay\.file_path, 360\)/);
   assert.doesNotMatch(liveRoutes, /getPublicUrl\(replay\.file_path/);
 });
 
