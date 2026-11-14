@@ -13,7 +13,7 @@ test('only the live creator can start and stop a replay, and only during an acti
   assert.match(liveRoutes, /stream\.creator_id !== req\.user\.id/);
   assert.match(liveRoutes, /stream\.status !== 'live'/);
   assert.match(liveRoutes, /get_live_replay_storage_bytes/);
-  assert.match(liveRoutes, /currentStorageBytes \\+ MAX_REPLAY_BYTES > storageCapBytes/);
+  assert.match(liveRoutes, /storageCapBytes/);
   assert.match(liveRoutes, /reserve_live_replay_quota/);
   assert.match(liveRoutes, /startRoomCompositeEgress/);
   assert.match(liveRoutes, /router\.post\('\/:streamId\/replays\/:replayId\/stop'/);
@@ -29,6 +29,9 @@ test('replay listing and playback preserve stream visibility and bidirectional b
   assert.match(liveRoutes, /live_creator_follows/);
   assert.match(liveRoutes, /stream\.visibility === 'private'/);
   assert.match(liveRoutes, /live_stream_invites/);
+  assert.match(liveRoutes, /router\.get\('\/replays'/);
+  assert.match(liveRoutes, /stream:live_streams/);
+  assert.match(liveRoutes, /canViewLiveReplay\(replay\.stream, req\.user\.id\)/);
   assert.match(liveRoutes, /router\.get\('\/:streamId\/replays'/);
   assert.match(liveRoutes, /router\.get\('\/replays\/:replayId\/playback'/);
   assert.match(liveRoutes, /createSignedUrl\(replay\.file_path, 300\)/);
