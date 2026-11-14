@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.live_stream_replays (
   file_size_bytes bigint NOT NULL DEFAULT 0 CHECK (file_size_bytes BETWEEN 0 AND 48000000),
   error_code text,
   notification_sent_at timestamptz,
+  notification_claimed_at timestamptz,
   started_at timestamptz,
   completed_at timestamptz,
   expires_at timestamptz,
