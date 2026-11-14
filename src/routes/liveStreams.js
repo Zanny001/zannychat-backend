@@ -304,6 +304,44 @@ router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
   }
 });
 
+router.get('/replays', async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const { data: readyRows, error: readyError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,stream:live_streams(id,creator_id,title,visibility,status)')
+      .eq('status', 'ready').gt('expires_at', now)
+      .order('completed_at', { ascending: false }).limit(20);
+    if (readyError) throw readyError;
+    const { data: ownerRows, error: ownerError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,stream:live_streams(id,creator_id,title,visibility,status)')
+      .eq('creator_id', req.user.id).in('status', ['starting', 'recording', 'processing', 'failed'])
+      .order('created_at', { ascending: false }).limit(10);
+    if (ownerError) throw ownerError;
+    const byId = new Map([...(readyRows || []), ...(ownerRows || [])].map((row) => [row.id, row]));
+    const visible = [];
+    for (const replay of byId.values()) {
+      if (replay.stream && await canViewLiveReplay(replay.stream, req.user.id)) {
+        visible.push({
+          id: replay.id,
+          streamId: replay.stream_id,
+          creatorId: replay.creator_id,
+          status: replay.status,
+          durationSeconds: replay.duration_seconds,
+          fileSizeBytes: replay.file_size_bytes,
+          completedAt: replay.completed_at,
+          expiresAt: replay.expires_at,
+          streamTitle: replay.stream.title,
+          visibility: replay.stream.visibility,
+        });
+      }
+    }
+    return res.json({ replays: visible });
+  } catch (error) {
+    console.error('[live-replay] discovery failed', { message: error.message });
+    return res.status(500).json({ error: 'Could not load LIVE replays' });
+  }
+});
+
 router.get('/:streamId/replays', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream' });
@@ -311,10 +349,15 @@ router.get('/:streamId/replays', async (req, res) => {
     const stream = await getStream(streamId);
     if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
     if (!await canViewLiveReplay(stream, req.user.id)) return res.status(403).json({ error: 'You cannot view this replay' });
-    const { data, error } = await supabaseAdmin.from('live_stream_replays')
-      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at')
-      .eq('stream_id', streamId).eq('status', 'ready').gt('expires_at', new Date().toISOString())
-      .order('completed_at', { ascending: false }).limit(10);
+    const isCreator = stream.creator_id === req.user.id;
+    let query = supabaseAdmin.from('live_stream_replays')
+      .select('id,stream_id,creator_id,status,duration_seconds,file_size_bytes,completed_at,expires_at,error_code')
+      .eq('stream_id', streamId)
+      .order('created_at', { ascending: false }).limit(10);
+    query = isCreator
+      ? query.in('status', ['ready', 'starting', 'recording', 'processing', 'failed'])
+      : query.eq('status', 'ready').gt('expires_at', new Date().toISOString());
+    const { data, error } = await query;
     if (error) throw error;
     return res.json({ replays: data || [] });
   } catch (error) {
