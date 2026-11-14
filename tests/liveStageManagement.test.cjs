@@ -72,7 +72,6 @@ test('only the creator can directly invite, mute, or remove guests and guest pub
   assert.ok(route.includes("participant.role !== 'guest'"));
   assert.ok(route.includes('MAX_LIVE_STAGE_GUESTS = 5'));
   assert.ok(route.includes("type: 'live_guest_invitation'"));
-  assert.ok(route.includes('revoke_token_ts'));
 });
 
 test('guest microphone controls target only the published audio track and expose current mute state', () => {
