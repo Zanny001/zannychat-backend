@@ -47,7 +47,7 @@ new_daily_totals AS (
   FROM daily_inserted
   GROUP BY creator_id
 )
-INSERT INTO public.live_creator_impact (
+INSERT INTO public.live_creator_impact AS current_impact (
   creator_id, impact_score, total_reactions, unique_supporters, updated_at
 )
 SELECT
@@ -60,7 +60,7 @@ FROM reaction_totals AS totals
 LEFT JOIN new_daily_totals AS daily USING (creator_id)
 LEFT JOIN new_supporter_totals AS supporters USING (creator_id)
 ON CONFLICT (creator_id) DO UPDATE SET
-  impact_score = public.live_creator_impact.impact_score + EXCLUDED.impact_score,
-  total_reactions = public.live_creator_impact.total_reactions + EXCLUDED.total_reactions,
-  unique_supporters = public.live_creator_impact.unique_supporters + EXCLUDED.unique_supporters,
+  impact_score = current_impact.impact_score + EXCLUDED.impact_score,
+  total_reactions = current_impact.total_reactions + EXCLUDED.total_reactions,
+  unique_supporters = current_impact.unique_supporters + EXCLUDED.unique_supporters,
   updated_at = now();
