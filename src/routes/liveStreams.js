@@ -253,26 +253,75 @@ router.post('/:streamId/replays/start', async (req, res) => {
       return res.status(429).json({ error: 'The monthly replay allowance is exhausted or another replay is active' });
     }
 
+    let egressId = null;
     try {
       const egress = await startRoomCompositeEgress({
         roomName: stream.room_name,
         filePath,
         replayConfig,
       });
-      const egressId = egress?.egress_id || egress?.egressId;
-      if (!egressId) throw new Error('LiveKit did not return an Egress id');
+      egressId = egress?.egress_id || egress?.egressId || null;
+      if (!egressId) {
+        const listed = await listEgress(stream.room_name, replayConfig.egressConfig);
+        const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+        egressId = found?.egress_id || found?.egressId || null;
+        if (!egressId) {
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+      }
       const { error: updateError } = await supabaseAdmin.from('live_stream_replays')
         .update({ egress_id: egressId, status: 'recording' })
         .eq('id', replayId);
-      if (updateError) {
-        await stopEgress(egressId, replayConfig.egressConfig).catch(() => {});
-        throw updateError;
-      }
+      if (updateError) throw updateError;
       scheduleLiveReplayStop(replayId, egressId, now);
       return res.status(201).json({
         replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
       });
     } catch (error) {
+      if (!egressId) {
+        try {
+          const listed = await listEgress(stream.room_name, replayConfig.egressConfig);
+          const found = (listed?.items || []).find((item) => item?.egress_id || item?.egressId);
+          egressId = found?.egress_id || found?.egressId || null;
+        } catch (lookupError) {
+          console.error('[live-replay] ambiguous Egress start; recovery lookup failed', { streamId, message: lookupError.message });
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+      }
+
+      if (egressId) {
+        let stopConfirmed = false;
+        try {
+          await stopEgress(egressId, replayConfig.egressConfig);
+          stopConfirmed = true;
+        } catch (stopError) {
+          if (stopError.message.includes('HTTP 404')) stopConfirmed = true;
+          else console.error('[live-replay] Egress recovery stop deferred', { replayId, message: stopError.message });
+        }
+        const recoveryStatus = stopConfirmed ? 'processing' : 'recording';
+        const { error: recoveryError } = await supabaseAdmin.from('live_stream_replays')
+          .update({ egress_id: egressId, status: recoveryStatus })
+          .eq('id', replayId);
+        if (recoveryError) {
+          console.error('[live-replay] Egress id could not be persisted; room recovery will retry', { replayId, message: recoveryError.message });
+          return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+        }
+        if (stopConfirmed) {
+          clearLiveReplayStop(replayId);
+          return res.status(202).json({ replay: { id: replayId, status: 'processing' } });
+        }
+        scheduleLiveReplayStop(replayId, egressId, now);
+        return res.status(201).json({
+          replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
+        });
+      }
+
+      const definitiveFailure = /HTTP (400|401|403|404|409|422|429)\b/.test(String(error.message || ''));
+      if (!definitiveFailure) {
+        console.error('[live-replay] ambiguous Egress start retained for recovery', { replayId, message: error.message });
+        return res.status(503).json({ error: 'Replay start is being reconciled; quota remains reserved safely' });
+      }
+
       await supabaseAdmin.from('live_stream_replays')
         .update({
           status: 'failed',
@@ -281,9 +330,12 @@ router.post('/:streamId/replays/start', async (req, res) => {
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         })
         .eq('id', replayId);
-      await supabaseAdmin.rpc('finalize_live_replay_quota', {
+      const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
         p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
       });
+      if (quotaError) {
+        console.error('[live-replay] failed-start quota release deferred', { replayId, message: quotaError.message });
+      }
       console.error('[live-replay] start failed', { streamId, message: error.message });
       return res.status(502).json({ error: 'Could not start the replay recording' });
     }
