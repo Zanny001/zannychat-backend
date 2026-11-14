@@ -67,7 +67,7 @@ DECLARE
   v_supporter_rows integer := 0;
   v_daily_rows integer := 0;
 BEGIN
-  IF p_stream_id IS NULL OR p_user_id IS NULL
+  IF p_stream_id IS NULL OR p_user_id IS NULL OR p_reaction IS NULL
      OR p_reaction NOT IN ('heart','clap','laugh','wow','fire','idea','support') THEN
     RAISE EXCEPTION 'Invalid LIVE reaction' USING ERRCODE = '22023';
   END IF;
