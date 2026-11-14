@@ -15,6 +15,7 @@ const {
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
 } = require('../services/livekitEgress');
+const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
@@ -174,6 +175,7 @@ async function stopActiveLiveReplayForStream(streamId) {
     .update({ status: 'processing' })
     .eq('id', replay.id)
     .in('status', ['starting', 'recording']);
+  clearLiveReplayStop(replay.id);
 }
 
 async function requireJoined(streamId, userId) {
@@ -267,6 +269,7 @@ router.post('/:streamId/replays/start', async (req, res) => {
         await stopEgress(egressId, replayConfig.egressConfig).catch(() => {});
         throw updateError;
       }
+      scheduleLiveReplayStop(replayId, egressId, now);
       return res.status(201).json({
         replay: { id: replayId, status: 'recording', startedAt: now, maxDurationSeconds: MAX_REPLAY_SECONDS },
       });
@@ -310,6 +313,7 @@ router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
       if (!error.message.includes('HTTP 404')) throw error;
     }
     await supabaseAdmin.from('live_stream_replays').update({ status: 'processing' }).eq('id', replay.id);
+    clearLiveReplayStop(replay.id);
     return res.status(202).json({ replay: { id: replay.id, status: 'processing' } });
   } catch (error) {
     console.error('[live-replay] stop failed', { replayId, message: error.message });
