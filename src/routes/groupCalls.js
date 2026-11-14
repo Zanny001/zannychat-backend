@@ -44,6 +44,10 @@ async function getGroupMembership(conversationId, userId) {
 router.post('/upgrade/:callId', async (req, res) => {
   const callId = String(req.params.callId || '');
   const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+  const requestedCallType = req.body?.callType;
+  if (requestedCallType !== undefined && !['audio', 'video'].includes(requestedCallType)) {
+    return res.status(400).json({ error: 'Choose a valid call media type' });
+  }
   if (!validId(callId) || userIds.length < 1 || userIds.length > 14
       || userIds.some((id) => !validId(id)) || new Set(userIds).size !== userIds.length) {
     return res.status(400).json({ error: 'Choose one to fourteen valid people to add' });
@@ -62,14 +66,16 @@ router.post('/upgrade/:callId', async (req, res) => {
       return res.status(409).json({ error: 'This call can no longer be upgraded' });
     }
 
+    const mediaCallType = requestedCallType || call.call_type;
     const roomId = randomUUID();
     const roomName = 'zgc_' + roomId.replace(/-/g, '');
-    const { data: room, error: promoteError } = await supabaseAdmin.rpc('promote_direct_call_to_group_room', {
+    const { data: room, error: promoteError } = await supabaseAdmin.rpc('promote_direct_call_to_group_room_with_media', {
       p_call_id: callId,
       p_actor_user_id: req.user.id,
       p_room_id: roomId,
       p_room_name: roomName,
       p_invited_user_ids: userIds,
+      p_call_type: mediaCallType,
     });
     if (promoteError) {
       if (promoteError.code === 'P0001') return res.status(409).json({ error: 'The call is no longer active. Start a new call and try again.' });
@@ -80,9 +86,9 @@ router.post('/upgrade/:callId', async (req, res) => {
     }
 
     const invitationResults = await Promise.allSettled(userIds.map((userId) => sendPushToUser(userId, {
-      title: call.call_type === 'video' ? 'Video call invitation' : 'Voice call invitation',
-      body: `${req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat member'} added you to an ongoing ${call.call_type} call`,
-      data: { type: 'group_call_invite', groupCallId: roomId, conversationId: call.conversation_id, callType: call.call_type },
+      title: mediaCallType === 'video' ? 'Video call invitation' : 'Voice call invitation',
+      body: `${req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat member'} added you to an ongoing ${mediaCallType} call`,
+      data: { type: 'group_call_invite', groupCallId: roomId, conversationId: call.conversation_id, callType: mediaCallType },
     })));
     const pushAccepted = invitationResults.filter((result) => result.status === 'fulfilled' && Number(result.value?.sent) > 0).length;
     return res.status(201).json({
