@@ -52,15 +52,17 @@ test('Egress webhook verifies raw signed payloads and validates output before ma
   assert.match(webhookRoute, /verifyLiveKitWebhook/);
   assert.match(webhookRoute, /event\?\.event !== 'egress_ended'/);
   assert.match(webhookRoute, /size <= MAX_REPLAY_BYTES/);
-  assert.match(webhookRoute, /durationSeconds <= MAX_REPLAY_SECONDS/);
+  assert.match(webhookRoute, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
   assert.match(webhookRoute, /status: 'ready'/);
   assert.match(webhookRoute, /clearLiveReplayStop/);
 });
 
 test('server worker stops expired recordings and deletes expired private objects', () => {
-  assert.match(worker, /STOP_SCAN_MS = 15000/);
+  assert.match(worker, /RECOVERY_SCAN_MS = 60 * 1000/);
   assert.match(worker, /MAX_REPLAY_SECONDS \* 1000/);
   assert.match(worker, /stopEgress/);
+  assert.match(worker, /scheduleLiveReplayStop/);
+  assert.match(worker, /STOP_RETRY_MS/);
   assert.match(worker, /CLEANUP_SCAN_MS/);
   assert.match(worker, /live-replays/);
   assert.match(worker, /status === 'processing'/);
