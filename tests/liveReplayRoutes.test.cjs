@@ -58,6 +58,9 @@ test('Egress webhook verifies raw signed payloads and validates output before ma
   assert.match(webhookRoute, /sendPushToUser/);
   assert.match(webhookRoute, /live_replay_ready/);
   assert.match(webhookRoute, /notification_sent_at/);
+  assert.match(webhookRoute, /notification_claimed_at/);
+  assert.match(webhookRoute, /notification_claimed_at\.is\.null/);
+  assert.match(webhookRoute, /notification_claimed_at\.lt\./);
 });
 
 test('server worker stops expired recordings and deletes expired private objects', () => {
