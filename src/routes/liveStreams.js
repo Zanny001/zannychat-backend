@@ -513,7 +513,7 @@ router.get('/creators/me/profile', async (req, res) => {
       supabaseAdmin.from('live_creator_impact').select('impact_score,total_reactions,unique_supporters,updated_at').eq('creator_id', creatorId).maybeSingle(),
       supabaseAdmin.from('live_creator_follows').select('follower_id', { count: 'exact', head: true }).eq('creator_id', creatorId),
       supabaseAdmin.from('live_streams').select('id,status,started_at,title', { count: 'exact' }).eq('creator_id', creatorId).order('started_at', { ascending: false }).limit(100),
-      supabaseAdmin.from('live_stream_replays').select('id,status,duration_seconds,file_size_bytes,completed_at,stream_id', { count: 'exact' }).eq('creator_id', creatorId).order('created_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('live_stream_replays').select('id,status,duration_seconds,file_size_bytes,completed_at,stream_id', { count: 'exact' }).eq('creator_id', creatorId).neq('status', 'deleted').order('created_at', { ascending: false }).limit(100),
     ]);
     for (const result of [profileResult, impactResult, followerResult, streamResult, replayResult]) {
       if (result.error) throw result.error;
