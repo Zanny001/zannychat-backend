@@ -44,6 +44,26 @@ USING (
     FROM public.status_updates AS visible_status
     WHERE visible_status.user_id = profiles.id
   )
+  OR EXISTS (
+    -- A status owner can label people who viewed their own active status.
+    SELECT 1
+    FROM public.status_views AS viewer_receipt
+    JOIN public.status_updates AS owned_status
+      ON owned_status.id = viewer_receipt.status_id
+    WHERE viewer_receipt.viewer_id = profiles.id
+      AND owned_status.user_id = (SELECT auth.uid())
+      AND owned_status.expires_at > now()
+  )
+  OR EXISTS (
+    -- A status owner can identify senders of private replies to their active status.
+    SELECT 1
+    FROM public.status_replies AS status_reply
+    JOIN public.status_updates AS replied_status
+      ON replied_status.id = status_reply.status_id
+    WHERE status_reply.sender_id = profiles.id
+      AND replied_status.user_id = (SELECT auth.uid())
+      AND replied_status.expires_at > now()
+  )
 );
 
 -- Do not let authenticated clients read private profile columns directly.
