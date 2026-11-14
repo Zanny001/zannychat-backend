@@ -21,7 +21,7 @@ const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
 
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
-const REACTIONS = new Set(['heart','clap','laugh','wow','fire']);
+const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support']);
 
 function validId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -47,6 +47,26 @@ async function hasBlockBetween(userA, userB) {
     .select('blocker_id').eq('blocker_id', userB).eq('blocked_id', userA).maybeSingle();
   if (secondError) throw secondError;
   return Boolean(first || second);
+}
+
+async function canViewCreatorImpact(viewerId, creatorId) {
+  if (viewerId === creatorId) return true;
+  if (await hasBlockBetween(viewerId, creatorId)) return false;
+  const { data: details, error: detailsError } = await supabaseAdmin.from('profile_details')
+    .select('profile_visibility').eq('user_id', creatorId).maybeSingle();
+  if (detailsError) throw detailsError;
+  const visibility = details?.profile_visibility || 'everyone';
+  if (visibility === 'everyone') return true;
+  if (visibility !== 'contacts') return false;
+  const { data: mine, error: mineError } = await supabaseAdmin.from('conversation_participants')
+    .select('conversation_id').eq('user_id', viewerId);
+  if (mineError) throw mineError;
+  const conversationIds = [...new Set((mine || []).map((row) => row.conversation_id).filter(Boolean))];
+  if (!conversationIds.length) return false;
+  const { data: shared, error: sharedError } = await supabaseAdmin.from('conversation_participants')
+    .select('conversation_id').eq('user_id', creatorId).in('conversation_id', conversationIds).limit(1);
+  if (sharedError) throw sharedError;
+  return Boolean(shared?.length);
 }
 
 async function getBlockedUserIds(userId, otherIds) {
@@ -968,6 +988,43 @@ router.post('/:streamId/comments/:commentId/hide', async (req, res) => {
   }
 });
 
+router.get('/creators/:creatorId/impact', async (req, res) => {
+  const creatorId = req.params.creatorId;
+  if (!validId(creatorId)) return res.status(400).json({ error: 'Invalid creator id' });
+  try {
+    if (!await canViewCreatorImpact(req.user.id, creatorId)) {
+      return res.status(404).json({ error: 'Creator impact is unavailable' });
+    }
+    const { data: creatorProfile, error: profileError } = await supabaseAdmin.from('profiles')
+      .select('id').eq('id', creatorId).maybeSingle();
+    if (profileError) throw profileError;
+    if (!creatorProfile) return res.status(404).json({ error: 'Creator impact is unavailable' });
+    const { data, error } = await supabaseAdmin.from('live_creator_impact')
+      .select('impact_score,total_reactions,unique_supporters,updated_at')
+      .eq('creator_id', creatorId).maybeSingle();
+    if (error) throw error;
+    const impactScore = Number(data?.impact_score || 0);
+    const badges = [
+      { threshold: 10, id: 'first-spark', label: 'First Spark' },
+      { threshold: 50, id: 'community-favorite', label: 'Community Favorite' },
+      { threshold: 250, id: 'stage-star', label: 'Stage Star' },
+      { threshold: 1000, id: 'iconic-voice', label: 'Iconic Voice' },
+    ].filter((badge) => impactScore >= badge.threshold).map(({ id, label }) => ({ id, label }));
+    return res.json({
+      impact: {
+        impactScore,
+        totalReactions: Number(data?.total_reactions || 0),
+        uniqueSupporters: Number(data?.unique_supporters || 0),
+        badges,
+        updatedAt: data?.updated_at || null,
+      },
+    });
+  } catch (error) {
+    console.error('[live] creator impact lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'Creator impact is temporarily unavailable' });
+  }
+});
+
 router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error: 'Please slow down before sending another LIVE reaction.' }), async (req, res) => {
   const streamId = req.params.streamId;
   const reaction = req.body?.reaction;
@@ -980,11 +1037,14 @@ router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error
       return res.status(403).json({ error: 'Reactions are unavailable' });
     }
     if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before reacting' });
-    const { error } = await supabaseAdmin.from('live_stream_reactions').insert({
-      stream_id: streamId, user_id: req.user.id, reaction,
+    const { data: impactRows, error } = await supabaseAdmin.rpc('record_live_creator_impact', {
+      p_stream_id: streamId,
+      p_user_id: req.user.id,
+      p_reaction: reaction,
     });
     if (error) throw error;
-    return res.status(201).json({ accepted: true });
+    const impact = Array.isArray(impactRows) ? impactRows[0] : null;
+    return res.status(201).json({ accepted: true, impact });
   } catch (error) {
     console.error('[live] reaction failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not send LIVE reaction' });

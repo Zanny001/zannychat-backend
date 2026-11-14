@@ -38,7 +38,7 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes('router.use(requireAuth'));
   assert.ok(route.includes(".eq('visibility', 'public')"));
   assert.ok(route.includes("if (!stream.allow_comments)"));
-  assert.ok(route.includes("const REACTIONS = new Set(['heart','clap','laugh','wow','fire'])"));
+  assert.ok(route.includes("const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support'])"));
   assert.ok(route.includes("const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other'])"));
   assert.ok(route.includes('stream.creator_id !== req.user.id'));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
