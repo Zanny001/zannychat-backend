@@ -14,10 +14,11 @@ test('LiveKit Egress webhook is mounted before the global JSON parser', () => {
 });
 
 test('replay worker and webhook import the Supabase client rather than the module wrapper', () => {
-  assert.match(worker, /const \\{ supabaseAdmin \\} = require\\('..\\/config\\/supabaseAdmin'\\)/);
-  assert.match(webhook, /const \\{ supabaseAdmin \\} = require\\('..\\/config\\/supabaseAdmin'\\)/);
-  assert.match(worker, /if \\(started \\|\\| !supabaseAdmin\\) return;/);
-  assert.match(webhook, /if \\(!supabaseAdmin \\|\\| !egressConfig/);
+  const clientImport = "const { supabaseAdmin } = require('../config/supabaseAdmin')";
+  assert.ok(worker.includes(clientImport));
+  assert.ok(webhook.includes(clientImport));
+  assert.ok(worker.includes('if (started || !supabaseAdmin) return;'));
+  assert.ok(webhook.includes('if (!supabaseAdmin || !egressConfig'));
 });
 
 test('replay expiry and retention worker starts with the production backend process', () => {
