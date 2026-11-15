@@ -10,7 +10,7 @@ const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 test('account deletion queues cleanup before Auth deletion and only releases it after success', () => {
   const queue = account.indexOf("from('account_storage_cleanup_jobs')");
   const deletion = account.indexOf('supabaseAdmin.auth.admin.deleteUser');
-  const due = account.indexOf(".update({ next_attempt_at: new Date().toISOString() })");
+  const due = account.indexOf(".update({ status: 'pending', next_attempt_at: new Date().toISOString() })");
   assert.ok(queue >= 0 && deletion > queue && due > deletion);
   assert.ok(account.includes("status: 'held'"));
   assert.ok(account.includes(".update({ status: 'pending', next_attempt_at: new Date().toISOString() })"));
