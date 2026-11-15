@@ -83,3 +83,12 @@ test('replay egress stops promptly when a LIVE stream ends before the five-minut
   assert.ok(replayWorker.includes('endedStreamIds.has(replay.stream_id)'));
   assert.ok(replayWorker.includes('!foundStreamIds.has(replay.stream_id)'));
 });
+
+
+test('LIVE end authorization is checked before stopping Egress or deleting the room', () => {
+  const endStart = liveRoute.indexOf("router.post('/:streamId/end'");
+  const endRoute = liveRoute.slice(endStart);
+  assert.ok(endStart >= 0);
+  assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('stopActiveLiveReplayForStream(streamId)'));
+  assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('deleteLiveKitRoom(stream.room_name)'));
+});
