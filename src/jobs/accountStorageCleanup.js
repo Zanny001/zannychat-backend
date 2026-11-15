@@ -8,17 +8,23 @@ function retryAt(attempts) {
 }
 
 async function removeUserPersonalStorage(admin, userId) {
-  const { data: objects, error } = await admin
-    .schema('storage')
-    .from('objects')
-    .select('bucket_id,name')
-    .in('bucket_id', PERSONAL_BUCKETS)
-    .or(`owner_id.eq.${userId},owner.eq.${userId},name.like.${userId}/%`)
-    .limit(5000);
-  if (error) throw error;
+  const objects = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data: page, error } = await admin
+      .schema('storage')
+      .from('objects')
+      .select('bucket_id,name')
+      .in('bucket_id', PERSONAL_BUCKETS)
+      .or(`owner_id.eq.${userId},owner.eq.${userId},name.like.${userId}/%`)
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    objects.push(...(page || []));
+    if (!page || page.length < pageSize) break;
+  }
 
   const byBucket = new Map();
-  for (const object of objects || []) {
+  for (const object of objects) {
     if (!PERSONAL_BUCKETS.includes(object.bucket_id) || typeof object.name !== 'string') continue;
     const paths = byBucket.get(object.bucket_id) || [];
     paths.push(object.name);
