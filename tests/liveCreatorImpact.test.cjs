@@ -47,7 +47,7 @@ test('creator impact endpoint delegates to a fail-closed profile and block visib
   assert.ok(guard.includes("visibility !== 'contacts') return false"));
 });
 
-const creatorReactionMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114234500_allow_creator_live_reactions_without_self_impact.sql'), 'utf8');
+const creatorReactionMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114224335_allow_creator_live_reactions_without_self_impact.sql'), 'utf8');
 
 test('LIVE creators can react on their own broadcast without awarding themselves impact', () => {
   const start = creatorReactionMigration.indexOf('CREATE OR REPLACE FUNCTION public.record_live_creator_impact');
