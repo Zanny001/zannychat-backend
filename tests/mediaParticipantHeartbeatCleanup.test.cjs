@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090002_media_participant_heartbeat_leases.sql'), 'utf8');
 const worker = require('../src/jobs/mediaParticipantHeartbeatCleanup');
+const roomAdmin = require('../src/services/livekitRoomAdmin');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
@@ -91,4 +92,47 @@ test('LIVE end authorization is checked before stopping Egress or deleting the r
   assert.ok(endStart >= 0);
   assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('stopActiveLiveReplayForStream(streamId)'));
   assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('deleteLiveKitRoom(stream.room_name)'));
+});
+
+
+test('ended LIVE room cleanup waits for replay egress and then deletes the room', async () => {
+  const deletedRooms = [];
+  const admin = {
+    from(table) {
+      const query = {
+        filters: {},
+        select() { return this; },
+        eq(key, value) { this.filters[key] = value; return this; },
+        lt(key, value) { this.filters[key] = value; return this; },
+        in(key, value) { this.filters[key] = value; return this; },
+        limit() {
+          if (table === 'live_streams') {
+            return Promise.resolve({ data: [
+              { id: 'stream-wait', room_name: 'zlive_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+              { id: 'stream-delete', room_name: 'zlive_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+            ], error: null });
+          }
+          return Promise.resolve({
+            data: this.filters.stream_id === 'stream-wait' ? [{ id: 'replay-active' }] : [],
+            error: null,
+          });
+        },
+      };
+      return query;
+    },
+  };
+  const result = await worker.cleanupEndedLiveRooms({
+    admin,
+    deleteRoom: async (roomName) => { deletedRooms.push(roomName); },
+    now: Date.parse('2026-11-15T01:00:00.000Z'),
+    graceMs: 60_000,
+  });
+  assert.deepEqual(deletedRooms, ['zlive_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']);
+  assert.deepEqual(result, { scanned: 2, deleted: 1, waitingForReplay: 1, failed: 0 });
+});
+
+test('LiveKit room deletion accepts only generated LIVE and group room prefixes', async () => {
+  const config = { url: 'wss://example.livekit.cloud', apiKey: 'key', apiSecret: 'secret' };
+  await assert.rejects(roomAdmin.deleteLiveKitRoom('zlive_not-a-valid-id', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }));
+  await assert.rejects(roomAdmin.deleteLiveKitRoom('zgc_not-a-valid-id', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }));
 });
