@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.account_storage_cleanup_jobs (
   user_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  status text NOT NULL DEFAULT 'held' CHECK (status IN ('held', 'pending')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   last_error text
 );
