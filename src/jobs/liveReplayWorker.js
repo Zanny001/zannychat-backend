@@ -75,11 +75,19 @@ async function stopExpiredLiveReplays(now = Date.now()) {
   if (!egressConfig) return { scanned: 0, stopped: 0 };
   const { data, error } = await supabaseAdmin
     .from('live_stream_replays')
-    .select('id, egress_id, room_name, status, started_at')
+    .select('id, stream_id, egress_id, room_name, status, started_at')
     .in('status', ['starting', 'recording'])
     .order('started_at', { ascending: true })
     .limit(25);
   if (error) throw error;
+
+  const streamIds = [...new Set((data || []).map((replay) => replay.stream_id).filter(Boolean))];
+  const { data: streams, error: streamsError } = streamIds.length
+    ? await supabaseAdmin.from('live_streams').select('id,status').in('id', streamIds)
+    : { data: [], error: null };
+  if (streamsError) throw streamsError;
+  const foundStreamIds = new Set((streams || []).map((stream) => stream.id));
+  const endedStreamIds = new Set((streams || []).filter((stream) => stream.status !== 'live').map((stream) => stream.id));
 
   let stopped = 0;
   for (const replay of data || []) {
@@ -122,7 +130,7 @@ async function stopExpiredLiveReplays(now = Date.now()) {
 
     scheduleLiveReplayStop(replay.id, egressId, replay.started_at);
     const startedMs = new Date(replay.started_at || now).getTime();
-    if (now >= startedMs + EXPIRY_MS) {
+    if (!foundStreamIds.has(replay.stream_id) || endedStreamIds.has(replay.stream_id) || now >= startedMs + EXPIRY_MS) {
       try {
         if (await stopReplayNow(replay.id, egressId)) stopped += 1;
       } catch (stopError) {
