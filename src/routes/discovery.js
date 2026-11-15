@@ -2,7 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { makeLimiter } = require('../middleware/rateLimit');
-const { normalizeE164, phoneHash, hashContactBatch } = require('../utils/phoneDiscovery');
+const { normalizeE164, phoneHash, hashContactBatch, filterPhoneDiscoveryMatches } = require('../utils/phoneDiscovery');
 
 const router = express.Router();
 // Discovery responses contain privacy-sensitive account/profile state and must never be cached.
@@ -95,9 +95,56 @@ router.post('/match', matchLimiter, async (req, res) => {
   const { data: withinQuota, error: quotaError } = await supabaseAdmin.rpc('consume_phone_discovery_match_limit', { p_user_id: req.user.id });
   if (quotaError) { console.error('[discovery] persistent rate limit check failed'); return res.status(503).json({ error: 'Contact discovery is temporarily unavailable' }); }
   if (withinQuota !== true) return res.status(429).json({ error: 'Contact matching is rate-limited. Please wait before trying again.' });
-  const { data, error } = await supabaseAdmin.from('phone_discovery').select('user_id, profiles:user_id(id,name,avatar_url,avatar_color,status)').in('phone_hash', hashes).eq('discoverable', true).neq('user_id', req.user.id).limit(100);
-  if (error) { console.error('[discovery] match query failed'); return res.status(500).json({ error: 'Unable to match contacts right now' }); }
-  const matches = (data || []).filter((row) => row.profiles).map((row) => ({ id: row.profiles.id, name: row.profiles.name || 'ZannyChat member', avatarUrl: row.profiles.avatar_url || null, avatarColor: row.profiles.avatar_color || null, status: row.profiles.status || null }));
+  const { data: candidates, error: candidateError } = await supabaseAdmin
+    .from('phone_discovery')
+    .select('user_id')
+    .in('phone_hash', hashes)
+    .eq('discoverable', true)
+    .neq('user_id', req.user.id)
+    .limit(100);
+  if (candidateError) { console.error('[discovery] match query failed'); return res.status(500).json({ error: 'Unable to match contacts right now' }); }
+  const candidateIds = [...new Set((candidates || []).map((row) => row.user_id).filter(Boolean))];
+  if (!candidateIds.length) return res.json({ matches: [] });
+
+  const [profilesResult, detailsResult, viewerMembershipsResult, blockedByViewerResult, blockingViewerResult] = await Promise.all([
+    supabaseAdmin.from('profiles').select('id,name,avatar_url,avatar_color,status').in('id', candidateIds),
+    supabaseAdmin.from('profile_details').select('user_id,profile_visibility,photo_visibility').in('user_id', candidateIds),
+    supabaseAdmin.from('conversation_participants').select('conversation_id').eq('user_id', req.user.id),
+    supabaseAdmin.from('blocked_users').select('blocked_id').eq('blocker_id', req.user.id).in('blocked_id', candidateIds),
+    supabaseAdmin.from('blocked_users').select('blocker_id').eq('blocked_id', req.user.id).in('blocker_id', candidateIds),
+  ]);
+  const lookupError = profilesResult.error || detailsResult.error || viewerMembershipsResult.error
+    || blockedByViewerResult.error || blockingViewerResult.error;
+  if (lookupError) {
+    console.error('[discovery] privacy-filtered match lookup failed');
+    return res.status(503).json({ error: 'Contact matching is temporarily unavailable' });
+  }
+
+  const conversationIds = [...new Set((viewerMembershipsResult.data || []).map((row) => row.conversation_id).filter(Boolean))];
+  let sharedUserIds = [];
+  if (conversationIds.length) {
+    const { data: sharedParticipants, error: sharedError } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('user_id')
+      .in('conversation_id', conversationIds)
+      .in('user_id', candidateIds);
+    if (sharedError) {
+      console.error('[discovery] shared-contact privacy lookup failed');
+      return res.status(503).json({ error: 'Contact matching is temporarily unavailable' });
+    }
+    sharedUserIds = [...new Set((sharedParticipants || []).map((row) => row.user_id).filter(Boolean))];
+  }
+
+  const blockedUserIds = [
+    ...(blockedByViewerResult.data || []).map((row) => row.blocked_id),
+    ...(blockingViewerResult.data || []).map((row) => row.blocker_id),
+  ];
+  const matches = filterPhoneDiscoveryMatches({
+    profiles: profilesResult.data || [],
+    profileDetails: detailsResult.data || [],
+    sharedUserIds,
+    blockedUserIds,
+  });
   return res.json({ matches });
 });
 
