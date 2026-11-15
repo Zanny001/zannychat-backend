@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeE164, phoneHash, hashContactBatch } = require('../src/utils/phoneDiscovery');
+const { normalizeE164, phoneHash, hashContactBatch, filterPhoneDiscoveryMatches } = require('../src/utils/phoneDiscovery');
 const root = path.join(__dirname, '..');
 
 test('E.164 normalization accepts international numbers and rejects ambiguous local values', () => {
@@ -78,4 +78,47 @@ test('discovery routes require verified auth enrollment, opt-in, bounded matchin
   const quotaIndex = route.indexOf("consume_phone_discovery_match_limit");
   assert.ok(validationIndex >= 0 && hashingIndex > validationIndex && emptyBatchIndex > hashingIndex && quotaIndex > emptyBatchIndex,
     'validate and hash a non-empty batch before consuming the persistent quota');
+});
+
+test('phone discovery matches respect profile visibility, photo visibility and bidirectional blocks independently', () => {
+  const profiles = [
+    { id: 'everyone', name: 'Everyone', avatar_url: 'public-everyone', avatar_color: '#111', status: 'hello' },
+    { id: 'private-profile', name: 'Private', avatar_url: 'private-profile-url' },
+    { id: 'contacts-profile', name: 'Contacts', avatar_url: 'contacts-profile-url' },
+    { id: 'private-photo', name: 'Private photo', avatar_url: 'private-photo-url' },
+    { id: 'contacts-photo', name: 'Contacts photo', avatar_url: 'contacts-photo-url' },
+    { id: 'blocked', name: 'Blocked', avatar_url: 'blocked-url' },
+  ];
+  const profileDetails = [
+    { user_id: 'private-profile', profile_visibility: 'nobody', photo_visibility: 'everyone' },
+    { user_id: 'contacts-profile', profile_visibility: 'contacts', photo_visibility: 'everyone' },
+    { user_id: 'private-photo', profile_visibility: 'everyone', photo_visibility: 'nobody' },
+    { user_id: 'contacts-photo', profile_visibility: 'everyone', photo_visibility: 'contacts' },
+  ];
+  const matches = filterPhoneDiscoveryMatches({
+    profiles,
+    profileDetails,
+    sharedUserIds: ['contacts-profile', 'contacts-photo'],
+    blockedUserIds: ['blocked'],
+  });
+  assert.deepEqual(matches.map((match) => match.id), ['everyone', 'contacts-profile', 'private-photo', 'contacts-photo']);
+  assert.equal(matches.find((match) => match.id === 'private-photo').avatarUrl, null);
+  assert.equal(matches.find((match) => match.id === 'contacts-photo').avatarUrl, 'contacts-photo-url');
+  assert.equal(matches.find((match) => match.id === 'everyone').avatarUrl, 'public-everyone');
+});
+
+test('phone discovery hides contacts-only profiles and photos without a shared conversation', () => {
+  const matches = filterPhoneDiscoveryMatches({
+    profiles: [
+      { id: 'profile', name: 'Profile', avatar_url: 'profile-url' },
+      { id: 'photo', name: 'Photo', avatar_url: 'photo-url' },
+    ],
+    profileDetails: [
+      { user_id: 'profile', profile_visibility: 'contacts', photo_visibility: 'everyone' },
+      { user_id: 'photo', profile_visibility: 'everyone', photo_visibility: 'contacts' },
+    ],
+    sharedUserIds: [],
+    blockedUserIds: [],
+  });
+  assert.deepEqual(matches, [{ id: 'photo', name: 'Photo', avatarUrl: null, avatarColor: null, status: null }]);
 });
