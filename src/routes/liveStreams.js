@@ -782,10 +782,6 @@ router.post('/:streamId/join', async (req, res) => {
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
     }
-    const { error: heartbeatError } = await supabaseAdmin.from('live_stream_participants')
-      .update({ last_seen_at: new Date().toISOString() })
-      .eq('stream_id', streamId).eq('user_id', req.user.id).eq('status', 'joined');
-    if (heartbeatError) throw heartbeatError;
     if (role === 'guest') {
       const { count: stageCount, error: stageCountError } = await supabaseAdmin.from('live_stream_participants')
         .select('id', { count: 'exact', head: true })
