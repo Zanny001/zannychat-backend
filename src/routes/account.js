@@ -32,6 +32,70 @@ router.post('/delete', async (req, res) => {
   }
 
   try {
+    const userId = req.user.id;
+
+    // Do not cascade-delete session rows while their external media rooms or
+    // Egress jobs are still active. The user must leave/end these first.
+    const { data: activeLive, error: activeLiveError } = await supabaseAdmin.from('live_streams')
+      .select('id').eq('creator_id', userId).eq('status', 'live').limit(1).maybeSingle();
+    if (activeLiveError) throw activeLiveError;
+    if (activeLive) return res.status(409).json({ error: 'End your active LIVE stream before deleting your account.' });
+
+    const { data: activeReplay, error: activeReplayError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,status').eq('creator_id', userId)
+      .in('status', ['starting', 'recording', 'processing']).limit(1).maybeSingle();
+    if (activeReplayError) throw activeReplayError;
+    if (activeReplay) return res.status(409).json({ error: 'Wait for your LIVE replay to finish before deleting your account.' });
+
+    const { data: activeCall, error: activeCallError } = await supabaseAdmin.from('call_sessions')
+      .select('id').or(`caller_id.eq.${userId},callee_id.eq.${userId}`)
+      .in('status', ['ringing', 'accepted']).limit(1).maybeSingle();
+    if (activeCallError) throw activeCallError;
+    if (activeCall) return res.status(409).json({ error: 'End your active call before deleting your account.' });
+
+    const { data: activeGroupRoom, error: activeGroupRoomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id').eq('host_user_id', userId).in('status', ['ringing', 'active'])
+      .is('ended_at', null).limit(1).maybeSingle();
+    if (activeGroupRoomError) throw activeGroupRoomError;
+    if (activeGroupRoom) return res.status(409).json({ error: 'End your active group call before deleting your account.' });
+
+    const { data: joinedGroupParticipants, error: groupParticipantError } = await supabaseAdmin.from('group_call_participants')
+      .select('room_id').eq('user_id', userId).eq('status', 'joined').is('left_at', null).limit(100);
+    if (groupParticipantError) throw groupParticipantError;
+    const groupRoomIds = [...new Set((joinedGroupParticipants || []).map((row) => row.room_id).filter(Boolean))];
+    if (groupRoomIds.length) {
+      const { data: joinedGroupRoom, error: joinedGroupRoomError } = await supabaseAdmin.from('group_call_rooms')
+        .select('id').in('id', groupRoomIds).in('status', ['ringing', 'active'])
+        .is('ended_at', null).limit(1).maybeSingle();
+      if (joinedGroupRoomError) throw joinedGroupRoomError;
+      if (joinedGroupRoom) return res.status(409).json({ error: 'Leave your active group call before deleting your account.' });
+    }
+
+    const { data: joinedLiveParticipants, error: liveParticipantError } = await supabaseAdmin.from('live_stream_participants')
+      .select('stream_id').eq('user_id', userId).eq('status', 'joined').is('left_at', null).limit(100);
+    if (liveParticipantError) throw liveParticipantError;
+    const liveStreamIds = [...new Set((joinedLiveParticipants || []).map((row) => row.stream_id).filter(Boolean))];
+    if (liveStreamIds.length) {
+      const { data: joinedLiveStream, error: joinedLiveStreamError } = await supabaseAdmin.from('live_streams')
+        .select('id').in('id', liveStreamIds).eq('status', 'live').limit(1).maybeSingle();
+      if (joinedLiveStreamError) throw joinedLiveStreamError;
+      if (joinedLiveStream) return res.status(409).json({ error: 'Leave the active LIVE stream before deleting your account.' });
+    }
+
+    // Release reservations held by failed/deleted replays before their rows
+    // cascade-delete with Auth. Successful replay seconds remain consumed.
+    const { data: terminalReplays, error: terminalReplayError } = await supabaseAdmin.from('live_stream_replays')
+      .select('id,status').eq('creator_id', userId).in('status', ['failed', 'deleted']).limit(1000);
+    if (terminalReplayError) throw terminalReplayError;
+    for (const replay of terminalReplays || []) {
+      const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replay.id,
+        p_actual_seconds: 0,
+        p_success: false,
+      });
+      if (quotaError) throw quotaError;
+    }
+
     // Queue personal Storage cleanup before deleting Auth. A short future
     // due-time prevents the background worker racing the Auth deletion.
     // The queue has no FK to auth.users, so it survives the cascade.
