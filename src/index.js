@@ -50,16 +50,18 @@ function startCallEndNotificationWorker() {
 function startMediaParticipantHeartbeatCleanupWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
-  const { cleanupStaleMediaParticipants } = require('./jobs/mediaParticipantHeartbeatCleanup');
+  const { cleanupStaleMediaParticipants, cleanupEndedLiveRooms } = require('./jobs/mediaParticipantHeartbeatCleanup');
   let running = false;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
       const summary = await cleanupStaleMediaParticipants({ admin: supabaseAdmin });
+      const roomCleanup = await cleanupEndedLiveRooms({ admin: supabaseAdmin });
       if (summary.liveStreamsEnded || summary.liveParticipantsLeft
-          || summary.groupParticipantsLeft || summary.groupRoomsEnded) {
-        console.info('[media-presence] stale participant cleanup', summary);
+          || summary.groupParticipantsLeft || summary.groupRoomsEnded
+          || roomCleanup.deleted || roomCleanup.failed) {
+        console.info('[media-presence] stale participant cleanup', { ...summary, endedLiveRooms: roomCleanup });
       }
     } catch (error) {
       console.error('[media-presence] stale participant cleanup failed:', error.message || error);
