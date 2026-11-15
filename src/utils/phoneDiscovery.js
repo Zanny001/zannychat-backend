@@ -28,4 +28,31 @@ function hashContactBatch(values, secret, max = 100) {
   return normalized.map((phone) => phoneHash(phone, secret));
 }
 
-module.exports = { normalizeE164, phoneHash, hashContactBatch };
+function filterPhoneDiscoveryMatches({ profiles = [], profileDetails = [], sharedUserIds = [], blockedUserIds = [] }) {
+  const detailsByUser = new Map(profileDetails.map((row) => [row.user_id, row]));
+  const shared = new Set(sharedUserIds);
+  const blocked = new Set(blockedUserIds);
+
+  return profiles
+    .filter((profile) => {
+      if (!profile?.id || blocked.has(profile.id)) return false;
+      const details = detailsByUser.get(profile.id) || {};
+      const visibility = details.profile_visibility || 'everyone';
+      return visibility === 'everyone' || (visibility === 'contacts' && shared.has(profile.id));
+    })
+    .map((profile) => {
+      const details = detailsByUser.get(profile.id) || {};
+      const photoVisibility = details.photo_visibility || 'everyone';
+      const canSeeAvatar = photoVisibility === 'everyone'
+        || (photoVisibility === 'contacts' && shared.has(profile.id));
+      return {
+        id: profile.id,
+        name: profile.name || 'ZannyChat member',
+        avatarUrl: canSeeAvatar ? profile.avatar_url || null : null,
+        avatarColor: profile.avatar_color || null,
+        status: profile.status || null,
+      };
+    });
+}
+
+module.exports = { normalizeE164, phoneHash, hashContactBatch, filterPhoneDiscoveryMatches };
