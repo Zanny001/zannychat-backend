@@ -62,6 +62,7 @@ test('group calls and LIVE expose authenticated heartbeats and restore stale-but
   assert.ok(liveRoute.includes("rpc('join_live_stream'"));
   assert.ok(liveRoute.includes("update({ last_seen_at: now })"));
   assert.ok(index.includes('startMediaParticipantHeartbeatCleanupWorker();'));
+  assert.ok(index.includes('cleanupEndedLiveRooms({ admin: supabaseAdmin })'));
 });
 
 
