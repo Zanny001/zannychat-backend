@@ -25,13 +25,14 @@ test('broad authenticated profile visibility is replaced with relationship-scope
 });
 
 test('profile row visibility is denied when either side has blocked the other', () => {
-  assert.ok(hardening.includes('CREATE OR REPLACE FUNCTION public.is_profile_blocked(p_user_id uuid)'));
+  assert.ok(hardening.includes('CREATE OR REPLACE FUNCTION private.is_profile_blocked(p_user_id uuid)'));
   assert.ok(hardening.includes('SECURITY DEFINER'));
   assert.ok(hardening.includes('b.blocker_id = auth.uid() AND b.blocked_id = p_user_id'));
   assert.ok(hardening.includes('b.blocker_id = p_user_id AND b.blocked_id = auth.uid()'));
-  assert.ok(hardening.includes('NOT public.is_profile_blocked(profiles.id)'));
-  assert.ok(hardening.includes('REVOKE ALL ON FUNCTION public.is_profile_blocked(uuid) FROM PUBLIC, anon'));
-  assert.ok(hardening.includes('GRANT EXECUTE ON FUNCTION public.is_profile_blocked(uuid) TO authenticated'));
+  assert.ok(hardening.includes('NOT private.is_profile_blocked(profiles.id)'));
+  assert.ok(hardening.includes('REVOKE ALL ON FUNCTION private.is_profile_blocked(uuid) FROM PUBLIC, anon'));
+  assert.ok(hardening.includes('GRANT EXECUTE ON FUNCTION private.is_profile_blocked(uuid) TO authenticated'));
+  assert.equal(hardening.includes('public.is_profile_blocked'), false);
 });
 
 

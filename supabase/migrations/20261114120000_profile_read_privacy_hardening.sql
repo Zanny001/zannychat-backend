@@ -8,7 +8,7 @@ DROP POLICY IF EXISTS "Users can view own and related profiles" ON public.profil
 -- The blocked_users SELECT policy exposes only the caller's outgoing block
 -- list. A SECURITY DEFINER predicate is required to check both directions
 -- without granting clients visibility into other users' block lists.
-CREATE OR REPLACE FUNCTION public.is_profile_blocked(p_user_id uuid)
+CREATE OR REPLACE FUNCTION private.is_profile_blocked(p_user_id uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -27,8 +27,8 @@ AS $function$
   END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.is_profile_blocked(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.is_profile_blocked(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION private.is_profile_blocked(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.is_profile_blocked(uuid) TO authenticated;
 
 CREATE POLICY "Users can view own and related profiles"
 ON public.profiles
@@ -37,7 +37,7 @@ TO authenticated
 USING (
   id = (SELECT auth.uid())
   OR (
-    NOT public.is_profile_blocked(profiles.id)
+    NOT private.is_profile_blocked(profiles.id)
     AND (
       EXISTS (
     SELECT 1
