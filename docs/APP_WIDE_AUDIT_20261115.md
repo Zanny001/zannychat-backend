@@ -180,3 +180,8 @@ The deprecated Egress API migration and expanded backend quality gates are now i
 ## Status identity/avatar follow-up
 
 - Frontend PR #71 adds the signed-in user's privacy-aware profile avatar to the My status ring. Previously the ring showed the latest status image or a generic person icon, not the user's profile photo. The screen now fetches getCurrentUser on focus, prioritizes the profile avatar, and falls back to the latest story image only when no profile photo exists. A contract test protects this priority. PR #71 is open; frontend premium and advanced-calling CI are queued, and the Netlify preview checks are running. Do not merge until the test workflows pass.
+
+## Active web edge telemetry — 24-hour read-only sample
+
+- The active Older-account zannychat.netlify.app site recorded 2,660 edge requests in the last 24 hours: 1,479 HTTP 200, 1,162 HTTP 304, 16 HTTP 301 and 3 HTTP 206. No 4xx or 5xx responses were present in the status-code breakdown.
+- The current top app entry request was the older bundle asset AppEntry-2ee194d46c15f22aecdb49e7f969b8f4.js. This confirms the site is serving its published older export, not the newer frontend main commit. Edge success is not proof of application API, authentication, WebRTC or replay correctness.
