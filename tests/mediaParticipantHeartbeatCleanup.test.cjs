@@ -8,6 +8,7 @@ const worker = require('../src/jobs/mediaParticipantHeartbeatCleanup');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+const replayWorker = fs.readFileSync(path.join(__dirname, '../src/jobs/liveReplayWorker.js'), 'utf8');
 
 test('media participant cleanup invokes the service-role database lease cleanup with a bounded cutoff', async () => {
   let invocation;
@@ -73,4 +74,12 @@ test('LIVE polling has enough shared request budget while mutation endpoints kee
 test('LIVE guest request and invitation mutations have dedicated anti-spam limits', () => {
   assert.ok(liveRoute.includes("max: 3, error: 'Please wait before requesting the LIVE stage again.'"));
   assert.ok(liveRoute.includes("max: 5, error: 'Please wait before sending more LIVE invitations.'"));
+});
+
+
+test('replay egress stops promptly when a LIVE stream ends before the five-minute cap', () => {
+  assert.ok(replayWorker.includes('id, stream_id, egress_id, room_name, status, started_at'));
+  assert.ok(replayWorker.includes("from('live_streams').select('id,status')"));
+  assert.ok(replayWorker.includes('endedStreamIds.has(replay.stream_id)'));
+  assert.ok(replayWorker.includes('!foundStreamIds.has(replay.stream_id)'));
 });
