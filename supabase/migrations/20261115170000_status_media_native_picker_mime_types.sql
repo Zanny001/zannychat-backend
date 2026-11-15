@@ -18,7 +18,4 @@ SET allowed_mime_types = ARRAY[
 ]
 WHERE id = 'status-media';
 
-COMMENT ON TABLE storage.buckets IS
-  'Storage buckets are private where required; status-media permits common native picker image/video MIME types.';
-
 COMMIT;
