@@ -22,3 +22,10 @@ test('creator profile history excludes replay metadata already marked deleted', 
   const streamsRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
   assert.match(streamsRoute, /from\('live_stream_replays'\)[\s\S]*?\.neq\('status', 'deleted'\)/);
 });
+
+
+test('broadcast deletion removes the ended LiveKit room before deleting its database row', () => {
+  assert.match(route, /deleteLiveKitRoom\(stream\.room_name\)/);
+  assert.ok(route.indexOf('deleteLiveKitRoom(stream.room_name)') < route.indexOf(".delete().eq('id', streamId)"));
+  assert.match(route, /select\('id,creator_id,status,room_name'\)/);
+});
