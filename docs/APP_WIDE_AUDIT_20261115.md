@@ -36,20 +36,19 @@ Migration `20261115084203_enforce_chat_media_upload_limits` was applied and reco
 
 Before this change, `chat-media.file_size_limit` was NULL despite a frontend comment claiming the 25 MiB limit was enforced server-side. The client-side check alone was bypassable.
 
-### Profile privacy compatibility — frontend PR in progress
+### Profile privacy and avatar visibility — backend and frontend fixes merged
 
-The live database still has the policy `Profiles are viewable by any signed-in user` with `USING (true)`. Authenticated users can currently select all profile columns, including status, online state and avatar URL. The staged backend migration `20261114120000_profile_read_privacy_hardening.sql` removes that broad policy, limits direct SELECT to non-sensitive identity columns and grants UPDATE on `username`.
+The profile read-hardening migration and private-avatar visibility cutover are now applied in production Supabase. The frontend compatibility and privacy work was merged in PR #63. Authenticated profile reads now use privacy-scoped RPCs and the client resolves avatar paths through the viewer-authorization RPC; restricted profiles do not fall back to public avatar URLs. Avatar uploads maintain a private copy, public copies are removed when visibility is restricted, and visibility changes use the server-verified `update_my_profile_visibility` RPC.
 
-That migration is **not yet applied**. The live database currently lacks authenticated UPDATE privilege on `profiles.username`, which explains why username saves can fail even when the UI appears to change.
+The username save path verifies persisted values through the owner RPC rather than assuming a successful local UI update means the database write succeeded. A remaining issue is that physical-device/profile acceptance should still verify save, navigate away, reload and confirm persistence under real user sessions.
 
-Frontend PR #60 (`fix/full-audit-profile-read-privacy-main`) ports the required compatibility work onto current `main`:
-- Owner profile reads use `get_my_profile`.
-- Conversation participant profiles use `get_conversation_profile_directory`.
-- Profile updates no longer request a private full-row SELECT, and verify the saved username via the owner RPC.
-- Personal-data export uses the owner RPC.
-- Profile loading has loading/error/retry states, stale-response protection and accessible press targets, while retaining the LIVE impact card.
+### Chat media upload security — production fixes merged and applied
 
-**Required rollout order:** merge/deploy PR #60 first, verify the deployed client, then apply `20261114120000_profile_read_privacy_hardening.sql`. Do not apply the hardening migration before the compatible client is deployed.
+The production `chat-media` bucket now has an exact 25 MiB (26,214,400-byte) limit and a supported MIME allowlist. The active-extension guard was corrected so HTML, SVG, script and executable extensions are rejected even when a client labels them as generic binary. Frontend PR #65 validates MIME and actual byte size before upload and avoids retrying permanent validation failures. The frontend picker and service limits match the existing 25 MiB bucket limit.
+
+### LIVE replay diagnostics and cleanup — merged
+
+Backend PR #98 added an authenticated, rate-limited, read-only replay configuration check. It verifies LiveKit Egress and Supabase S3 credentials without starting a recording or returning secret values. Backend PRs #91–#93 corrected chat media extension handling, replay quota release on deletion, newest-first reaction retrieval, and protection against deleting accounts during active calls or LIVE sessions. These changes are merged; the replay credential endpoint is deployed on Render. A real replay Egress → object upload → signed playback → deletion cycle remains an acceptance-test requirement.
 
 ## Database and storage security observations
 
