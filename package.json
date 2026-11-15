@@ -65,7 +65,7 @@
     "test:history-deletion": "node --test tests/liveHistoryDeletion.test.cjs tests/callHistoryDeletion.test.cjs",
     "test:ai-input-validation": "node --test tests/aiInputValidation.test.cjs",
     "test:chat-media-upload-limit": "node --test tests/chatMediaUploadSizeLimitMigration.test.cjs tests/chatMediaSafeMimeTypesMigration.test.cjs tests/chatMediaExtensionGuardCorrection.test.cjs",
-    "test:account-storage-cleanup": "node --test tests/accountStorageCleanupQueueMigration.test.cjs tests/accountStorageCleanupWorker.test.cjs"
+    "test:account-storage-cleanup": "node --test tests/accountStorageCleanupQueueMigration.test.cjs tests/accountStorageCleanupWorker.test.cjs tests/accountDeletionEndedSessionGuard.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
