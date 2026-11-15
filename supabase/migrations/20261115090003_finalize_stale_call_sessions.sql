@@ -101,7 +101,7 @@ BEGIN
     NEW.accepted_at := OLD.accepted_at;
     NEW.ended_at := now();
   ELSIF OLD.status = 'accepted' AND NEW.status = 'ended'
-     AND (actor IN (OLD.caller_id, OLD.callee_id) OR is_service_role OR (actor IS NULL AND current_user = 'postgres')) THEN
+     AND (actor IN (OLD.caller_id, OLD.callee_id) OR is_service_role) THEN
     NEW.accepted_at := OLD.accepted_at;
     NEW.ended_at := now();
   ELSE
