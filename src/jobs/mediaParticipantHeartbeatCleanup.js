@@ -43,18 +43,20 @@ async function cleanupEndedLiveRooms({
     .limit(limit);
   if (error) throw error;
 
+  const streamIds = (streams || []).map((stream) => stream.id);
+  const { data: activeReplays, error: replayError } = streamIds.length
+    ? await admin.from('live_stream_replays').select('stream_id')
+      .in('stream_id', streamIds).in('status', ['starting', 'recording'])
+    : { data: [], error: null };
+  if (replayError) throw replayError;
+  const activeStreamIds = new Set((activeReplays || []).map((replay) => replay.stream_id));
+
   let deleted = 0;
   let waitingForReplay = 0;
   let failed = 0;
   for (const stream of streams || []) {
     if (!stream.room_name) continue;
-    const { data: activeReplays, error: replayError } = await admin.from('live_stream_replays')
-      .select('id')
-      .eq('stream_id', stream.id)
-      .in('status', ['starting', 'recording'])
-      .limit(1);
-    if (replayError) throw replayError;
-    if (activeReplays?.length) {
+    if (activeStreamIds.has(stream.id)) {
       waitingForReplay += 1;
       continue;
     }
