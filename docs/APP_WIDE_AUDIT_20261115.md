@@ -132,7 +132,7 @@ Remaining product/acceptance gaps:
 ## External standards and compatibility references
 
 - OWASP Mobile Application Security Verification Standard: https://mas.owasp.org/MASVS/
-- Expo SecureStore SDK guidance: https://docs.expo.dev/versions/v57.0.0/sdk/securestore/ (SDK 57 package line; use the SDK-matched release, currently 57.0.4).
+- Expo SecureStore SDK guidance: https://docs.expo.dev/versions/v57.0.0/sdk/securestore/ (SDK 57 package line; use the SDK-matched release, installed dependency line ~57.0.2 (Expo SDK 57)).
 - Expo authentication guidance: https://docs.expo.dev/guides/authentication/
 - PostgreSQL 17.12 security and correctness release: https://www.postgresql.org/docs/release/17.12/
 - Supabase CLI v3 migration warning: https://supabase.com/changelog?types=breaking-change
