@@ -47,14 +47,14 @@ test('LIVE replay Egress only targets managed LiveKit Cloud and uses a roomRecor
   const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(payload.video.roomRecord, true);
   assert.equal(payload.exp - payload.nbf, 65);
-  assert.equal(liveKitEgressUrl(liveKitConfig.url, 'StartRoomCompositeEgress'), 'https://zannychat-test.livekit.cloud/twirp/livekit.Egress/StartRoomCompositeEgress');
-  assert.throws(() => liveKitEgressUrl('wss://self-hosted.example', 'StartRoomCompositeEgress'), /managed LiveKit Cloud/);
+  assert.equal(liveKitEgressUrl(liveKitConfig.url, 'StartEgress'), 'https://zannychat-test.livekit.cloud/twirp/livekit.Egress/StartEgress');
+  assert.throws(() => liveKitEgressUrl('wss://self-hosted.example', 'StartEgress'), /managed LiveKit Cloud/);
   assert.equal(MAX_REPLAY_SECONDS, 300);
   assert.equal(MAX_REPLAY_BYTES, 48_000_000);
   assert.equal(MAX_REPLAY_OUTPUT_SECONDS, 305);
 });
 
-test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
+test('LIVE replay starts a private 360p MP4 through unified StartEgress and Supabase S3', async () => {
   let request;
   const replayConfig = getLiveReplayConfig(env, liveKitConfig);
   const result = await startRoomCompositeEgress({
@@ -68,10 +68,14 @@ test('LIVE replay starts a private 360p MP4 in Supabase S3', async () => {
   });
   assert.equal(result.egress_id, 'EG_test');
   assert.equal(request.body.room_name, 'zlive_01234567890123456789012345678901');
-  assert.equal(request.body.file_outputs.length, 1);
-  assert.equal(request.body.file_outputs[0].file_type, 1);
-  assert.equal(request.body.file_outputs[0].s3.bucket, 'live-replays');
-  assert.equal(request.body.file_outputs[0].s3.force_path_style, true);
+  assert.equal(request.body.template.layout, 'grid');
+  assert.equal(request.body.outputs.length, 1);
+  assert.equal(request.body.outputs[0].file.file_type, 1);
+  assert.equal(request.body.outputs[0].file.filepath, 'creator/stream/replay.mp4');
+  assert.equal(request.body.storage.s3.bucket, 'live-replays');
+  assert.equal(request.body.storage.s3.force_path_style, true);
+  assert.equal(Object.hasOwn(request.body, 'outputs'), true);
+  assert.equal(Object.hasOwn(request.body, 'file_outputs'), false);
   assert.equal(Object.hasOwn(request.body, 'file'), false);
   assert.equal(request.body.advanced.width, 640);
   assert.equal(request.body.advanced.height, 360);
@@ -136,7 +140,7 @@ test('read-only replay credential validation authenticates Egress and Supabase S
   assert.equal(calls[1].options.method, 'GET');
   assert.ok(calls[1].url.includes('/storage/v1/s3/live-replays?list-type=2&max-keys=1'));
   assert.match(calls[1].options.headers.Authorization, /^AWS4-HMAC-SHA256 Credential=access\/20261114\/eu-central-1\/s3\/aws4_request/);
-  assert.equal(calls.some((call) => call.url.includes('StartRoomCompositeEgress')), false);
+  assert.equal(calls.some((call) => call.url.includes('StartEgress')), false);
 });
 
 test('read-only replay credential validation fails closed when the S3 key cannot list the private bucket', async () => {
