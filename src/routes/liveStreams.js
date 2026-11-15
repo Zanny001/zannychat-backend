@@ -782,6 +782,10 @@ router.post('/:streamId/join', async (req, res) => {
       if (joinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended' });
       throw joinError;
     }
+    const { error: heartbeatError } = await supabaseAdmin.from('live_stream_participants')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', req.user.id).eq('status', 'joined');
+    if (heartbeatError) throw heartbeatError;
     if (role === 'guest') {
       const { count: stageCount, error: stageCountError } = await supabaseAdmin.from('live_stream_participants')
         .select('id', { count: 'exact', head: true })
@@ -805,6 +809,50 @@ router.post('/:streamId/join', async (req, res) => {
   } catch (error) {
     console.error('[live] join failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not join this LIVE stream' });
+  }
+});
+
+router.post('/:streamId/heartbeat', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
+      .select('role,status,last_seen_at,left_at')
+      .eq('stream_id', streamId).eq('user_id', req.user.id).maybeSingle();
+    if (participantError) throw participantError;
+    if (!participant) return res.status(403).json({ error: 'Join this LIVE stream before sending a heartbeat' });
+
+    let rejoined = false;
+    if (participant.status === 'left') {
+      const lastSeen = Date.parse(participant.last_seen_at || '');
+      const leftAt = Date.parse(participant.left_at || '');
+      if (!Number.isFinite(lastSeen) || !Number.isFinite(leftAt) || lastSeen >= leftAt - 30_000) {
+        return res.status(403).json({ error: 'You have left this LIVE stream' });
+      }
+      const { error: rejoinError } = await supabaseAdmin.rpc('join_live_stream', {
+        p_stream_id: streamId, p_user_id: req.user.id,
+      });
+      if (rejoinError) {
+        if (rejoinError.code === '42501') return res.status(403).json({ error: 'This LIVE stream is no longer available to you' });
+        if (rejoinError.code === 'P0001') return res.status(404).json({ error: 'LIVE stream has ended or is full' });
+        throw rejoinError;
+      }
+      rejoined = true;
+    } else if (participant.status !== 'joined') {
+      return res.status(403).json({ error: 'Join this LIVE stream before sending a heartbeat' });
+    }
+
+    const now = new Date().toISOString();
+    const { error: updateError } = await supabaseAdmin.from('live_stream_participants')
+      .update({ last_seen_at: now })
+      .eq('stream_id', streamId).eq('user_id', req.user.id).eq('status', 'joined');
+    if (updateError) throw updateError;
+    return res.json({ ok: true, rejoined, lastSeenAt: now });
+  } catch (error) {
+    console.error('[live] participant heartbeat failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not renew LIVE presence' });
   }
 });
 
@@ -997,6 +1045,10 @@ router.post('/:streamId/leave', async (req, res) => {
       if (error.code === '42501') return res.status(403).json({ error: 'The creator must end this LIVE stream' });
       throw error;
     }
+    const { error: heartbeatError } = await supabaseAdmin.from('live_stream_participants')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', req.user.id).eq('status', 'left');
+    if (heartbeatError) throw heartbeatError;
     return res.json({ left: left === true });
   } catch (error) {
     console.error('[live] leave failed:', error?.message || error);
@@ -1257,6 +1309,10 @@ router.delete('/:streamId/guests/:userId', async (req, res) => {
       });
       if (leaveError) throw leaveError;
     }
+    const { error: participantHeartbeatError } = await supabaseAdmin.from('live_stream_participants')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', userId);
+    if (participantHeartbeatError) throw participantHeartbeatError;
     const { error: revokeInviteError } = await supabaseAdmin.from('live_stream_invites')
       .update({ status: 'revoked', updated_at: new Date().toISOString() })
       .eq('stream_id', streamId).eq('user_id', userId).eq('invitation_type', 'guest');
