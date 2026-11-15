@@ -38,6 +38,9 @@ test('heartbeat schema is indexed and service-only cleanup is pinned to an empty
   assert.ok(migration.includes('ADD COLUMN IF NOT EXISTS last_seen_at timestamptz NOT NULL DEFAULT now()'));
   assert.ok(migration.includes('live_stream_participants_active_heartbeat_idx'));
   assert.ok(migration.includes('group_call_participants_active_heartbeat_idx'));
+  assert.ok(migration.includes('live_creator_impact_daily_supporter_id_idx'));
+  assert.ok(migration.includes('live_creator_impact_supporters_supporter_id_idx'));
+  assert.ok(migration.includes('live_replay_quota_active_replay_id_idx'));
   assert.ok(migration.includes('CREATE OR REPLACE FUNCTION public.cleanup_stale_media_participants'));
   assert.ok(migration.includes('SET search_path TO'));
   assert.ok(migration.includes('REVOKE ALL ON FUNCTION public.cleanup_stale_media_participants(timestamptz) FROM PUBLIC, anon, authenticated'));
