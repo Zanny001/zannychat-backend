@@ -81,3 +81,13 @@ test('a replay start that cannot be found during recovery is failed and releases
   assert.match(worker, /p_success: false/);
   assert.match(worker, /START_RECOVERY_GRACE_MS/);
 });
+
+test('deleting a failed or already-deleted replay releases any outstanding reservation immediately', () => {
+  const start = liveRoutes.indexOf("router.delete('/replays/:replayId'");
+  const end = liveRoutes.indexOf("\n});", start) + 4;
+  const body = liveRoutes.slice(start, end);
+  assert.match(body, /\['failed', 'deleted'\]\.includes\(replay\.status\)/);
+  assert.match(body, /finalize_live_replay_quota/);
+  assert.match(body, /p_actual_seconds: 0/);
+  assert.match(body, /p_success: false/);
+});
