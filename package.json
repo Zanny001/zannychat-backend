@@ -64,7 +64,7 @@
     "test:live-replay": "node --test tests/liveReplayStorageQuotaMigration.test.cjs tests/livekitEgress.test.cjs tests/liveReplayWorkerMount.test.cjs tests/liveReplayRoutes.test.cjs",
     "test:history-deletion": "node --test tests/liveHistoryDeletion.test.cjs tests/callHistoryDeletion.test.cjs",
     "test:ai-input-validation": "node --test tests/aiInputValidation.test.cjs",
-    "test:chat-media-upload-limit": "node --test tests/chatMediaUploadSizeLimitMigration.test.cjs",
+    "test:chat-media-upload-limit": "node --test tests/chatMediaUploadSizeLimitMigration.test.cjs tests/chatMediaSafeMimeTypesMigration.test.cjs",
     "test:account-storage-cleanup": "node --test tests/accountStorageCleanupQueueMigration.test.cjs tests/accountStorageCleanupWorker.test.cjs"
   },
   "dependencies": {
