@@ -10,6 +10,20 @@
 - Netlify/Render deployment status: not re-verified in this session; the latest frontend `main` commit has not been confirmed exported/deployed, and no Render workspace was selected.
 - OWASP MASVS categories: storage, cryptography, authentication/authorization, network, platform, code quality, resilience and privacy.
 
+## Navigation inventory verified against frontend main
+
+The current `src/navigation/AppNavigator.js` contains **43 root-stack routes and 6 bottom-tab routes**. `Channels` appears in both navigators, so the application currently exposes **48 unique navigation entries**, not 36. Several entries reuse one screen component; count them for route/flow QA, but do not duplicate visual redesign work.
+
+- **Authentication (6):** Onboarding, Login, Signup, VerifyEmail, PasswordRecovery, PasswordReset.
+- **Messaging and organization (12):** Main, Chats, Chat, NewChat, ForwardMessage, SavedMessages, Drafts, PinnedMessages, ChatFolders, SharedMedia, ChatAppearance, ScheduledMessages.
+- **People and groups (6):** PeerProfile, QRContact, ContactDiscovery, CreateGroup, GroupManagement, JoinGroup.
+- **Discovery and content (5):** Channels, Polls, Events, Updates, StatusUpdates.
+- **Calls (5):** Calls, IncomingCall, OutgoingCall, Call, GroupCall.
+- **LIVE (5):** LIVE, LiveHub, LiveStream, LiveReplay, LiveCreatorProfile.
+- **Account and settings (9):** Profile, EditProfile, Settings, PrivacySecurity, Notifications, DataStorage, DataExport, Sessions, Help.
+
+The guest/auth route group contains onboarding, login, signup and email verification. Password recovery/reset remain reachable outside the authenticated app group. App routes are gated by `canAccessApp`. Deep-link configuration currently includes PasswordReset, JoinGroup and QRContact. Reused components include Chats/ChatListScreen, Calls/CallHistoryScreen, LIVE/LiveHubScreen, Updates/StatusUpdatesScreen and Channels across both navigators.
+
 ## Feature inventory
 
 - Account onboarding, email/password sign-in, email verification, password recovery, OAuth callbacks and session restoration.
@@ -82,7 +96,7 @@ The recent call/video/LIVE audit and merged fixes cover:
 - Native call end cleanup, heartbeat leases and stale-call cleanup.
 - LIVE guest request/approval/token handoff, guest stage lifecycle and participant presence.
 - Replay Egress output shape, recovery, stop/cleanup and creator-owned deletion.
-- **Completed compatibility modernization:** backend PR #103 migrated replay creation from deprecated `StartRoomCompositeEgress` to unified `StartEgress` and was merged to backend `main` as `c59dac1395f59fcaf12e9bfe7b771d01c45d718f`. The focused Egress unit test passed 8/8 locally; full replay suite and live recording acceptance remain outstanding.
+- **Completed compatibility modernization:** backend PR #103 migrated replay creation from deprecated `StartRoomCompositeEgress` to unified `StartEgress` and was merged to backend `main` as `c59dac1395f59fcaf12e9bfe7b771d01c45d718f`. The focused Egress unit test passed 8/8 locally, and the full backend LIVE replay regression suite passed in the expanded backend quality workflow. A real production recording/upload/playback/deletion cycle remains outstanding.
 - Per-user call-history deletion and creator-owned ended broadcast/replay deletion.
 
 Remaining product/acceptance gaps:
@@ -97,10 +111,11 @@ Remaining product/acceptance gaps:
 - Frontend `main` is now at merge commit `03399de036b265bdadba727d3f8ac7a3be73fa00`; PR #66's premium status/LIVE quality and advanced-calling workflows both passed. This merge includes MP4/MOV and HEIC/HEIF/GIF status compatibility.
 - The current Netlify published commit was not verified in this session. The latest frontend `main` state must be freshly exported before it can be treated as the live web build.
 - The current Render backend deployment commit was not verified in this session; no Render workspace was selected. Do not assume the latest backend `main` documentation or pending PR code is deployed.
-- Backend PR #103 was merged after the focused Egress test passed 8/8 in an isolated Node 22 harness. The repository reported no GitHub workflow runs or combined-status checks; the complete `npm run test:live-replay` suite and a real recording cycle remain unverified.
+- Backend PR #103 was merged after the focused Egress test passed 8/8 in an isolated Node 22 harness. The full `yarn run test:live-replay` suite also passed in the backend quality workflow run triggered by PR #105; the real production recording cycle remains unverified.
+- Backend PR #105 expanded the backend regression gates and was merged as `bf3e155d0c598cf55278c4a9e234bb54b24711c4`. Both the Backend quality and Advanced calling backend workflows passed: dependency installation/audit, Jest, health, security, AI input, privacy, media, calls, group calls, LIVE/replay and migration/history suites.
 - Frontend PR #67 prepares SecureStore-backed native auth sessions. Its seven adapter tests passed in an isolated Node 22 harness. It remains open until a native binary containing the module can be built and tested; do not ship the JS change through OTA to existing binaries.
-- Android Kotlin compilation passed on the preceding PR run; APK assembly, latest SDK export and iOS/export checks are still required for the latest commit.
-- The current Android CI workflow creates a placeholder-Firebase artifact but labels it as physical-device QA. This is misleading and is being corrected separately. A placeholder-Firebase artifact is not evidence of installable production behavior.
+- Frontend PR #66 workflows passed `npm run test:unit`, call recovery, native call receiver, release audit, contract audit, integrity tests, Expo web/Android exports, Android/iOS prebuild and Android Kotlin compilation. The Android APK artifact uses placeholder Firebase and is compile-only, not installable for physical-device QA.
+- The current Android CI workflow correctly labels its placeholder-Firebase artifact as compile-only and not installable for QA. It is not evidence of production Firebase behavior or physical-device acceptance.
 - The Android production EAS workflow must remain manual and must not be triggered under the current zero-budget constraint.
 
 ## Required acceptance testing before calling the app fully verified
@@ -123,4 +138,4 @@ Remaining product/acceptance gaps:
 - Supabase CLI v3 migration warning: https://supabase.com/changelog?types=breaking-change
 - LiveKit Egress API: https://docs.livekit.io/reference/other/egress/api/
 
-The deprecated Egress API migration is now in backend `main`. The audit remains open until the SecureStore change is released in a compatible native binary, the remaining security settings and database patch level are addressed, the real replay cycle is verified, and the real-device/two-account acceptance tests are completed.
+The deprecated Egress API migration and expanded backend quality gates are now in backend `main`. The audit remains open until the SecureStore change is released in a compatible native binary, the remaining security settings and database patch level are addressed, the real replay cycle is verified, and the 48-entry route inventory has passed physical-device/two-account acceptance.
