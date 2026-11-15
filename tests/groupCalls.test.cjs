@@ -224,7 +224,7 @@ test('LiveKit room-admin requests refuse insecure transport in production', () =
 });
 
 
-const joinBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090001_harden_group_call_join_block_privacy.sql'), 'utf8');
+const joinBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115014903_harden_group_call_join_block_privacy.sql'), 'utf8');
 
 test('group-call admission rechecks bidirectional blocks against joined and invited participants', () => {
   assert.ok(joinBlockMigration.includes('CREATE OR REPLACE FUNCTION public.join_group_call_room(p_room_id uuid, p_user_id uuid)'));
