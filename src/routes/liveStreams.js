@@ -1088,12 +1088,13 @@ router.get('/:streamId/comments', async (req, res) => {
       .select('id,user_id,reaction,created_at')
       .eq('stream_id', streamId)
       .gt('created_at', reactionSince)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(100);
     if (reactionError) throw reactionError;
     const blockedReactionUserIds = await getBlockedUserIds(req.user.id, (recentReactions || []).map((reaction) => reaction.user_id));
     const reactions = (recentReactions || [])
       .filter((reaction) => !blockedReactionUserIds.has(reaction.user_id))
+      .reverse()
       .map(({ user_id: _userId, ...reaction }) => reaction);
     return res.json({ comments, reactions });
   } catch (error) {
