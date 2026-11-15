@@ -46,3 +46,20 @@ test('creator impact endpoint delegates to a fail-closed profile and block visib
   assert.ok(guard.includes('conversation_participants'));
   assert.ok(guard.includes("visibility !== 'contacts') return false"));
 });
+
+const creatorReactionMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114234500_allow_creator_live_reactions_without_self_impact.sql'), 'utf8');
+
+test('LIVE creators can react on their own broadcast without awarding themselves impact', () => {
+  const start = creatorReactionMigration.indexOf('CREATE OR REPLACE FUNCTION public.record_live_creator_impact');
+  const end = creatorReactionMigration.indexOf('CREATE OR REPLACE FUNCTION public.get_live_creator_reaction_breakdown', start);
+  assert.ok(start >= 0 && end > start, 'creator reaction RPC migration is present');
+  const body = creatorReactionMigration.slice(start, end);
+  const reactionInsert = body.indexOf('INSERT INTO public.live_stream_reactions');
+  const creatorBranch = body.indexOf('IF v_creator_id = p_user_id THEN');
+  assert.ok(reactionInsert >= 0 && creatorBranch > reactionInsert, 'creator reaction is persisted before impact handling');
+  assert.match(body, /SELECT COALESCE\(i\.impact_score, 0\)/);
+  assert.match(body, /false\s+FROM \(SELECT 1\) AS anchor/);
+  assert.match(body, /RETURN;/);
+  assert.doesNotMatch(body, /Creators cannot award themselves impact/);
+  assert.match(body, /p\.status = 'joined'/, 'non-creator viewers still need an active joined participant row');
+});
