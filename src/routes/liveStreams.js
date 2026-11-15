@@ -15,6 +15,7 @@ const {
   stopEgress,
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
+  validateReplayCredentials,
 } = require('../services/livekitEgress');
 const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
@@ -22,6 +23,11 @@ const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 90, error: 'LIVE actions are rate-limited.' }));
 
 const MAX_LIVE_STAGE_GUESTS = 5;
+const replayConfigValidationLimiter = makeLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 3,
+  error: 'Replay configuration checks are rate-limited.',
+});
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
 const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support']);
 
@@ -218,6 +224,65 @@ router.get('/replays/config', async (req, res) => {
     maxFileBytes: MAX_REPLAY_BYTES,
     retentionDays: 7,
   });
+});
+
+// Read-only check: ListEgress + S3 ListObjectsV2. This never starts a recording,
+// uploads an object, or returns secret values.
+router.post('/replays/config/validate', replayConfigValidationLimiter, async (req, res) => {
+  const replayConfig = getLiveReplayConfig();
+  const missing = [];
+  if (!getLiveKitConfig()) missing.push('LIVEKIT_URL and LiveKit API credentials');
+  if (!getLiveKitEgressConfig()) missing.push('LIVEKIT_EGRESS_API_KEY and LIVEKIT_EGRESS_API_SECRET');
+
+  let storageEndpointValid = false;
+  try {
+    const endpoint = new URL(String(process.env.SUPABASE_STORAGE_S3_ENDPOINT || '').trim());
+    storageEndpointValid = endpoint.protocol === 'https:' &&
+      endpoint.hostname.endsWith('.storage.supabase.co') &&
+      endpoint.pathname.replace(/\/$/, '') === '/storage/v1/s3';
+  } catch {}
+  if (!storageEndpointValid) missing.push('SUPABASE_STORAGE_S3_ENDPOINT');
+  if (!String(process.env.SUPABASE_STORAGE_S3_ACCESS_KEY_ID || '').trim()) missing.push('SUPABASE_STORAGE_S3_ACCESS_KEY_ID');
+  if (!String(process.env.SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY || '').trim()) missing.push('SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY');
+  if (!String(process.env.SUPABASE_STORAGE_S3_REGION || '').trim()) missing.push('SUPABASE_STORAGE_S3_REGION');
+
+  let webhookValid = false;
+  try {
+    const webhook = new URL(String(process.env.LIVEKIT_REPLAY_WEBHOOK_URL || '').trim());
+    webhookValid = webhook.protocol === 'https:' && webhook.pathname.endsWith('/webhooks/livekit/egress');
+  } catch {}
+  if (!webhookValid) missing.push('LIVEKIT_REPLAY_WEBHOOK_URL');
+  if (!replayConfig) {
+    // Avoid duplicate diagnostics when one of the individually checked values is missing.
+    if (!missing.length) missing.push('Replay configuration is incomplete');
+  }
+
+  const missingFlags = [];
+  if (process.env.LIVEKIT_REPLAY_ENABLED !== 'true') missingFlags.push('LIVEKIT_REPLAY_ENABLED=true');
+  if (process.env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED !== 'true') missingFlags.push('LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED=true');
+
+  if (missing.length) {
+    return res.status(503).json({ valid: false, configured: false, replayEnabled: false, missing, missingFlags });
+  }
+
+  try {
+    const validation = await validateReplayCredentials(replayConfig);
+    return res.json({
+      valid: true,
+      configured: true,
+      replayEnabled: isLiveReplayEnabled(),
+      missingFlags,
+      ...validation,
+    });
+  } catch (error) {
+    return res.status(503).json({
+      valid: false,
+      configured: true,
+      replayEnabled: false,
+      missingFlags,
+      error: 'Credential verification failed. Check the Render environment values; secret values are never returned.',
+    });
+  }
 });
 
 router.post('/:streamId/replays/start', async (req, res) => {
