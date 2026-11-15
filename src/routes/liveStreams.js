@@ -485,6 +485,14 @@ router.delete('/replays/:replayId', async (req, res) => {
     if (!replay) return res.status(404).json({ error: 'Replay not found' });
     if (replay.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete this replay' });
     if (['starting', 'recording', 'processing'].includes(replay.status)) return res.status(409).json({ error: 'Wait for the recording to finish before deleting it' });
+    if (['failed', 'deleted'].includes(replay.status)) {
+      const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replay.id,
+        p_actual_seconds: 0,
+        p_success: false,
+      });
+      if (quotaError) throw quotaError;
+    }
     if (replay.file_path) {
       const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove([replay.file_path]);
       if (removeError) throw removeError;
@@ -1080,12 +1088,13 @@ router.get('/:streamId/comments', async (req, res) => {
       .select('id,user_id,reaction,created_at')
       .eq('stream_id', streamId)
       .gt('created_at', reactionSince)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(100);
     if (reactionError) throw reactionError;
     const blockedReactionUserIds = await getBlockedUserIds(req.user.id, (recentReactions || []).map((reaction) => reaction.user_id));
     const reactions = (recentReactions || [])
       .filter((reaction) => !blockedReactionUserIds.has(reaction.user_id))
+      .reverse()
       .map(({ user_id: _userId, ...reaction }) => reaction);
     return res.json({ comments, reactions });
   } catch (error) {

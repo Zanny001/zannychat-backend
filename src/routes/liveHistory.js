@@ -29,6 +29,17 @@ router.delete('/:streamId', async (req, res) => {
     if (rows.some((row) => ['starting', 'recording', 'processing'].includes(row.status))) {
       return res.status(409).json({ error: 'Wait until the LIVE replay finishes processing before deleting this broadcast' });
     }
+    // Failed/deleted recordings may still hold a 300-second reservation if
+    // cleanup has not run yet. Release it before the replay rows cascade away.
+    for (const replay of rows.filter((row) => ['failed', 'deleted'].includes(row.status))) {
+      const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+        p_replay_id: replay.id,
+        p_actual_seconds: 0,
+        p_success: false,
+      });
+      if (quotaError) throw quotaError;
+    }
+
     const paths = rows.map((row) => row.file_path).filter(Boolean);
     if (paths.some((path) => !path.startsWith(req.user.id + '/' + streamId + '/'))) {
       return res.status(409).json({ error: 'Broadcast media ownership could not be verified' });
