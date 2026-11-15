@@ -31,6 +31,8 @@ test('cleanup is limited to personal media buckets and never deletes shared chat
 
 test('cleanup paginates object lookup, batches deletes and retries failures durably', () => {
   assert.ok(job.includes('.range(offset, offset + pageSize - 1)'));
+  assert.ok(job.includes(".order('bucket_id', { ascending: true })"));
+  assert.ok(job.includes(".order('name', { ascending: true })"));
   assert.ok(job.includes('REMOVE_BATCH_SIZE = 100'));
   assert.ok(job.includes('attempts,'));
   assert.ok(job.includes('last_error: message'));
