@@ -47,6 +47,32 @@ function startCallEndNotificationWorker() {
   return timer;
 }
 
+function startCallSessionCleanupWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { cleanupStaleCallSessions } = require('./jobs/callSessionCleanupWorker');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const summary = await cleanupStaleCallSessions({ admin: supabaseAdmin });
+      if (summary.deletedSignals) {
+        console.info('[call-session-cleanup] removed stale signaling records', summary);
+      }
+    } catch (error) {
+      console.error('[call-session-cleanup] failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 60_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 15_000);
+  warmup.unref?.();
+  return timer;
+}
+
 function startMediaParticipantHeartbeatCleanupWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
@@ -211,6 +237,7 @@ if (require.main === module) {
     startCallEndNotificationWorker();
     startGroupCallMediaCleanupWorker();
     startMediaParticipantHeartbeatCleanupWorker();
+    startCallSessionCleanupWorker();
     startLiveReplayWorker();
   });
 }
