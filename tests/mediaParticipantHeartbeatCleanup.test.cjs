@@ -106,17 +106,15 @@ test('ended LIVE room cleanup waits for replay egress and then deletes the room'
         eq(key, value) { this.filters[key] = value; return this; },
         lt(key, value) { this.filters[key] = value; return this; },
         in(key, value) { this.filters[key] = value; return this; },
-        limit() {
-          if (table === 'live_streams') {
-            return Promise.resolve({ data: [
+        limit() { return this; },
+        then(resolve, reject) {
+          const data = table === 'live_streams'
+            ? [
               { id: 'stream-wait', room_name: 'zlive_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
               { id: 'stream-delete', room_name: 'zlive_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
-            ], error: null });
-          }
-          return Promise.resolve({
-            data: this.filters.stream_id === 'stream-wait' ? [{ id: 'replay-active' }] : [],
-            error: null,
-          });
+            ]
+            : [{ stream_id: 'stream-wait' }];
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
         },
       };
       return query;
