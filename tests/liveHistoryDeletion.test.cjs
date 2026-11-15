@@ -29,3 +29,11 @@ test('broadcast deletion removes the ended LiveKit room before deleting its data
   assert.ok(route.indexOf('deleteLiveKitRoom(stream.room_name)') < route.indexOf(".delete().eq('id', streamId)"));
   assert.match(route, /select\('id,creator_id,status,room_name'\)/);
 });
+
+test('broadcast deletion releases failed/deleted replay reservations before cascade deleting rows', () => {
+  assert.match(route, /rows\.filter\(\(row\) => \['failed', 'deleted'\]\.includes\(row\.status\)\)/);
+  assert.match(route, /finalize_live_replay_quota/);
+  assert.match(route, /p_actual_seconds: 0/);
+  assert.match(route, /p_success: false/);
+  assert.ok(route.indexOf('finalize_live_replay_quota') < route.indexOf("storage.from('live-replays').remove(paths)"));
+});
