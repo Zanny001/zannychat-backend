@@ -37,7 +37,7 @@ router.post('/delete', async (req, res) => {
     // The queue has no FK to auth.users, so it survives the cascade.
     const { data: cleanupJob, error: queueError } = await supabaseAdmin
       .from('account_storage_cleanup_jobs')
-      .insert({ user_id: req.user.id, next_attempt_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() })
+      .insert({ user_id: req.user.id, status: 'held', next_attempt_at: new Date().toISOString() })
       .select('id')
       .single();
     if (queueError || !cleanupJob?.id) {
@@ -56,7 +56,7 @@ router.post('/delete', async (req, res) => {
 
     const { error: dueError } = await supabaseAdmin
       .from('account_storage_cleanup_jobs')
-      .update({ next_attempt_at: new Date().toISOString() })
+      .update({ status: 'pending', next_attempt_at: new Date().toISOString() })
       .eq('id', cleanupJob.id);
     if (dueError) {
       console.error('[account] personal storage cleanup remains queued:', dueError.message || dueError);
