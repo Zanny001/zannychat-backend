@@ -239,7 +239,7 @@ router.post('/replays/config/validate', replayConfigValidationLimiter, async (re
     const endpoint = new URL(String(process.env.SUPABASE_STORAGE_S3_ENDPOINT || '').trim());
     storageEndpointValid = endpoint.protocol === 'https:' &&
       endpoint.hostname.endsWith('.storage.supabase.co') &&
-      endpoint.pathname.replace(/\\/$/, '') === '/storage/v1/s3';
+      endpoint.pathname.replace(/\/$/, '') === '/storage/v1/s3';
   } catch {}
   if (!storageEndpointValid) missing.push('SUPABASE_STORAGE_S3_ENDPOINT');
   if (!String(process.env.SUPABASE_STORAGE_S3_ACCESS_KEY_ID || '').trim()) missing.push('SUPABASE_STORAGE_S3_ACCESS_KEY_ID');
