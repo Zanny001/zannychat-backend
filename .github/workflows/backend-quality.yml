@@ -48,6 +48,9 @@ jobs:
       - name: Audit dependency vulnerabilities
         run: npm audit --audit-level=high
 
+      - name: Run AI input validation regression tests
+        run: yarn run test:ai-input-validation
+
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
 
