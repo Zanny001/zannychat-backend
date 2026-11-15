@@ -63,6 +63,14 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - This document describes the code and database checks in scope; it does not claim a real two-user media session was completed by automation.
 
 
+## Product gaps found (not regressions in the repaired flows)
+
+- No screen-sharing control or picture-in-picture flow was found in the current direct-call, group-call or LIVE screens.
+- Private direct/group calls do not expose a recording workflow; recording/replay is implemented for LIVE broadcasts only.
+- Web audio-device routing remains delegated to browser/OS controls; explicit output selection is native-only.
+- LIVE comments and emoji reactions are persisted and polled, so visual updates are not guaranteed to be sub-second. A secured realtime transport would be a separate enhancement.
+- Background/screen-locked call continuity and Bluetooth routing require physical Android/iOS acceptance testing; CI compilation cannot prove device audio behavior.
+
 ## Production schema rollout verification
 
 - Applied migrations `20261115014903`, `20261115014920`, `20261115014925`, and `20261115015502` to Supabase project `vithpppgyjmazxvogvno`.
