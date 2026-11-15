@@ -1489,10 +1489,8 @@ router.post('/:streamId/end', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
-    await stopActiveLiveReplayForStream(streamId).catch((error) => {
-      console.error('[live-replay] stop on stream end failed', { streamId, message: error.message });
-    });
     const stream = await getStream(streamId);
+    if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
     const { data: ended, error } = await supabaseAdmin.rpc('end_live_stream', {
       p_stream_id: streamId, p_creator_id: req.user.id,
     });
@@ -1501,6 +1499,9 @@ router.post('/:streamId/end', async (req, res) => {
       throw error;
     }
     if (!ended) return res.status(404).json({ error: 'LIVE stream has ended' });
+    await stopActiveLiveReplayForStream(streamId).catch((replayError) => {
+      console.error('[live-replay] stop on stream end failed', { streamId, message: replayError.message });
+    });
     if (stream?.room_name) {
       await deleteLiveKitRoom(stream.room_name).catch((roomError) => {
         console.error('[live] LiveKit room cleanup after end failed:', roomError?.message || roomError);
