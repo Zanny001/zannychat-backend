@@ -15,6 +15,7 @@ const {
   stopEgress,
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_BYTES,
+  validateReplayCredentials,
 } = require('../services/livekitEgress');
 const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
@@ -22,6 +23,11 @@ const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 90, error: 'LIVE actions are rate-limited.' }));
 
 const MAX_LIVE_STAGE_GUESTS = 5;
+const replayConfigValidationLimiter = makeLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 3,
+  error: 'Replay configuration checks are rate-limited.',
+});
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
 const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support']);
 
@@ -218,6 +224,43 @@ router.get('/replays/config', async (req, res) => {
     maxFileBytes: MAX_REPLAY_BYTES,
     retentionDays: 7,
   });
+});
+
+// Read-only check: ListEgress + S3 ListObjectsV2. This never starts a recording,
+// uploads an object, or returns secret values.
+router.post('/replays/config/validate', replayConfigValidationLimiter, async (req, res) => {
+  const replayConfig = getLiveReplayConfig();
+  const missing = [];
+  if (!getLiveKitConfig()) missing.push('LiveKit server URL and API credentials');
+  if (!getLiveKitEgressConfig()) missing.push('LiveKit Egress API key and secret');
+  if (!replayConfig?.storage) missing.push('Supabase S3-compatible storage credentials, region, or webhook URL');
+
+  const missingFlags = [];
+  if (process.env.LIVEKIT_REPLAY_ENABLED !== 'true') missingFlags.push('LIVEKIT_REPLAY_ENABLED=true');
+  if (process.env.LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED !== 'true') missingFlags.push('LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED=true');
+
+  if (missing.length) {
+    return res.status(503).json({ valid: false, configured: false, replayEnabled: false, missing, missingFlags });
+  }
+
+  try {
+    const validation = await validateReplayCredentials(replayConfig);
+    return res.json({
+      valid: true,
+      configured: true,
+      replayEnabled: isLiveReplayEnabled(),
+      missingFlags,
+      ...validation,
+    });
+  } catch (error) {
+    return res.status(503).json({
+      valid: false,
+      configured: true,
+      replayEnabled: false,
+      missingFlags,
+      error: 'Credential verification failed. Check the Render environment values; secret values are never returned.',
+    });
+  }
 });
 
 router.post('/:streamId/replays/start', async (req, res) => {
