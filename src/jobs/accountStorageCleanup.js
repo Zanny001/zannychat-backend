@@ -53,7 +53,7 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
     const { data: jobs, error } = await admin
       .from('account_storage_cleanup_jobs')
       .select('id,user_id,attempts,status')
-      .eq('status', 'pending')
+      .in('status', ['held', 'pending'])
       .lte('next_attempt_at', new Date().toISOString())
       .order('created_at', { ascending: true })
       .limit(Math.max(1, Math.min(50, limit)));
