@@ -48,7 +48,7 @@ The production `chat-media` bucket now has an exact 25 MiB (26,214,400-byte) lim
 
 ### LIVE replay diagnostics and cleanup — merged
 
-Backend PR #98 added an authenticated, rate-limited, read-only replay configuration check. It verifies LiveKit Egress and Supabase S3 credentials without starting a recording or returning secret values. Backend PRs #91–#93 corrected chat media extension handling, replay quota release on deletion, newest-first reaction retrieval, and protection against deleting accounts during active calls or LIVE sessions. These changes are merged; the replay credential endpoint is deployed on Render. A real replay Egress → object upload → signed playback → deletion cycle remains an acceptance-test requirement.
+Backend PR #98 added an authenticated, rate-limited, read-only replay configuration check. It verifies LiveKit Egress and Supabase S3 credentials without starting a recording or returning secret values. Backend PRs #91–#93 corrected chat media extension handling, replay quota release on deletion, newest-first reaction retrieval, and protection against deleting accounts during active calls or LIVE sessions. These changes are merged; the Render deployment status of the replay credential endpoint was not independently re-verified in this session. A real replay Egress → object upload → signed playback → deletion cycle remains an acceptance-test requirement.
 
 ## Database and storage security observations
 
@@ -113,10 +113,13 @@ Remaining product/acceptance gaps:
 7. Install the production-configured Android build on a physical Android 10 device and verify cold/warm startup, permissions, notifications and native call lifecycle.
 8. Verify profile privacy with an unrelated authenticated account against the current deployed frontend and database policy.
 
-## External standards used
+## External standards and compatibility references
 
 - OWASP Mobile Application Security Verification Standard: https://mas.owasp.org/MASVS/
-- Expo SecureStore: https://docs.expo.dev/versions/latest/sdk/securestore/
+- Expo SecureStore SDK guidance: https://docs.expo.dev/versions/v57.0.0/sdk/securestore/ (SDK 57 package line; use the SDK-matched release, currently 57.0.4).
 - Expo authentication guidance: https://docs.expo.dev/guides/authentication/
+- Supabase PostgreSQL 15.19 / 17.11 security and correctness release: https://supabase.com/changelog/postgres-15-19-17-11-breaking-changes
+- Supabase CLI v3 migration warning: https://supabase.com/changelog?types=breaking-change
+- LiveKit Egress API: https://docs.livekit.io/reference/other/egress/api/
 
 The audit remains open until native session storage is hardened, the remaining security settings and database patch level are addressed, the deprecated Egress migration is tested, the real replay cycle is verified, and the real-device/two-account acceptance tests are completed.
