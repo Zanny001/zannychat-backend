@@ -139,7 +139,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(authTime)}`)
-      .set('X-Forwarded-For', '198.51.100.30')
+      .set('X-Forwarded-For', `198.51.100.${30 + ['live_streams', 'live_stream_replays', 'call_sessions', 'group_call_rooms', 'group_call_participants', 'live_stream_participants'].indexOf(table)}`)
       .send({ confirmation: 'DELETE' });
     expect(res.status).toBe(409);
     expect(mockDeleteUser).not.toHaveBeenCalled();
