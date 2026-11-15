@@ -4,6 +4,13 @@
 
 Reviewed the native and web call screens, group-call/conference admission, Supabase call/LIVE data access, LiveKit token permissions, LIVE guest/reaction/replay routes, replay worker lifecycle, call history, and production Render/Supabase logs.
 
+## Feature inventory reviewed
+
+- **Direct audio/video calls:** outgoing and incoming call flows; accept, decline, cancel, missed and end states; WebRTC peer connections; STUN/TURN ICE configuration; mute/unmute; camera on/off; front/back camera switching; audio-to-video and video-to-audio switching; caller/callee ICE restart; native speakerphone control; remote audio playback; call history, redial and per-user deletion.
+- **Group calls and conferences:** direct-call promotion to a group room; invitation of additional conversation members; participant admission and block checks; LiveKit audio/video tracks; participant roster; microphone/camera controls; leave versus end behavior; native speaker/earpiece selection; group call history and deletion.
+- **LIVE broadcasts:** public, follower-only and private visibility; creator, viewer, moderator and guest roles; guest requests and creator invitations; multi-guest stage; stage capacity; creator/guest camera and microphone controls; viewer comments and emoji reactions; moderation (mute, remove, spotlight, demote, reports); creator impact/supporter scores; separate Live Hub profile; replay Egress, signed playback, replay deletion and past-broadcast deletion.
+- **Cross-platform:** native Android/iOS and web screen paths, LiveKit token permissions, authenticated backend routes, Supabase RLS/grants, private replay storage, cleanup workers, rate limits and production logs.
+
 ## Findings and remediation in this audit
 
 | Area | Finding | Remediation |
