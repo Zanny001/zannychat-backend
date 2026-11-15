@@ -15,4 +15,6 @@ test('account storage cleanup queue survives Auth deletion and is service-role-o
   assert.match(migration, /REVOKE ALL ON TABLE public\.account_storage_cleanup_jobs FROM PUBLIC, anon, authenticated/i);
   assert.match(migration, /GRANT ALL ON TABLE public\.account_storage_cleanup_jobs TO service_role/i);
   assert.match(migration, /next_attempt_at, created_at/i);
+  assert.match(migration, /status text NOT NULL DEFAULT 'held'/i);
+  assert.match(migration, /CHECK \(status IN \('held', 'pending'\)\)/i);
 });
