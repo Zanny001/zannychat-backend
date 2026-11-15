@@ -14,6 +14,16 @@ CREATE INDEX IF NOT EXISTS group_call_participants_active_heartbeat_idx
   ON public.group_call_participants (last_seen_at)
   WHERE status = 'joined';
 
+-- Cover the supporter and replay quota foreign keys flagged by the Supabase
+-- performance advisor; the existing composite primary keys do not cover
+-- supporter_id-only lookups.
+CREATE INDEX IF NOT EXISTS live_creator_impact_daily_supporter_id_idx
+  ON public.live_creator_impact_daily (supporter_id);
+CREATE INDEX IF NOT EXISTS live_creator_impact_supporters_supporter_id_idx
+  ON public.live_creator_impact_supporters (supporter_id);
+CREATE INDEX IF NOT EXISTS live_replay_quota_active_replay_id_idx
+  ON public.live_replay_quota (active_replay_id);
+
 -- A participant whose row was marked left by the stale-heartbeat cleaner may
 -- rejoin an otherwise-active room. An explicit leave writes last_seen_at at
 -- least as recently as left_at and remains non-rejoinable.
