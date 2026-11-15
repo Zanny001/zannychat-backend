@@ -68,3 +68,9 @@ test('LIVE polling has enough shared request budget while mutation endpoints kee
   assert.ok(liveRoute.includes("max: 8, error: 'Please slow down before sending another LIVE reaction.'"));
   assert.ok(liveRoute.includes("max: 5, error: 'Please slow down before posting another LIVE comment.'"));
 });
+
+
+test('LIVE guest request and invitation mutations have dedicated anti-spam limits', () => {
+  assert.ok(liveRoute.includes("max: 3, error: 'Please wait before requesting the LIVE stage again.'"));
+  assert.ok(liveRoute.includes("max: 5, error: 'Please wait before sending more LIVE invitations.'"));
+});
