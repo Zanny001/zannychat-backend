@@ -21,6 +21,7 @@ function tokenFor(user, roomName, config) {
     room: roomName,
     canPublish: true,
     canSubscribe: true,
+    canPublishData: false,
     config,
   });
 }
