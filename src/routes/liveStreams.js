@@ -1068,20 +1068,26 @@ router.get('/:streamId/comments', async (req, res) => {
       .order('created_at', { ascending: false }).limit(50);
     if (error) throw error;
     const ordered = (data || []).reverse();
-    const names = await getProfileNames(ordered.map((comment) => comment.user_id));
-    const comments = ordered.map((row) => {
+    const blockedCommenterIds = await getBlockedUserIds(req.user.id, ordered.map((comment) => comment.user_id));
+    const visibleComments = ordered.filter((comment) => !blockedCommenterIds.has(comment.user_id));
+    const names = await getProfileNames(visibleComments.map((comment) => comment.user_id));
+    const comments = visibleComments.map((row) => {
       const { user_id: _userId, ...comment } = row;
       return { ...comment, user_name: names.get(_userId) || 'ZannyChat user' };
     });
     const reactionSince = new Date(Date.now() - 12 * 1000).toISOString();
     const { data: recentReactions, error: reactionError } = await supabaseAdmin.from('live_stream_reactions')
-      .select('id,reaction,created_at')
+      .select('id,user_id,reaction,created_at')
       .eq('stream_id', streamId)
       .gt('created_at', reactionSince)
       .order('created_at', { ascending: true })
       .limit(100);
     if (reactionError) throw reactionError;
-    return res.json({ comments, reactions: recentReactions || [] });
+    const blockedReactionUserIds = await getBlockedUserIds(req.user.id, (recentReactions || []).map((reaction) => reaction.user_id));
+    const reactions = (recentReactions || [])
+      .filter((reaction) => !blockedReactionUserIds.has(reaction.user_id))
+      .map(({ user_id: _userId, ...reaction }) => reaction);
+    return res.json({ comments, reactions });
   } catch (error) {
     console.error('[live] comments fetch failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE comments' });

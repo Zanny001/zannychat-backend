@@ -184,10 +184,10 @@ test('LIVE comments expose profile display names without returning raw user IDs'
 
 test('LIVE comments response includes a bounded recent reaction feed for floating stage animations', () => {
   assert.ok(route.includes("const reactionSince = new Date(Date.now() - 12 * 1000).toISOString()"));
-  assert.ok(route.includes(".select('id,reaction,created_at')"));
+  assert.ok(route.includes(".select('id,user_id,reaction,created_at')"));
   assert.ok(route.includes(".gt('created_at', reactionSince)"));
   assert.ok(route.includes(".limit(100)"));
-  assert.ok(route.includes("return res.json({ comments, reactions: recentReactions || [] })"));
+  assert.ok(route.includes("return res.json({ comments, reactions })"));
 });
 
 test('LIVE reaction writes have a dedicated per-user rate limit', () => {
