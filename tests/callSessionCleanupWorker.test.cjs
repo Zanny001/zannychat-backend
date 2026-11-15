@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { cleanupStaleCallSessions } = require('../src/jobs/callSessionCleanupWorker');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090003_finalize_stale_call_sessions.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115014925_finalize_stale_call_sessions.sql'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
 test('call-session cleanup worker invokes the restricted cleanup RPC', async () => {
