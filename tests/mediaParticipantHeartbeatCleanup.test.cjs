@@ -146,3 +146,11 @@ test('explicit LIVE and group-call leaves renew last-seen timestamps atomically'
   assert.ok(migration.includes("status = 'left', left_at = COALESCE(left_at, now()), last_seen_at = now()"));
   assert.ok(migration.includes("REVOKE ALL ON FUNCTION public.leave_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated"));
 });
+
+
+test('LIVE join records the heartbeat lease atomically with participant admission', () => {
+  assert.ok(migration.includes('CREATE OR REPLACE FUNCTION public.join_live_stream'));
+  assert.ok(migration.includes('joined_at, left_at, last_seen_at'));
+  assert.ok(migration.includes('left_at = NULL, last_seen_at = now()'));
+  assert.ok(migration.includes("GRANT EXECUTE ON FUNCTION public.join_live_stream(uuid, uuid) TO service_role"));
+});
