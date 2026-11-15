@@ -53,6 +53,9 @@ jobs:
       - name: Run AI input validation regression tests
         run: yarn run test:ai-input-validation
 
+      - name: Run chat media upload limit regression tests
+        run: yarn run test:chat-media-upload-limit
+
       - name: Run account storage cleanup regression tests
         run: yarn run test:account-storage-cleanup
 
