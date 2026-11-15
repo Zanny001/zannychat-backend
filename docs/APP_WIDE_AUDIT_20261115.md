@@ -7,7 +7,7 @@
 - Frontend screens, navigation-facing modules, API/service layer, native/web startup, profile editing, attachment handling and release workflows.
 - Backend routes/jobs, call/video/LIVE fixes, replay Egress, cleanup workers and CI.
 - Live Supabase migration ledger, table/column grants, RLS policies, SECURITY DEFINER grants/definitions, storage buckets and object counts.
-- Netlify/Render deployment status: not re-verified in this session; the latest frontend `main` commit has not been confirmed exported/deployed, and no Render workspace was selected.
+- Netlify/Render deployment status: read-only verified against both connected Netlify accounts and the connected Render workspace; exact production commits and drift are recorded below.
 - OWASP MASVS categories: storage, cryptography, authentication/authorization, network, platform, code quality, resilience and privacy.
 
 ## Navigation inventory verified against frontend main
@@ -108,9 +108,9 @@ Remaining product/acceptance gaps:
 
 ## Release and testing observations
 
-- Frontend `main` is now at merge commit `03399de036b265bdadba727d3f8ac7a3be73fa00`; PR #66's premium status/LIVE quality and advanced-calling workflows both passed. This merge includes MP4/MOV and HEIC/HEIF/GIF status compatibility.
-- The current Netlify published commit was not verified in this session. The latest frontend `main` state must be freshly exported before it can be treated as the live web build.
-- The current Render backend deployment commit was not verified in this session; no Render workspace was selected. Do not assume the latest backend `main` documentation or pending PR code is deployed.
+- Frontend `main` is now at merge commit `fb7bcab5b4d60e7df7804629df5a58b148132395`. PR #66's premium status/LIVE quality and advanced-calling workflows passed; PRs #68, #69 and #70 are also merged. This includes the status media compatibility work, recipient tombstone removal, privacy-scoped call history and protected deep-link continuation.
+- The active Netlify site `zannychat.netlify.app` is published from commit `27d76827e2259d14e00e2717fd0b8ebc35b63011`, two commits behind frontend `main`; PR #68 and PR #70 are not yet in the published web bundle. A fresh Expo web export is required before publishing current `main`.
+- The current Render backend service was verified in the Older workspace. Its latest live code deploy is `c59dac1395f59fcaf12e9bfe7b771d01c45d718f` (PR #103 unified Egress API); the later backend commits in this audit changed tests and documentation only. Do not assume pending frontend PR #67 is deployed.
 - Backend PR #103 was merged after the focused Egress test passed 8/8 in an isolated Node 22 harness. The full `yarn run test:live-replay` suite also passed in the backend quality workflow run triggered by PR #105; the real production recording cycle remains unverified.
 - Backend PR #105 expanded the backend regression gates and was merged as `bf3e155d0c598cf55278c4a9e234bb54b24711c4`. Both the Backend quality and Advanced calling backend workflows passed: dependency installation/audit, Jest, health, security, AI input, privacy, media, calls, group calls, LIVE/replay and migration/history suites.
 - Frontend PR #67 prepares SecureStore-backed native auth sessions. Its eight adapter tests and ten static account-deletion/OAuth preflight checks passed in isolated Node 22 runs. The latest premium quality workflow passed all 19 steps, including 703/703 unit tests and the integrity suite after its stale OAuth assertion was corrected. The advanced-calling workflow is still building the Android compile-only APK with placeholder Firebase; Kotlin compilation has passed, but packaging and remaining export/tests are not yet complete. PR #67 remains open until the native CI workflow completes; do not ship the JS change through OTA to existing binaries.
@@ -134,7 +134,7 @@ Remaining product/acceptance gaps:
 - OWASP Mobile Application Security Verification Standard: https://mas.owasp.org/MASVS/
 - Expo SecureStore SDK guidance: https://docs.expo.dev/versions/v57.0.0/sdk/securestore/ (SDK 57 package line; use the SDK-matched release, currently 57.0.4).
 - Expo authentication guidance: https://docs.expo.dev/guides/authentication/
-- Supabase PostgreSQL 15.19 / 17.11 security and correctness release: https://supabase.com/changelog/postgres-15-19-17-11-breaking-changes
+- PostgreSQL 17.12 security and correctness release: https://www.postgresql.org/docs/release/17.12/
 - Supabase CLI v3 migration warning: https://supabase.com/changelog?types=breaking-change
 - LiveKit Egress API: https://docs.livekit.io/reference/other/egress/api/
 
@@ -167,4 +167,4 @@ The deprecated Egress API migration and expanded backend quality gates are now i
 - Render logs from 2026-11-14 22:36:27 UTC captured POST /live/:streamId/react returning HTTP 503. The adjacent application log identified the cause exactly: `Creators cannot award themselves impact`. The reaction route translated that database exception into a generic 503, so a creator tapping an emoji on their own broadcast saw no successful reaction.
 - This was fixed in production migration 20261114224335 (`allow_creator_live_reactions_without_self_impact`, repository migration file 20261114224335_allow_creator_live_reactions_without_self_impact.sql). The RPC now persists the creator's reaction for the on-screen reaction feed, returns current impact totals with score_awarded=false, and does not award the creator supporter points. Viewer reactions still require an active joined participant row and retain the existing anti-abuse impact rules.
 - The production Supabase function definition was read back and matches this corrected implementation; the migration ledger confirms the migration is applied. The latest Render code deployment succeeded at 11:45 UTC. A read-only Render log check found no application error logs between 11:45 and 12:40 UTC, but this is not a substitute for a fresh creator/viewer session.
-- Added a missing backend regression test in commit e98c8097c9329043630ec234284aec9b345d5cc4. It asserts the creator reaction is inserted before the self-impact branch, no self-impact is awarded, and viewer reactions still require an active joined participant. The applied migration filename has also been reconciled to the production ledger version (20261114224335), avoiding a false pending migration on the next Supabase CLI push. The backend quality and backend tests workflows are now running for the final main commit 4c109ebc3d89714a91c27afae7d964f276d9d132; their results must be checked before considering the test gate complete.
+- Added a missing backend regression test in commit e98c8097c9329043630ec234284aec9b345d5cc4. It asserts the creator reaction is inserted before the self-impact branch, no self-impact is awarded, and viewer reactions still require an active joined participant. The applied migration filename has also been reconciled to the production ledger version (20261114224335), avoiding a false pending migration on the next Supabase CLI push. The backend quality workflow passed 30/30 steps and the backend tests workflow passed 16/16 steps for code/test commit 4c109ebc3d89714a91c27afae7d964f276d9d132. The LIVE creator-reaction regression was explicitly reported as passing. A later documentation-only commit did not change runtime code.
