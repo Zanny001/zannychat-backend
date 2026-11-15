@@ -62,7 +62,7 @@ Backend PR #98 added an authenticated, rate-limited, read-only replay configurat
 
 ### Open security/privacy work
 
-1. **Native auth session storage (high):** `supabaseClient.js` still persists native Supabase sessions in AsyncStorage. Expo SecureStore is available for this SDK line; implement a chunked, migration-safe adapter and verify old sessions migrate without logging users out. SecureStore can reject oversized values, so storing the complete Supabase session as one key is not an acceptable implementation.
+1. **Native auth session storage (high):** `main` still persists native Supabase sessions in AsyncStorage. Frontend PR #67 now prepares a chunked SecureStore/Keychain/Android Keystore adapter, migrates old sessions on first read, keeps each value below 1.5 KiB, writes a manifest last, and uses device-only Keychain accessibility. Its seven adapter tests passed locally. The PR is not merged or deployed because it adds a native module; a new Android/iOS binary and physical-device migration test are required first. No EAS build was started under the zero-budget constraint.
 2. **Profile visibility (resolved in database; acceptance remains):** a fresh production check confirms `anon` and table-level `authenticated` SELECT are both false on `profiles`; authenticated column SELECT is limited to `id` and `username`, not `avatar_url` or `status`. The current SELECT policy is relationship-scoped, and the owner UPDATE policy remains. Still verify the complete profile/avatar flow using two real accounts on the latest client.
 3. **End-to-end encryption (product/security gap):** the live `messages` table stores message bodies in a plaintext `text` column, and the frontend has no Signal/Olm/libsodium-style message-key dependency. Transport encryption and provider-side encryption at rest are not end-to-end encryption. Do not claim E2EE.
 4. **Legacy public avatars (medium):** the client now resolves viewer-authorized private avatar URLs and removes public copies when visibility is restricted. Production currently contains three objects in public `avatars` and four in `private-avatars`. The previous profile audit established the three public objects belong to profiles whose profile and photo visibility are both `everyone`. Public avatar dual-write compatibility remains for those public profiles/older clients. Retire public dual writes and objects only after the old-client compatibility window closes; a previously shared public URL cannot be revoked by Storage RLS.
@@ -82,7 +82,7 @@ The recent call/video/LIVE audit and merged fixes cover:
 - Native call end cleanup, heartbeat leases and stale-call cleanup.
 - LIVE guest request/approval/token handoff, guest stage lifecycle and participant presence.
 - Replay Egress output shape, recovery, stop/cleanup and creator-owned deletion.
-- **Pending compatibility modernization:** backend PR #103 migrates replay creation from deprecated `StartRoomCompositeEgress` to unified `StartEgress`; do not call it completed until its request-shape tests pass and the PR is merged.
+- **Completed compatibility modernization:** backend PR #103 migrated replay creation from deprecated `StartRoomCompositeEgress` to unified `StartEgress` and was merged to backend `main` as `c59dac1395f59fcaf12e9bfe7b771d01c45d718f`. The focused Egress unit test passed 8/8 locally; full replay suite and live recording acceptance remain outstanding.
 - Per-user call-history deletion and creator-owned ended broadcast/replay deletion.
 
 Remaining product/acceptance gaps:
@@ -97,7 +97,8 @@ Remaining product/acceptance gaps:
 - Frontend `main` is now at merge commit `03399de036b265bdadba727d3f8ac7a3be73fa00`; PR #66's premium status/LIVE quality and advanced-calling workflows both passed. This merge includes MP4/MOV and HEIC/HEIF/GIF status compatibility.
 - The current Netlify published commit was not verified in this session. The latest frontend `main` state must be freshly exported before it can be treated as the live web build.
 - The current Render backend deployment commit was not verified in this session; no Render workspace was selected. Do not assume the latest backend `main` documentation or pending PR code is deployed.
-- Backend PR #103 has no reported GitHub workflow runs or combined-status checks at the time of this audit. Its targeted replay tests still require execution before merge.
+- Backend PR #103 was merged after the focused Egress test passed 8/8 in an isolated Node 22 harness. The repository reported no GitHub workflow runs or combined-status checks; the complete `npm run test:live-replay` suite and a real recording cycle remain unverified.
+- Frontend PR #67 prepares SecureStore-backed native auth sessions. Its seven adapter tests passed in an isolated Node 22 harness. It remains open until a native binary containing the module can be built and tested; do not ship the JS change through OTA to existing binaries.
 - Android Kotlin compilation passed on the preceding PR run; APK assembly, latest SDK export and iOS/export checks are still required for the latest commit.
 - The current Android CI workflow creates a placeholder-Firebase artifact but labels it as physical-device QA. This is misleading and is being corrected separately. A placeholder-Firebase artifact is not evidence of installable production behavior.
 - The Android production EAS workflow must remain manual and must not be triggered under the current zero-budget constraint.
@@ -122,4 +123,4 @@ Remaining product/acceptance gaps:
 - Supabase CLI v3 migration warning: https://supabase.com/changelog?types=breaking-change
 - LiveKit Egress API: https://docs.livekit.io/reference/other/egress/api/
 
-The audit remains open until native session storage is hardened, the remaining security settings and database patch level are addressed, the deprecated Egress migration is tested, the real replay cycle is verified, and the real-device/two-account acceptance tests are completed.
+The deprecated Egress API migration is now in backend `main`. The audit remains open until the SecureStore change is released in a compatible native binary, the remaining security settings and database patch level are addressed, the real replay cycle is verified, and the real-device/two-account acceptance tests are completed.
