@@ -36,7 +36,7 @@ function issueToken(user, roomName, config, canPublish) {
     room: roomName,
     canPublish,
     canSubscribe: true,
-    canPublishData: true,
+    canPublishData: canPublish,
     config,
   });
 }
