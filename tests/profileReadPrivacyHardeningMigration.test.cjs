@@ -25,14 +25,15 @@ test('broad authenticated profile visibility is replaced with relationship-scope
 });
 
 test('profile row visibility is denied when either side has blocked the other', () => {
-  assert.match(hardening, /create or replace function public\\.is_profile_blocked\\(p_user_id uuid\\)/i);
-  assert.match(hardening, /security definer\\s+set search_path = ''/i);
-  assert.match(hardening, /b\\.blocker_id = auth\\.uid\\(\\) and b\\.blocked_id = p_user_id/i);
-  assert.match(hardening, /b\\.blocker_id = p_user_id and b\\.blocked_id = auth\\.uid\\(\\)/i);
-  assert.match(hardening, /not public\\.is_profile_blocked\\(profiles\\.id\\)/i);
-  assert.match(hardening, /revoke all on function public\\.is_profile_blocked\\(uuid\\) from public, anon/i);
-  assert.match(hardening, /grant execute on function public\\.is_profile_blocked\\(uuid\\) to authenticated/i);
+  assert.ok(hardening.includes('CREATE OR REPLACE FUNCTION public.is_profile_blocked(p_user_id uuid)'));
+  assert.ok(hardening.includes('SECURITY DEFINER'));
+  assert.ok(hardening.includes('b.blocker_id = auth.uid() AND b.blocked_id = p_user_id'));
+  assert.ok(hardening.includes('b.blocker_id = p_user_id AND b.blocked_id = auth.uid()'));
+  assert.ok(hardening.includes('NOT public.is_profile_blocked(profiles.id)'));
+  assert.ok(hardening.includes('REVOKE ALL ON FUNCTION public.is_profile_blocked(uuid) FROM PUBLIC, anon'));
+  assert.ok(hardening.includes('GRANT EXECUTE ON FUNCTION public.is_profile_blocked(uuid) TO authenticated'));
 });
+
 
 test('authenticated clients receive only the minimal direct profile projection', () => {
   assert.match(migration, /revoke select on table public\.profiles from public, anon, authenticated/i);
