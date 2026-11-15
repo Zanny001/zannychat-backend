@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Audit dependency vulnerabilities
+        run: yarn audit --level high
+
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
 
