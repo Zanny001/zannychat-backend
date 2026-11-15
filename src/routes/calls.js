@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { buildIceConfig } = require('../utils/turnCredentials.cjs');
+const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
 const { runCallInvitationNotifications } = require('../jobs/callInvitationNotifications');
 const { enqueueCallEndNotification } = require('../jobs/callEndNotifications');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
@@ -148,6 +149,64 @@ router.post('/:callId/notify', async (req, res) => {
   } catch (deliveryError) {
     console.error('[calls] invitation push processing failed:', deliveryError.message || deliveryError);
     return res.status(503).json({ error: 'Call invitation push is temporarily unavailable' });
+  }
+});
+
+
+// Issue a short-lived LiveKit token for an accepted one-to-one call.
+// The room name is deterministic but reveals no credential; only the two
+// authenticated call participants can receive a token for it.
+router.post('/:callId/livekit-token', async (req, res) => {
+  const callId = String(req.params.callId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId)) {
+    return res.status(400).json({ error: 'Invalid call id' });
+  }
+  const config = getLiveKitConfig();
+  if (!config) return res.status(503).json({ error: 'LiveKit calling is not configured on this server' });
+
+  try {
+    const { data: call, error } = await supabaseAdmin.from('call_sessions')
+      .select('id,caller_id,callee_id,conversation_id,call_type,status,group_room_id,last_activity_at')
+      .eq('id', callId).maybeSingle();
+    if (error) return res.status(503).json({ error: 'Could not inspect call state' });
+    if (!call || ![call.caller_id, call.callee_id].includes(req.user.id)) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    if (call.group_room_id) {
+      return res.status(409).json({ error: 'This call has already moved to a conference', groupRoomId: call.group_room_id });
+    }
+    if (call.status !== 'accepted') {
+      return res.status(409).json({ error: 'The other participant must accept the call before media can connect' });
+    }
+    const lastActivity = Date.parse(call.last_activity_at || '');
+    if (Number.isFinite(lastActivity) && lastActivity > 0 && lastActivity <= Date.now() - 3 * 60 * 1000) {
+      return res.status(409).json({ error: 'This call session has expired. Start a new call.' });
+    }
+
+    const peerId = req.user.id === call.caller_id ? call.callee_id : call.caller_id;
+    const { data: blocked, error: blockError } = await supabaseAdmin.from('blocked_users')
+      .select('blocker_id,blocked_id')
+      .or(`and(blocker_id.eq.${req.user.id},blocked_id.eq.${peerId}),and(blocker_id.eq.${peerId},blocked_id.eq.${req.user.id})`)
+      .limit(1);
+    if (blockError) return res.status(503).json({ error: 'Could not verify call permissions' });
+    if (blocked?.length) return res.status(403).json({ error: 'This call is unavailable because one participant has blocked the other' });
+
+    const roomName = 'zdc_' + call.id.replace(/-/g, '');
+    const token = createLiveKitToken({
+      identity: req.user.id,
+      name: req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'ZannyChat member',
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: false,
+      ttlSeconds: 900,
+      config,
+    });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ callId: call.id, roomId: roomName, livekitUrl: config.url, token, callType: call.call_type });
+  } catch (error) {
+    console.error('[calls] direct LiveKit token issue failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not prepare secure call media' });
   }
 });
 
