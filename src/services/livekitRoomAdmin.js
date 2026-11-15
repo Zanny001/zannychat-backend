@@ -43,7 +43,7 @@ async function deleteLiveKitRoom(roomName, {
   fetchImpl = globalThis.fetch,
   nowSeconds = Math.floor(Date.now() / 1000),
 } = {}) {
-  if (!/^zgc_[a-f0-9]{32}$/i.test(String(roomName || ''))) {
+  if (!/^z(?:gc|live)_[a-f0-9]{32}$/i.test(String(roomName || ''))) {
     throw new Error('Invalid ZannyChat LiveKit room name');
   }
   if (!config) throw new Error('Group calling is not configured on this server');
