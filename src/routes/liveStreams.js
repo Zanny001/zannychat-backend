@@ -231,9 +231,31 @@ router.get('/replays/config', async (req, res) => {
 router.post('/replays/config/validate', replayConfigValidationLimiter, async (req, res) => {
   const replayConfig = getLiveReplayConfig();
   const missing = [];
-  if (!getLiveKitConfig()) missing.push('LiveKit server URL and API credentials');
-  if (!getLiveKitEgressConfig()) missing.push('LiveKit Egress API key and secret');
-  if (!replayConfig?.storage) missing.push('Supabase S3-compatible storage credentials, region, or webhook URL');
+  if (!getLiveKitConfig()) missing.push('LIVEKIT_URL and LiveKit API credentials');
+  if (!getLiveKitEgressConfig()) missing.push('LIVEKIT_EGRESS_API_KEY and LIVEKIT_EGRESS_API_SECRET');
+
+  let storageEndpointValid = false;
+  try {
+    const endpoint = new URL(String(process.env.SUPABASE_STORAGE_S3_ENDPOINT || '').trim());
+    storageEndpointValid = endpoint.protocol === 'https:' &&
+      endpoint.hostname.endsWith('.storage.supabase.co') &&
+      endpoint.pathname.replace(/\\/$/, '') === '/storage/v1/s3';
+  } catch {}
+  if (!storageEndpointValid) missing.push('SUPABASE_STORAGE_S3_ENDPOINT');
+  if (!String(process.env.SUPABASE_STORAGE_S3_ACCESS_KEY_ID || '').trim()) missing.push('SUPABASE_STORAGE_S3_ACCESS_KEY_ID');
+  if (!String(process.env.SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY || '').trim()) missing.push('SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY');
+  if (!String(process.env.SUPABASE_STORAGE_S3_REGION || '').trim()) missing.push('SUPABASE_STORAGE_S3_REGION');
+
+  let webhookValid = false;
+  try {
+    const webhook = new URL(String(process.env.LIVEKIT_REPLAY_WEBHOOK_URL || '').trim());
+    webhookValid = webhook.protocol === 'https:' && webhook.pathname.endsWith('/webhooks/livekit/egress');
+  } catch {}
+  if (!webhookValid) missing.push('LIVEKIT_REPLAY_WEBHOOK_URL');
+  if (!replayConfig) {
+    // Avoid duplicate diagnostics when one of the individually checked values is missing.
+    if (!missing.length) missing.push('Replay configuration is incomplete');
+  }
 
   const missingFlags = [];
   if (process.env.LIVEKIT_REPLAY_ENABLED !== 'true') missingFlags.push('LIVEKIT_REPLAY_ENABLED=true');
