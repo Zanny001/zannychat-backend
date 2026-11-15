@@ -1,5 +1,7 @@
 name: Backend quality
 
+# Account deletion media cleanup is a release-critical privacy regression suite.
+
 on:
   pull_request:
     branches: [main]
@@ -51,8 +53,8 @@ jobs:
       - name: Run AI input validation regression tests
         run: yarn run test:ai-input-validation
 
-      - name: Run chat media upload limit migration tests
-        run: yarn run test:chat-media-upload-limit
+      - name: Run account storage cleanup regression tests
+        run: yarn run test:account-storage-cleanup
 
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
