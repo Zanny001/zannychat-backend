@@ -52,7 +52,7 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
   try {
     const { data: jobs, error } = await admin
       .from('account_storage_cleanup_jobs')
-      .select('id,user_id,attempts')
+      .select('id,user_id,attempts,status')
       .eq('status', 'pending')
       .lte('next_attempt_at', new Date().toISOString())
       .order('created_at', { ascending: true })
@@ -61,6 +61,19 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
 
     for (const job of jobs || []) {
       try {
+        if (job.status === 'held') {
+          const { data: authUser, error: authLookupError } = await admin.auth.admin.getUserById(job.user_id);
+          const userMissing = !authUser?.user
+            && (authLookupError?.status === 404 || authLookupError?.code === 'user_not_found'
+              || /user.*not found/i.test(String(authLookupError?.message || '')));
+          if (authUser?.user || !userMissing) continue;
+          const { error: releaseError } = await admin
+            .from('account_storage_cleanup_jobs')
+            .update({ status: 'pending', next_attempt_at: new Date().toISOString() })
+            .eq('id', job.id)
+            .eq('status', 'held');
+          if (releaseError) throw releaseError;
+        }
         const removed = await removeUserPersonalStorage(admin, job.user_id);
         const { error: deleteError } = await admin
           .from('account_storage_cleanup_jobs')
