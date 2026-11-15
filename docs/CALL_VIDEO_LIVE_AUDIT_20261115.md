@@ -30,6 +30,9 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - Call sessions and call signals are protected by row-level policies and participant validation; call-signal payloads already have a 16 KiB database limit and sender rate guard.
 - LIVE stream, participant, guest-invite, reaction, replay and impact data are accessed through the backend service role rather than direct anonymous/authenticated table grants.
 - The authenticated call heartbeat RPC is scoped to the caller's own participation in the call.
+- In the call/LIVE function surface, `heartbeat_call_session` is the only SECURITY DEFINER RPC callable by authenticated users; it requires `auth.uid()` and updates only a call where that user is caller or callee. All other audited call/LIVE privileged functions are service-role-only.
+- Supabase security advisor reports 36 RLS-enabled tables without policies; the audited call/LIVE tables are intentionally service-role-only and have no anon/authenticated SELECT grants. The advisor also reports 27 authenticated-callable SECURITY DEFINER functions across the wider app; the call/LIVE subset was reviewed as above.
+- The platform-wide leaked-password protection setting is disabled; this is outside the call/LIVE changes and should be enabled when the Supabase plan/settings support it.
 - The LIVE replay Storage bucket is private and has no public object policy; playback uses the authenticated backend playback path and short-lived signed URLs.
 - LiveKit room names are constrained to generated ZannyChat namespaces before room deletion.
 - LiveKit data publishing is disabled where no current client data-channel feature uses it.
@@ -46,5 +49,6 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 ## Verification notes
 
 - Production logs reviewed for call/LIVE HTTP 5xx and replay Storage errors in the audit window; no matching PostgREST 5xx or LIVE replay Storage failures were returned.
+- Supabase performance advisor found three missing LIVE foreign-key indexes (impact daily supporter, impact supporters, replay quota active replay); these indexes are added by the heartbeat migration. The advisor also lists many unused indexes; none were removed without representative production workload evidence.
 - Earlier database errors included expected state/authorization rejections (expired/non-participant call heartbeat, active-call guard, and duplicate active LIVE creator constraint). A missing-column message in the log window came from an audit SQL query referencing a non-existent column, not from the app.
 - This document describes the code and database checks in scope; it does not claim a real two-user media session was completed by automation.
