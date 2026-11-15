@@ -76,5 +76,13 @@
     "jest": "^29.7.0",
     "supabase": "^2.120.0",
     "supertest": "^7.0.0"
+  },
+  "resolutions": {
+    "body-parser": "1.20.9",
+    "proxy-addr": "2.0.8"
+  },
+  "overrides": {
+    "body-parser": "1.20.9",
+    "proxy-addr": "2.0.8"
   }
 }

@@ -8,6 +8,7 @@ on:
       - "tests/**"
       - "package.json"
       - "yarn.lock"
+      - "package-lock.json"
       - ".github/workflows/backend-quality.yml"
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - "tests/**"
       - "package.json"
       - "yarn.lock"
+      - "package-lock.json"
       - ".github/workflows/backend-quality.yml"
 
 permissions:
@@ -44,7 +46,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Audit dependency vulnerabilities
-        run: yarn audit --level high
+        run: npm audit --audit-level=high
 
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
