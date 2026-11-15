@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const optIn = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115014926_media_heartbeat_opt_in.sql'), 'utf8');
+const optIn = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115015502_media_heartbeat_opt_in.sql'), 'utf8');
 const lease = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115014920_media_participant_heartbeat_leases.sql'), 'utf8');
 const liveRoute = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
