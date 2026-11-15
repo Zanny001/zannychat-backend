@@ -47,6 +47,61 @@ function startCallEndNotificationWorker() {
   return timer;
 }
 
+function startCallSessionCleanupWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { cleanupStaleCallSessions } = require('./jobs/callSessionCleanupWorker');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const summary = await cleanupStaleCallSessions({ admin: supabaseAdmin });
+      if (summary.deletedSignals) {
+        console.info('[call-session-cleanup] removed stale signaling records', summary);
+      }
+    } catch (error) {
+      console.error('[call-session-cleanup] failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 60_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 15_000);
+  warmup.unref?.();
+  return timer;
+}
+
+function startMediaParticipantHeartbeatCleanupWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { cleanupStaleMediaParticipants, cleanupEndedLiveRooms } = require('./jobs/mediaParticipantHeartbeatCleanup');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const summary = await cleanupStaleMediaParticipants({ admin: supabaseAdmin });
+      const roomCleanup = await cleanupEndedLiveRooms({ admin: supabaseAdmin });
+      if (summary.liveStreamsEnded || summary.liveParticipantsLeft
+          || summary.groupParticipantsLeft || summary.groupRoomsEnded
+          || roomCleanup.deleted || roomCleanup.failed) {
+        console.info('[media-presence] stale participant cleanup', { ...summary, endedLiveRooms: roomCleanup });
+      }
+    } catch (error) {
+      console.error('[media-presence] stale participant cleanup failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 12_000);
+  warmup.unref?.();
+  return timer;
+}
+
 function startGroupCallMediaCleanupWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
@@ -181,6 +236,8 @@ if (require.main === module) {
     startCallInvitationWorker();
     startCallEndNotificationWorker();
     startGroupCallMediaCleanupWorker();
+    startMediaParticipantHeartbeatCleanupWorker();
+    startCallSessionCleanupWorker();
     startLiveReplayWorker();
   });
 }

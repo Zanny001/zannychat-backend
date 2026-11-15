@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { deleteLiveKitRoom } = require('../services/livekitRoomAdmin');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 8, error: 'LIVE history actions are rate-limited.' }));
@@ -15,7 +16,7 @@ router.delete('/:streamId', async (req, res) => {
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream' });
   try {
     const { data: stream, error: streamError } = await supabaseAdmin.from('live_streams')
-      .select('id,creator_id,status').eq('id', streamId).maybeSingle();
+      .select('id,creator_id,status,room_name').eq('id', streamId).maybeSingle();
     if (streamError) throw streamError;
     if (!stream) return res.status(404).json({ error: 'LIVE broadcast not found' });
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete this broadcast' });
@@ -32,6 +33,7 @@ router.delete('/:streamId', async (req, res) => {
     if (paths.some((path) => !path.startsWith(req.user.id + '/' + streamId + '/'))) {
       return res.status(409).json({ error: 'Broadcast media ownership could not be verified' });
     }
+    if (stream.room_name) await deleteLiveKitRoom(stream.room_name);
     if (paths.length) {
       const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove(paths);
       if (removeError) throw removeError;

@@ -21,6 +21,7 @@ function tokenFor(user, roomName, config) {
     room: roomName,
     canPublish: true,
     canSubscribe: true,
+    canPublishData: false,
     config,
   });
 }
@@ -262,6 +263,57 @@ router.post('/:roomId/join', async (req, res) => {
   }
 });
 
+router.post('/:roomId/heartbeat', async (req, res) => {
+  const roomId = req.params.roomId;
+  if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call id' });
+  try {
+    const { data: room, error: roomError } = await supabaseAdmin.from('group_call_rooms')
+      .select('id,status,source_call_id')
+      .eq('id', roomId).maybeSingle();
+    if (roomError) throw roomError;
+    if (!room || !['ringing','active'].includes(room.status)) {
+      return res.status(404).json({ error: 'Group call is no longer active' });
+    }
+
+    const { data: participant, error: participantError } = await supabaseAdmin.from('group_call_participants')
+      .select('status,last_seen_at,left_at')
+      .eq('room_id', roomId).eq('user_id', req.user.id).maybeSingle();
+    if (participantError) throw participantError;
+    if (!participant) return res.status(403).json({ error: 'You are not a participant in this call' });
+
+    const now = new Date();
+    let rejoined = false;
+    if (participant.status === 'left') {
+      const lastSeen = Date.parse(participant.last_seen_at || '');
+      const leftAt = Date.parse(participant.left_at || '');
+      if (!Number.isFinite(lastSeen) || !Number.isFinite(leftAt) || lastSeen >= leftAt - 30_000) {
+        return res.status(403).json({ error: 'You have left this call' });
+      }
+      const { error: rejoinError } = await supabaseAdmin.rpc(
+        room.source_call_id ? 'join_direct_call_room' : 'join_group_call_room',
+        { p_room_id: roomId, p_user_id: req.user.id },
+      );
+      if (rejoinError) {
+        if (rejoinError.code === '42501') return res.status(403).json({ error: 'You can no longer rejoin this call' });
+        if (rejoinError.code === 'P0001') return res.status(404).json({ error: 'This call is no longer available' });
+        throw rejoinError;
+      }
+      rejoined = true;
+    } else if (participant.status !== 'joined') {
+      return res.status(403).json({ error: 'Join this call before sending a heartbeat' });
+    }
+
+    const { error: updateError } = await supabaseAdmin.from('group_call_participants')
+      .update({ last_seen_at: now.toISOString() })
+      .eq('room_id', roomId).eq('user_id', req.user.id).eq('status', 'joined');
+    if (updateError) throw updateError;
+    return res.json({ ok: true, rejoined, lastSeenAt: now.toISOString() });
+  } catch (error) {
+    console.error('[group-calls] heartbeat failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not renew group-call presence' });
+  }
+});
+
 router.get('/:roomId/participants', async (req, res) => {
   const roomId = req.params.roomId;
   if (!validId(roomId)) return res.status(400).json({ error: 'Invalid group call room' });
@@ -361,6 +413,10 @@ router.post('/:roomId/leave', async (req, res) => {
       p_room_id: roomId, p_user_id: req.user.id,
     });
     if (error) throw error;
+    const { error: heartbeatError } = await supabaseAdmin.from('group_call_participants')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('room_id', roomId).eq('user_id', req.user.id).eq('status', 'left');
+    if (heartbeatError) throw heartbeatError;
     return res.json({ left: true, roomEnded: roomEnded === true });
   } catch (error) {
     console.error('[group-calls] leave failed:', error?.message || error);
