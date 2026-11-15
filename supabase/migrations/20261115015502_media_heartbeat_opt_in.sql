@@ -1,0 +1,317 @@
+-- Opt participants into server-side lease cleanup only after the new client
+-- sends its first connected-room heartbeat. Legacy web/APK clients do not
+-- send this heartbeat yet and must not be expired by the new worker.
+
+ALTER TABLE public.live_stream_participants
+  ALTER COLUMN last_seen_at DROP NOT NULL,
+  ALTER COLUMN last_seen_at DROP DEFAULT;
+ALTER TABLE public.group_call_participants
+  ALTER COLUMN last_seen_at DROP NOT NULL,
+  ALTER COLUMN last_seen_at DROP DEFAULT;
+
+-- Existing connected sessions predate the heartbeat client and are therefore
+-- left untracked until their client sends its first heartbeat.
+UPDATE public.live_stream_participants SET last_seen_at = NULL WHERE status = 'joined';
+UPDATE public.group_call_participants SET last_seen_at = NULL WHERE status = 'joined';
+
+COMMENT ON COLUMN public.live_stream_participants.last_seen_at IS
+  'NULL until the connected client opts into presence heartbeats; explicit leave stamps the time.';
+COMMENT ON COLUMN public.group_call_participants.last_seen_at IS
+  'NULL until the connected client opts into presence heartbeats; explicit leave stamps the time.';
+
+CREATE OR REPLACE FUNCTION public.join_group_call_room(p_room_id uuid, p_user_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_room public.group_call_rooms%rowtype;
+  v_joined integer;
+  v_role text;
+  v_existing_status text;
+  v_invited_at timestamptz;
+  v_left_at timestamptz;
+  v_last_seen_at timestamptz;
+BEGIN
+  IF p_room_id IS NULL OR p_user_id IS NULL THEN
+    RAISE EXCEPTION 'group call room and user are required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_room
+    FROM public.group_call_rooms
+   WHERE id = p_room_id
+   FOR UPDATE;
+  IF NOT FOUND OR v_room.status NOT IN ('ringing','active') THEN
+    RAISE EXCEPTION 'group call is no longer active' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.conversations c
+    JOIN public.conversation_participants cp ON cp.conversation_id = c.id
+    WHERE c.id = v_room.conversation_id AND c.is_group = true AND cp.user_id = p_user_id
+  ) THEN
+    RAISE EXCEPTION 'user is not a member of this group' USING ERRCODE = '42501';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.group_call_participants current_participant
+      JOIN public.blocked_users b
+        ON (b.blocker_id = p_user_id AND b.blocked_id = current_participant.user_id)
+        OR (b.blocker_id = current_participant.user_id AND b.blocked_id = p_user_id)
+     WHERE current_participant.room_id = p_room_id
+       AND current_participant.user_id <> p_user_id
+       AND current_participant.status = 'joined'
+  ) THEN
+    RAISE EXCEPTION 'blocked users cannot share a group call' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT status, invited_at, left_at, last_seen_at
+    INTO v_existing_status, v_invited_at, v_left_at, v_last_seen_at
+    FROM public.group_call_participants
+   WHERE room_id = p_room_id AND user_id = p_user_id;
+  IF NOT FOUND OR v_existing_status = 'declined'
+     OR (v_existing_status = 'left' AND (
+       v_left_at IS NULL OR v_last_seen_at IS NULL
+       OR v_last_seen_at >= v_left_at - interval '30 seconds'
+     )) THEN
+    RAISE EXCEPTION 'user was not invited to this group call' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_existing_status = 'invited'
+     AND v_invited_at IS NOT NULL
+     AND v_invited_at <= now() - interval '2 minutes' THEN
+    RAISE EXCEPTION 'group call invitation has expired' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_existing_status <> 'joined' THEN
+    SELECT count(*) INTO v_joined
+      FROM public.group_call_participants
+     WHERE room_id = p_room_id AND status = 'joined';
+    IF v_joined >= v_room.max_participants THEN
+      RAISE EXCEPTION 'group call is full' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  v_role := CASE WHEN p_user_id = v_room.host_user_id THEN 'host' ELSE 'member' END;
+  INSERT INTO public.group_call_participants(room_id, user_id, role, status, joined_at, left_at, last_seen_at)
+  VALUES (p_room_id, p_user_id, v_role, 'joined', now(), NULL, NULL)
+  ON CONFLICT (room_id, user_id) DO UPDATE
+    SET role = EXCLUDED.role, status = 'joined', joined_at = now(), left_at = NULL, last_seen_at = NULL;
+
+  UPDATE public.group_call_rooms
+     SET status = 'active', started_at = COALESCE(started_at, now())
+   WHERE id = p_room_id AND status = 'ringing';
+  RETURN v_role;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.join_group_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.join_group_call_room(uuid, uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_stream public.live_streams%rowtype;
+  v_joined integer;
+  v_stage_joined integer;
+  v_role text;
+  v_existing_status text;
+  v_invite public.live_stream_invites%rowtype;
+  v_has_invite boolean := false;
+  v_is_follower boolean := false;
+BEGIN
+  SELECT * INTO v_stream
+    FROM public.live_streams
+   WHERE id = p_stream_id
+   FOR UPDATE;
+  IF NOT FOUND OR v_stream.status <> 'live' THEN
+    RAISE EXCEPTION 'LIVE stream has ended' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_user_id <> v_stream.creator_id AND EXISTS (
+    SELECT 1 FROM public.blocked_users b
+     WHERE (b.blocker_id = v_stream.creator_id AND b.blocked_id = p_user_id)
+        OR (b.blocker_id = p_user_id AND b.blocked_id = v_stream.creator_id)
+  ) THEN
+    RAISE EXCEPTION 'LIVE stream is unavailable' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_user_id <> v_stream.creator_id THEN
+    SELECT * INTO v_invite
+      FROM public.live_stream_invites
+     WHERE stream_id = p_stream_id AND user_id = p_user_id
+       AND status IN ('pending','accepted')
+     ORDER BY CASE WHEN invitation_type = 'guest' AND status = 'accepted' THEN 0 ELSE 1 END,
+              created_at DESC
+     LIMIT 1
+     FOR UPDATE;
+    v_has_invite := FOUND;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.live_creator_follows
+       WHERE follower_id = p_user_id AND creator_id = v_stream.creator_id
+    ) INTO v_is_follower;
+
+    IF v_stream.visibility = 'followers' AND NOT v_is_follower
+       AND NOT (v_has_invite AND v_invite.invitation_type IN ('viewer','guest')) THEN
+      RAISE EXCEPTION 'LIVE stream is for followers only' USING ERRCODE = '42501';
+    END IF;
+
+    IF v_stream.visibility = 'private'
+       AND NOT (v_has_invite AND v_invite.invitation_type IN ('viewer','guest')) THEN
+      RAISE EXCEPTION 'LIVE stream invitation required' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  v_role := CASE
+    WHEN p_user_id = v_stream.creator_id THEN 'creator'
+    WHEN v_stream.allow_guests AND v_has_invite
+      AND v_invite.invitation_type = 'guest' AND v_invite.status = 'accepted' THEN 'guest'
+    ELSE 'viewer'
+  END;
+
+  IF v_role = 'guest' THEN
+    SELECT count(*) INTO v_stage_joined
+      FROM public.live_stream_participants
+     WHERE stream_id = p_stream_id
+       AND role = 'guest'
+       AND status = 'joined'
+       AND user_id <> p_user_id;
+    IF v_stage_joined >= 5 THEN
+      RAISE EXCEPTION 'LIVE stage is full' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  SELECT status INTO v_existing_status
+    FROM public.live_stream_participants
+   WHERE stream_id = p_stream_id AND user_id = p_user_id;
+  IF NOT FOUND OR v_existing_status <> 'joined' THEN
+    SELECT count(*) INTO v_joined
+      FROM public.live_stream_participants
+     WHERE stream_id = p_stream_id AND status = 'joined';
+    IF v_joined >= v_stream.viewer_limit THEN
+      RAISE EXCEPTION 'LIVE audience is full' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  INSERT INTO public.live_stream_participants(stream_id, user_id, role, status, joined_at, left_at, last_seen_at)
+  VALUES (p_stream_id, p_user_id, v_role, 'joined', now(), NULL, NULL)
+  ON CONFLICT (stream_id, user_id) DO UPDATE
+    SET role = EXCLUDED.role, status = 'joined', joined_at = now(), left_at = NULL, last_seen_at = NULL;
+
+  IF v_has_invite AND v_invite.invitation_type = 'viewer' AND v_invite.status = 'pending' THEN
+    UPDATE public.live_stream_invites
+       SET status = 'accepted', updated_at = now()
+     WHERE stream_id = p_stream_id AND user_id = p_user_id;
+  END IF;
+  RETURN v_role;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.join_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.join_live_stream(uuid, uuid) TO service_role;
+
+-- Explicit leaves update the lease in the same transaction, so a user who
+-- intentionally left cannot be mistaken for a crashed participant and rejoin.
+
+CREATE OR REPLACE FUNCTION public.join_direct_call_room(p_room_id uuid, p_user_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_room public.group_call_rooms%rowtype;
+  v_call public.call_sessions%rowtype;
+  v_status text;
+  v_invited_at timestamptz;
+  v_left_at timestamptz;
+  v_last_seen_at timestamptz;
+  v_joined integer;
+  v_role text;
+BEGIN
+  IF p_room_id IS NULL OR p_user_id IS NULL THEN
+    RAISE EXCEPTION 'conference room and user are required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_room
+    FROM public.group_call_rooms
+   WHERE id = p_room_id
+   FOR UPDATE;
+  IF NOT FOUND OR v_room.source_call_id IS NULL
+     OR v_room.status NOT IN ('ringing','active') THEN
+    RAISE EXCEPTION 'conference call is no longer active' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_call
+    FROM public.call_sessions
+   WHERE id = v_room.source_call_id;
+  IF NOT FOUND OR v_call.group_room_id <> p_room_id OR v_call.status <> 'ended' THEN
+    RAISE EXCEPTION 'conference call is not linked to the original call' USING ERRCODE = '42501';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.group_call_participants current_participant
+      JOIN public.blocked_users b
+        ON (b.blocker_id = p_user_id AND b.blocked_id = current_participant.user_id)
+        OR (b.blocker_id = current_participant.user_id AND b.blocked_id = p_user_id)
+     WHERE current_participant.room_id = p_room_id
+       AND current_participant.user_id <> p_user_id
+       AND current_participant.status IN ('joined','invited')
+  ) THEN
+    RAISE EXCEPTION 'blocked users cannot share a conference call' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT status, invited_at, left_at, last_seen_at
+    INTO v_status, v_invited_at, v_left_at, v_last_seen_at
+    FROM public.group_call_participants
+   WHERE room_id = p_room_id AND user_id = p_user_id;
+  IF NOT FOUND OR v_status = 'declined'
+     OR (v_status = 'left' AND (
+       v_left_at IS NULL OR v_last_seen_at IS NULL
+       OR v_last_seen_at >= v_left_at - interval '30 seconds'
+     )) THEN
+    RAISE EXCEPTION 'user was not invited to this conference call' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_status = 'invited' AND v_invited_at <= now() - interval '2 minutes' THEN
+    RAISE EXCEPTION 'conference call invitation has expired' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_status <> 'joined' THEN
+    SELECT count(*) INTO v_joined
+      FROM public.group_call_participants
+     WHERE room_id = p_room_id AND status = 'joined';
+    IF v_joined >= v_room.max_participants THEN
+      RAISE EXCEPTION 'conference call is full' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  v_role := CASE WHEN p_user_id = v_room.host_user_id THEN 'host' ELSE 'member' END;
+  INSERT INTO public.group_call_participants(room_id, user_id, role, status, joined_at, left_at, last_seen_at)
+  VALUES (p_room_id, p_user_id, v_role, 'joined', now(), NULL, NULL)
+  ON CONFLICT (room_id, user_id) DO UPDATE
+    SET role = EXCLUDED.role, status = 'joined', joined_at = now(), left_at = NULL, last_seen_at = NULL;
+
+  UPDATE public.group_call_rooms
+     SET status = 'active', started_at = COALESCE(started_at, now())
+   WHERE id = p_room_id AND status = 'ringing';
+  RETURN v_role;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.join_direct_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.join_direct_call_room(uuid, uuid) TO service_role;
+
+-- Run from the backend's small background worker. A creator who stops
+-- heartbeating ends their LIVE; stale viewers/guests free audience/stage slots.
+-- Group-call participants are marked left, and empty active rooms are ended so
+-- the existing SFU teardown worker can remove the LiveKit room.
+NOTIFY pgrst, 'reload schema';
