@@ -57,6 +57,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(authTime)}`)
+      .set('X-Forwarded-For', '198.51.100.21')
       .send({});
     expect(res.status).toBe(400);
     expect(mockDeleteUser).not.toHaveBeenCalled();
@@ -68,6 +69,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(oldTime)}`)
+      .set('X-Forwarded-For', '198.51.100.22')
       .send({ confirmation: 'DELETE' });
     expect(res.status).toBe(403);
     expect(mockDeleteUser).not.toHaveBeenCalled();
@@ -78,6 +80,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(authTime)}`)
+      .set('X-Forwarded-For', '198.51.100.23')
       .send({ confirmation: 'DELETE' });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ deleted: true, storageCleanupPending: false });
@@ -95,6 +98,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(authTime)}`)
+      .set('X-Forwarded-For', '198.51.100.24')
       .send({ confirmation: 'DELETE' });
     expect(res.status).toBe(503);
     expect(res.body.deleted).not.toBe(true);
@@ -106,6 +110,7 @@ describe('POST /account/delete', () => {
     const res = await request(app)
       .post('/account/delete')
       .set('Authorization', `Bearer ${tokenWithAuthTime(authTime)}`)
+      .set('X-Forwarded-For', '198.51.100.25')
       .send({ confirmation: 'DELETE' });
     expect(res.status).toBe(500);
     expect(res.body.deleted).not.toBe(true);
