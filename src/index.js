@@ -47,6 +47,33 @@ function startCallEndNotificationWorker() {
   return timer;
 }
 
+function startMediaParticipantHeartbeatCleanupWorker() {
+  const { supabaseAdmin } = require('./config/supabaseAdmin');
+  if (!supabaseAdmin) return null;
+  const { cleanupStaleMediaParticipants } = require('./jobs/mediaParticipantHeartbeatCleanup');
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const summary = await cleanupStaleMediaParticipants({ admin: supabaseAdmin });
+      if (summary.liveStreamsEnded || summary.liveParticipantsLeft
+          || summary.groupParticipantsLeft || summary.groupRoomsEnded) {
+        console.info('[media-presence] stale participant cleanup', summary);
+      }
+    } catch (error) {
+      console.error('[media-presence] stale participant cleanup failed:', error.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 12_000);
+  warmup.unref?.();
+  return timer;
+}
+
 function startGroupCallMediaCleanupWorker() {
   const { supabaseAdmin } = require('./config/supabaseAdmin');
   if (!supabaseAdmin) return null;
@@ -181,6 +208,7 @@ if (require.main === module) {
     startCallInvitationWorker();
     startCallEndNotificationWorker();
     startGroupCallMediaCleanupWorker();
+    startMediaParticipantHeartbeatCleanupWorker();
     startLiveReplayWorker();
   });
 }
