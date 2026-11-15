@@ -61,3 +61,10 @@ test('group calls and LIVE expose authenticated heartbeats and restore stale-but
   assert.ok(liveRoute.includes("update({ last_seen_at: now })"));
   assert.ok(index.includes('startMediaParticipantHeartbeatCleanupWorker();'));
 });
+
+
+test('LIVE polling has enough shared request budget while mutation endpoints keep tighter limits', () => {
+  assert.ok(liveRoute.includes("max: 90, error: 'LIVE actions are rate-limited.'"));
+  assert.ok(liveRoute.includes("max: 8, error: 'Please wait before sending another LIVE reaction.'"));
+  assert.ok(liveRoute.includes("max: 5, error: 'Please slow down before posting another LIVE comment.'"));
+});
