@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/callHistory.js'), 'utf8');
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090000_call_history_user_hiding.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114233751_call_history_user_hiding.sql'), 'utf8');
 
 test('call history deletion verifies participant ownership for direct and group calls', () => {
   assert.match(route, /router\.delete\('\/:kind\/:callId'/);
