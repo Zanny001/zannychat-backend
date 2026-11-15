@@ -20,7 +20,7 @@
     "test:group-admin-migration": "node --test tests/groupAdministrationMigration.test.cjs",
     "test:group-invites-migration": "node --test tests/groupInvitesMigration.test.cjs",
     "test:channels-migration": "node --test tests/channelsMigration.test.cjs",
-    "test:status-media-migration": "node --test tests/statusMediaMigration.test.cjs",
+    "test:status-media-migration": "node --test tests/statusMediaMigration.test.cjs tests/statusMediaNativePickerMimeTypes.test.cjs",
     "test:status-views-migration": "node --test tests/statusViewsMigration.test.cjs",
     "test:status-reactions-migration": "node --test tests/statusReactionsMigration.test.cjs",
     "test:status-reaction-upsert": "node --test tests/statusReactionUpsertPrivilegeMigration.test.cjs",
