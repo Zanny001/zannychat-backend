@@ -895,7 +895,7 @@ router.post('/:streamId/invites', async (req, res) => {
   }
 });
 
-router.post('/:streamId/guests/invite', async (req, res) => {
+router.post('/:streamId/guests/invite', makeLimiter({ windowMs: 60 * 1000, max: 5, error: 'Please wait before sending more LIVE invitations.' }), async (req, res) => {
   const streamId = req.params.streamId;
   const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
   if (!validId(streamId) || !validId(userId) || userId === req.user.id) {
@@ -945,7 +945,7 @@ router.get('/:streamId/guest-status', async (req, res) => {
   }
 });
 
-router.post('/:streamId/guest-requests', async (req, res) => {
+router.post('/:streamId/guest-requests', makeLimiter({ windowMs: 60 * 1000, max: 3, error: 'Please wait before requesting the LIVE stage again.' }), async (req, res) => {
   const streamId = req.params.streamId;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
