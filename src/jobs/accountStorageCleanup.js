@@ -17,6 +17,8 @@ async function removeUserPersonalStorage(admin, userId) {
       .select('bucket_id,name')
       .in('bucket_id', PERSONAL_BUCKETS)
       .or(`owner_id.eq.${userId},owner.eq.${userId},name.like.${userId}/%`)
+      .order('bucket_id', { ascending: true })
+      .order('name', { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (error) throw error;
     objects.push(...(page || []));
