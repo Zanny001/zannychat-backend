@@ -5,13 +5,41 @@ BEGIN;
 DROP POLICY IF EXISTS "Profiles are viewable by any signed-in user" ON public.profiles;
 DROP POLICY IF EXISTS "Users can view own and related profiles" ON public.profiles;
 
+-- The blocked_users SELECT policy exposes only the caller's outgoing block
+-- list. A SECURITY DEFINER predicate is required to check both directions
+-- without granting clients visibility into other users' block lists.
+CREATE OR REPLACE FUNCTION public.is_profile_blocked(p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT CASE
+    WHEN auth.uid() IS NULL OR p_user_id IS NULL THEN true
+    WHEN p_user_id = auth.uid() THEN false
+    ELSE EXISTS (
+      SELECT 1
+      FROM public.blocked_users AS b
+      WHERE (b.blocker_id = auth.uid() AND b.blocked_id = p_user_id)
+         OR (b.blocker_id = p_user_id AND b.blocked_id = auth.uid())
+    )
+  END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.is_profile_blocked(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_profile_blocked(uuid) TO authenticated;
+
 CREATE POLICY "Users can view own and related profiles"
 ON public.profiles
 FOR SELECT
 TO authenticated
 USING (
   id = (SELECT auth.uid())
-  OR EXISTS (
+  OR (
+    NOT public.is_profile_blocked(profiles.id)
+    AND (
+      EXISTS (
     SELECT 1
     FROM public.conversation_participants AS viewer_membership
     JOIN public.conversation_participants AS target_membership
@@ -63,6 +91,8 @@ USING (
     WHERE status_reply.sender_id = profiles.id
       AND replied_status.user_id = (SELECT auth.uid())
       AND replied_status.expires_at > now()
+      )
+    )
   )
 );
 
