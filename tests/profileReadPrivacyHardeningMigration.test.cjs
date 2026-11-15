@@ -32,6 +32,7 @@ test('profile row visibility is denied when either side has blocked the other', 
   assert.ok(hardening.includes('NOT private.is_profile_blocked(profiles.id)'));
   assert.ok(hardening.includes('REVOKE ALL ON FUNCTION private.is_profile_blocked(uuid) FROM PUBLIC, anon'));
   assert.ok(hardening.includes('GRANT EXECUTE ON FUNCTION private.is_profile_blocked(uuid) TO authenticated'));
+  assert.equal(hardening.includes('public.is_profile_blocked'), false);
 });
 
 
