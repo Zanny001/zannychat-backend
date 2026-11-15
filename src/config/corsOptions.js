@@ -1,9 +1,10 @@
 const DEFAULT_PRODUCTION_ORIGIN = 'https://zannychat.netlify.app';
 const LEGACY_PRODUCTION_ORIGINS = ['https://zannychat-app.netlify.app'];
+const VERCEL_PRODUCTION_ORIGIN = 'https://zannychat.vercel.app';
 
 function parseAllowedOrigins(value = process.env.CORS_ORIGINS) {
   const configured = typeof value === 'string' ? value.split(',') : [];
-  const origins = [...configured, DEFAULT_PRODUCTION_ORIGIN, ...LEGACY_PRODUCTION_ORIGINS]
+  const origins = [...configured, DEFAULT_PRODUCTION_ORIGIN, ...LEGACY_PRODUCTION_ORIGINS, VERCEL_PRODUCTION_ORIGIN]
     .map((origin) => origin.trim())
     .filter(Boolean);
   if (process.env.NODE_ENV !== 'production') {
@@ -31,6 +32,7 @@ function createCorsOptions(allowedOrigins = parseAllowedOrigins()) {
 module.exports = {
   DEFAULT_PRODUCTION_ORIGIN,
   LEGACY_PRODUCTION_ORIGINS,
+  VERCEL_PRODUCTION_ORIGIN,
   parseAllowedOrigins,
   createCorsOptions,
 };
