@@ -19,7 +19,7 @@ const {
 const { scheduleLiveReplayStop, clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 
 const router = express.Router();
-router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 30, error: 'LIVE actions are rate-limited.' }));
+router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 90, error: 'LIVE actions are rate-limited.' }));
 
 const MAX_LIVE_STAGE_GUESTS = 5;
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
