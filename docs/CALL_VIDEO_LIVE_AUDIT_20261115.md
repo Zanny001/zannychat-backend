@@ -60,3 +60,12 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - Supabase performance advisor found three missing LIVE foreign-key indexes (impact daily supporter, impact supporters, replay quota active replay); these indexes are added by the heartbeat migration. The advisor also lists many unused indexes; none were removed without representative production workload evidence.
 - Earlier database errors included expected state/authorization rejections (expired/non-participant call heartbeat, active-call guard, and duplicate active LIVE creator constraint). A missing-column message in the log window came from an audit SQL query referencing a non-existent column, not from the app.
 - This document describes the code and database checks in scope; it does not claim a real two-user media session was completed by automation.
+
+
+## Production schema rollout verification
+
+- Applied migrations `20261115014903`, `20261115014920`, `20261115014925`, and `20261115015502` to Supabase project `vithpppgyjmazxvogvno`.
+- Verified `last_seen_at` is nullable with no default on both media participant tables; existing joined rows were reset to NULL so legacy clients are not opted into lease expiry.
+- Verified all privileged call/LIVE join, leave and cleanup RPCs are executable by `service_role` only; anon and authenticated execution are denied.
+- Verified there were no currently joined LIVE/group-call participant rows at the opt-in migration point, so no active sessions were expired by rollout.
+- Supabase performance advisor no longer reports the three missing LIVE foreign-key indexes; remaining unused-index notices are retained for workload-based review.
