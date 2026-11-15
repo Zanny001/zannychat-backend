@@ -60,7 +60,7 @@ BEGIN
         OR (b.blocker_id = current_participant.user_id AND b.blocked_id = p_user_id)
      WHERE current_participant.room_id = p_room_id
        AND current_participant.user_id <> p_user_id
-       AND current_participant.status IN ('joined','invited')
+       AND current_participant.status = 'joined'
   ) THEN
     RAISE EXCEPTION 'blocked users cannot share a group call' USING ERRCODE = '42501';
   END IF;
