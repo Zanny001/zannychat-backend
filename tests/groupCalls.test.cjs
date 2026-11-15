@@ -236,3 +236,8 @@ test('group-call admission rechecks bidirectional blocks against joined and invi
   assert.ok(joinBlockMigration.includes('REVOKE ALL ON FUNCTION public.join_group_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated'));
   assert.ok(joinBlockMigration.includes('GRANT EXECUTE ON FUNCTION public.join_group_call_room(uuid, uuid) TO service_role'));
 });
+
+
+test('group-call LiveKit tokens do not expose unused data-channel publishing', () => {
+  assert.ok(route.includes('canPublishData: false'));
+});
