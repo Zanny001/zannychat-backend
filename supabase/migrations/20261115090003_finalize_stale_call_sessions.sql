@@ -15,7 +15,7 @@ SET search_path TO ''
 AS $function$
 DECLARE
   actor uuid := auth.uid();
-  is_service_role boolean := COALESCE(auth.role() = 'service_role', false);
+  is_service_role boolean := COALESCE((auth.jwt() ->> 'role') = 'service_role', false);
   member_count integer;
   total_count integer;
 BEGIN
