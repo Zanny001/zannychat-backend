@@ -88,6 +88,8 @@ test('LIVE replay credential diagnostics are authenticated, rate-limited, and re
   assert.match(liveRoutes, /max: 3/);
   assert.match(liveRoutes, /validateReplayCredentials\(replayConfig\)/);
   assert.match(liveRoutes, /LIVEKIT_REPLAY_BUILD_PLAN_CONFIRMED/);
+  assert.match(liveRoutes, /SUPABASE_STORAGE_S3_ENDPOINT/);
+  assert.match(liveRoutes, /LIVEKIT_REPLAY_WEBHOOK_URL/);
   assert.match(liveRoutes, /secret values are never returned/);
   assert.match(liveRoutes, /ListEgress \+ S3 ListObjectsV2/);
 });
