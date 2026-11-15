@@ -54,6 +54,9 @@ jobs:
       - name: Run chat media upload limit migration tests
         run: yarn run test:chat-media-upload-limit
 
+      - name: Run profile and private-avatar privacy regression tests
+        run: yarn run test:profile-privacy
+
       - name: Run LIVE replay regression tests
         run: yarn run test:live-replay
 
