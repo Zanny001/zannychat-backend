@@ -208,3 +208,9 @@ test('creator impact API exposes per-emoji reaction collection and future milest
   assert.ok(route.includes("id: 'hall-of-fame'"));
   assert.ok(route.includes('nextMilestone'));
 });
+
+
+test('LIVE viewers cannot publish arbitrary LiveKit data packets', () => {
+  assert.ok(route.includes('canPublishData: canPublish'));
+  assert.ok(route.includes('canPublish,'));
+});
