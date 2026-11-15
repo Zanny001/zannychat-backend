@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090002_media_participant_heartbeat_leases.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115014920_media_participant_heartbeat_leases.sql'), 'utf8');
 const worker = require('../src/jobs/mediaParticipantHeartbeatCleanup');
 const roomAdmin = require('../src/services/livekitRoomAdmin');
 const groupRoute = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
