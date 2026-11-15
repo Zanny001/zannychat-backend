@@ -222,3 +222,17 @@ test('LiveKit room-admin requests refuse insecure transport in production', () =
     else process.env.NODE_ENV = previous;
   }
 });
+
+
+const joinBlockMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261115090001_harden_group_call_join_block_privacy.sql'), 'utf8');
+
+test('group-call admission rechecks bidirectional blocks against joined and invited participants', () => {
+  assert.match(joinBlockMigration, /CREATE OR REPLACE FUNCTION public\\.join_group_call_room\\(p_room_id uuid, p_user_id uuid\\)/);
+  assert.match(joinBlockMigration, /b\\.blocker_id = p_user_id AND b\\.blocked_id = current_participant\\.user_id/);
+  assert.match(joinBlockMigration, /b\\.blocker_id = current_participant\\.user_id AND b\\.blocked_id = p_user_id/);
+  assert.match(joinBlockMigration, /current_participant\\.status IN \\('joined','invited'\\)/);
+  assert.match(joinBlockMigration, /blocked users cannot share a group call/);
+  assert.match(joinBlockMigration, /FOR UPDATE/);
+  assert.match(joinBlockMigration, /REVOKE ALL ON FUNCTION public\\.join_group_call_room\\(uuid, uuid\\) FROM PUBLIC, anon, authenticated/);
+  assert.match(joinBlockMigration, /GRANT EXECUTE ON FUNCTION public\\.join_group_call_room\\(uuid, uuid\\) TO service_role/);
+});
