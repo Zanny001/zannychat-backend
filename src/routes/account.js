@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/requireAuth');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { runAccountStorageCleanup } = require('../jobs/accountStorageCleanup');
 
 const router = express.Router();
 const deletionLimiter = rateLimit({
@@ -31,12 +32,45 @@ router.post('/delete', async (req, res) => {
   }
 
   try {
-    // The 0013 migration installs a database trigger that removes empty
-    // direct conversations transactionally as participant rows cascade. This
-    // avoids deleting chats before knowing that Auth deletion will succeed.
+    // Queue personal Storage cleanup before deleting Auth. A short future
+    // due-time prevents the background worker racing the Auth deletion.
+    // The queue has no FK to auth.users, so it survives the cascade.
+    const { data: cleanupJob, error: queueError } = await supabaseAdmin
+      .from('account_storage_cleanup_jobs')
+      .insert({ user_id: req.user.id, next_attempt_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() })
+      .select('id')
+      .single();
+    if (queueError || !cleanupJob?.id) {
+      console.error('[account] could not queue personal storage cleanup:', queueError?.message || 'missing cleanup job');
+      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.' });
+    }
+
+    // The 0013 migration removes empty direct conversations transactionally
+    // as participant rows cascade. Do not delete personal Storage objects until
+    // Auth confirms deletion, so a failed delete does not destroy account media.
     const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(req.user.id);
-    if (deleteUserError) return res.status(500).json({ error: 'Account deletion failed. Please contact support if this continues.' });
-    return res.status(200).json({ deleted: true });
+    if (deleteUserError) {
+      await supabaseAdmin.from('account_storage_cleanup_jobs').delete().eq('id', cleanupJob.id);
+      return res.status(500).json({ error: 'Account deletion failed. Please contact support if this continues.' });
+    }
+
+    const { error: dueError } = await supabaseAdmin
+      .from('account_storage_cleanup_jobs')
+      .update({ next_attempt_at: new Date().toISOString() })
+      .eq('id', cleanupJob.id);
+    if (dueError) {
+      console.error('[account] personal storage cleanup remains queued:', dueError.message || dueError);
+      return res.status(200).json({ deleted: true, storageCleanupPending: true });
+    }
+
+    let storageCleanupPending = true;
+    try {
+      const summary = await runAccountStorageCleanup({ admin: supabaseAdmin, limit: 1 });
+      storageCleanupPending = summary.failed > 0 || summary.processed === 0;
+    } catch (cleanupError) {
+      console.error('[account] immediate personal storage cleanup deferred:', cleanupError.message || cleanupError);
+    }
+    return res.status(200).json({ deleted: true, storageCleanupPending });
   } catch (_) {
     return res.status(500).json({ error: 'Account deletion failed. Please try again or contact support.' });
   }
