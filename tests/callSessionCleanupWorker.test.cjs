@@ -28,7 +28,7 @@ test('expired accepted calls are finalized before their signaling rows are remov
 });
 
 test('the call lifecycle trigger permits only trusted postgres cleanup to end an expired accepted session', () => {
-  assert.ok(migration.includes("actor IS NULL AND current_user = 'postgres'"));
+  assert.ok(migration.includes("OR is_service_role) THEN"));
   assert.ok(migration.includes('call_sessions_accepted_last_activity_idx'));
   assert.ok(migration.includes("OLD.status = 'accepted' AND NEW.status = 'ended'"));
 });
