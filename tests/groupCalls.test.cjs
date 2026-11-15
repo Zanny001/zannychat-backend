@@ -230,7 +230,7 @@ test('group-call admission rechecks bidirectional blocks against joined and invi
   assert.ok(joinBlockMigration.includes('CREATE OR REPLACE FUNCTION public.join_group_call_room(p_room_id uuid, p_user_id uuid)'));
   assert.ok(joinBlockMigration.includes('b.blocker_id = p_user_id AND b.blocked_id = current_participant.user_id'));
   assert.ok(joinBlockMigration.includes('b.blocker_id = current_participant.user_id AND b.blocked_id = p_user_id'));
-  assert.ok(joinBlockMigration.includes("current_participant.status IN ('joined','invited')"));
+  assert.ok(joinBlockMigration.includes("current_participant.status = 'joined'"));
   assert.ok(joinBlockMigration.includes('blocked users cannot share a group call'));
   assert.ok(joinBlockMigration.includes('FOR UPDATE'));
   assert.ok(joinBlockMigration.includes('REVOKE ALL ON FUNCTION public.join_group_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated'));
