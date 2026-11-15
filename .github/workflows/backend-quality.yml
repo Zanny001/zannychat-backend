@@ -1,26 +1,28 @@
 name: Backend quality
 
-# Account deletion media cleanup is a release-critical privacy regression suite.
-
+# Keep the full migration, route and service regression coverage on pull requests.
 on:
   pull_request:
     branches: [main]
     paths:
       - "src/**"
       - "tests/**"
+      - "supabase/**"
       - "package.json"
       - "yarn.lock"
       - "package-lock.json"
-      - ".github/workflows/backend-quality.yml"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
       - "src/**"
       - "tests/**"
+      - "supabase/**"
       - "package.json"
       - "yarn.lock"
       - "package-lock.json"
-      - ".github/workflows/backend-quality.yml"
+      - ".github/workflows/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,7 +35,7 @@ jobs:
   quality:
     name: Backend tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -50,26 +52,45 @@ jobs:
       - name: Audit dependency vulnerabilities
         run: npm audit --audit-level=high
 
-      - name: Run AI input validation regression tests
-        run: yarn run test:ai-input-validation
+      - name: Run health and diagnostics tests
+        run: |
+          yarn run test:health-endpoints
+          yarn run test:health-unit
 
-      - name: Run chat media upload limit regression tests
-        run: yarn run test:chat-media-upload-limit
+      - name: Run security and API hardening tests
+        run: |
+          yarn run test:security-headers
+          yarn run test:database-hardening
+          yarn run test:api-hardening
+          yarn run test:observability
 
-      - name: Run account storage cleanup regression tests
-        run: yarn run test:account-storage-cleanup
+      - name: Run AI and profile privacy tests
+        run: |
+          yarn run test:ai-input-validation
+          yarn run test:profile-privacy
+          yarn run test:contact-directory-privacy
 
-      - name: Run profile and private-avatar privacy regression tests
-        run: yarn run test:profile-privacy
+      - name: Run chat media and storage cleanup tests
+        run: |
+          yarn run test:chat-media-upload-limit
+          yarn run test:account-storage-cleanup
 
-      - name: Run LIVE replay regression tests
-        run: yarn run test:live-replay
+      - name: Run call and conference tests
+        run: |
+          yarn run test:call-signaling
+          yarn run test:group-calls
 
-      - name: Run LIVE stream and stage-management regression tests
-        run: yarn run test:live-streams
+      - name: Run LIVE and replay tests
+        run: |
+          yarn run test:live-streams
+          yarn run test:live-replay
 
-      - name: Run LIVE and call history deletion regression tests
-        run: yarn run test:history-deletion
+      - name: Run migration and history integrity tests
+        run: |
+          yarn run test:migration-reconciliation
+          yarn run test:history-deletion
+          yarn run test:status-media-migration
+          yarn run test:status-video-migration
 
       - name: Run backend Jest suite
         run: yarn test
