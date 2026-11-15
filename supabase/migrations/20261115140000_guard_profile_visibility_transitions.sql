@@ -141,7 +141,8 @@ BEGIN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
 
-  IF p_profile_visibility NOT IN ('everyone', 'contacts', 'nobody')
+  IF p_profile_visibility IS NULL OR p_photo_visibility IS NULL
+     OR p_profile_visibility NOT IN ('everyone', 'contacts', 'nobody')
      OR p_photo_visibility NOT IN ('everyone', 'contacts', 'nobody') THEN
     RAISE EXCEPTION 'Invalid profile visibility setting' USING ERRCODE = '22023';
   END IF;
