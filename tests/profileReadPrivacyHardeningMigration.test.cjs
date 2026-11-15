@@ -24,6 +24,16 @@ test('broad authenticated profile visibility is replaced with relationship-scope
   assert.match(migration, /not exists \([\s\S]*?public\.blocked_users/i);
 });
 
+test('profile row visibility is denied when either side has blocked the other', () => {
+  assert.match(hardening, /create or replace function public\\.is_profile_blocked\\(p_user_id uuid\\)/i);
+  assert.match(hardening, /security definer\\s+set search_path = ''/i);
+  assert.match(hardening, /b\\.blocker_id = auth\\.uid\\(\\) and b\\.blocked_id = p_user_id/i);
+  assert.match(hardening, /b\\.blocker_id = p_user_id and b\\.blocked_id = auth\\.uid\\(\\)/i);
+  assert.match(hardening, /not public\\.is_profile_blocked\\(profiles\\.id\\)/i);
+  assert.match(hardening, /revoke all on function public\\.is_profile_blocked\\(uuid\\) from public, anon/i);
+  assert.match(hardening, /grant execute on function public\\.is_profile_blocked\\(uuid\\) to authenticated/i);
+});
+
 test('authenticated clients receive only the minimal direct profile projection', () => {
   assert.match(migration, /revoke select on table public\.profiles from public, anon, authenticated/i);
   assert.match(migration, /revoke select \(id, name, avatar_color, status, online, created_at, avatar_url, username\)/i);
