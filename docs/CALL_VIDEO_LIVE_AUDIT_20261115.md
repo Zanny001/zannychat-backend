@@ -15,7 +15,7 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 | Call lifecycle | The stale-signal cleanup function existed but was not scheduled on this project; expired accepted sessions could remain labelled in progress in history | Added a single-instance Render worker to run cleanup every minute and finalize accepted sessions after their three-minute lease expires; the trigger permits participants or the service-role cleanup worker to make that transition |
 | Call history | A one-to-one call upgraded to a group conference could appear twice in history | Conference-linked source calls are excluded from the direct-call history list |
 | Group calls | Block relationships were checked at creation/invitation but not consistently rechecked when an existing room was joined | Group-call and direct-conference join functions recheck bidirectional blocks against connected participants at admission |
-| Group calls / LIVE | Abrupt disconnects could leave stale participants counted as joined, consuming room/audience/stage capacity | Added 30-second client heartbeats and a three-minute server lease cleanup; stale group participants are released, empty rooms end, stale viewers/guests leave, and a stale LIVE creator ends the stream |
+| Group calls / LIVE | Abrupt disconnects could leave stale participants counted as joined, consuming room/audience/stage capacity | Added 30-second client heartbeats and a three-minute opt-in server lease cleanup; legacy clients are not expired until they send their first heartbeat; stale group participants are released, empty rooms end, stale viewers/guests leave, and a stale LIVE creator ends the stream |
 | Group calls | A participant whose row was marked left due to a heartbeat timeout needed a safe reconnect path | Join functions allow stale-timeout rejoin only when last-seen predates the cleanup leave timestamp; explicit leave remains non-rejoinable |
 | LIVE request load | Shared 30 requests/minute budget was too low for normal concurrent comments, guest-request and replay polling | Shared LIVE budget raised to 90/minute; reactions/comments retain tighter endpoint-specific limits |
 | LIVE guest flow | Guest requests and invitations lacked dedicated anti-spam caps | Guest requests limited to 3/minute and creator invitations to 5/minute |
@@ -43,6 +43,7 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - Reactions and comments are server-persisted and then polled; they are not a guaranteed sub-second real-time transport.
 - Web audio output selection remains controlled by the browser/operating system; the new explicit output picker is native-only.
 - The app still needs a two-account browser/device acceptance test for guest request → creator approval → guest stage join, audio/video track publication, reactions, and guest reconnect.
+- The presence cleanup is intentionally opt-in: older web/APK clients that do not send the new heartbeat keep their legacy presence behavior until updated, avoiding accidental disconnection during rollout. New clients opt in on the first connected-room heartbeat.
 - Android Kotlin compilation and debug APK packaging are CI checks, not physical-device call/audio-route verification.
 - A new real LIVE broadcast is still required to verify Egress upload, replay completion, signed playback, and delete end-to-end.
 
