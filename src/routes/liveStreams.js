@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
-const { listRoomParticipants, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions } = require('../services/livekitRoomAdmin');
+const { listRoomParticipants, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions, deleteLiveKitRoom } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -1492,6 +1492,7 @@ router.post('/:streamId/end', async (req, res) => {
     await stopActiveLiveReplayForStream(streamId).catch((error) => {
       console.error('[live-replay] stop on stream end failed', { streamId, message: error.message });
     });
+    const stream = await getStream(streamId);
     const { data: ended, error } = await supabaseAdmin.rpc('end_live_stream', {
       p_stream_id: streamId, p_creator_id: req.user.id,
     });
@@ -1500,6 +1501,11 @@ router.post('/:streamId/end', async (req, res) => {
       throw error;
     }
     if (!ended) return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream?.room_name) {
+      await deleteLiveKitRoom(stream.room_name).catch((roomError) => {
+        console.error('[live] LiveKit room cleanup after end failed:', roomError?.message || roomError);
+      });
+    }
     return res.json({ ended: true });
   } catch (error) {
     console.error('[live] end failed:', error?.message || error);
