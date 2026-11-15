@@ -46,6 +46,15 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes("role, canPublish, canModerate"));
 });
 
+test('LIVE reaction feed limits to the newest events and restores chronological display order', () => {
+  const start = route.indexOf(".select('id,user_id,reaction,created_at')");
+  const end = route.indexOf('return res.json({ comments, reactions })', start);
+  const body = route.slice(start, end);
+  assert.match(body, /\.order\('created_at', \{ ascending: false \}\)/);
+  assert.match(body, /\.limit\(100\)/);
+  assert.match(body, /\.reverse\(\)/);
+});
+
 test('LIVE schema stores audience, moderation, reactions and abuse reports with client access revoked', () => {
   for (const table of ['live_streams','live_stream_participants','live_stream_comments','live_stream_reactions','live_stream_reports']) {
     assert.ok(migration.includes('public.' + table));
