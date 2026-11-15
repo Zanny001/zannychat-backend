@@ -50,6 +50,7 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - Reactions and comments are server-persisted and then polled; they are not a guaranteed sub-second real-time transport.
 - Web audio output selection remains controlled by the browser/operating system; the new explicit output picker is native-only.
 - The app still needs a two-account browser/device acceptance test for guest request → creator approval → guest stage join, audio/video track publication, reactions, and guest reconnect.
+- Backend CI now includes the dedicated call/LIVE history-deletion regression suite on the next main-branch workflow run.
 - Production currently has reaction/creator-impact rows, but the replay table has no records at audit time; a new LIVE ending with replay enabled is required to verify Egress upload, object existence, signed playback and deletion end to end.
 - The presence cleanup is intentionally opt-in: older web/APK clients that do not send the new heartbeat keep their legacy presence behavior until updated, avoiding accidental disconnection during rollout. New clients opt in on the first connected-room heartbeat.
 - Android Kotlin compilation and debug APK packaging are CI checks, not physical-device call/audio-route verification.
