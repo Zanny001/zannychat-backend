@@ -20,6 +20,7 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 | LIVE request load | Shared 30 requests/minute budget was too low for normal concurrent comments, guest-request and replay polling | Shared LIVE budget raised to 90/minute; reactions/comments retain tighter endpoint-specific limits |
 | LIVE guest flow | Guest requests and invitations lacked dedicated anti-spam caps | Guest requests limited to 3/minute and creator invitations to 5/minute |
 | LiveKit permissions | Viewers and group-call participants could publish unused arbitrary data-channel packets | Data-channel publishing disabled for all current LIVE and group-call roles; media track permissions remain role-scoped |
+| Native audio routing | Group calls and LIVE had no explicit in-app speaker/earpiece route control | Added LiveKit audio output selection for Android and the native iOS route picker on group-call and LIVE screens |
 | LIVE ending | The end route stopped replay Egress before checking creator ownership, allowing an authenticated non-creator to disrupt another stream's replay | Creator authorization/state transition now succeeds before Egress stop or room deletion |
 | LIVE cleanup | Ending a broadcast did not guarantee its LiveKit room was deleted | Creator end and broadcast deletion remove the generated LIVE room; a retrying worker removes ended rooms after active replay Egress has stopped |
 | Replay lifecycle | Replay Egress could remain active after a stream ended outside the normal creator end route | Replay recovery worker now stops Egress when the parent stream is ended or missing |
@@ -37,6 +38,7 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 
 - LIVE replay recording is capped at five minutes and 48 MB. The current 360p/500 kbps video plus 64 kbps audio profile is sized below that storage limit; longer replays require an explicit storage/egress budget decision.
 - Reactions and comments are server-persisted and then polled; they are not a guaranteed sub-second real-time transport.
+- Web audio output selection remains controlled by the browser/operating system; the new explicit output picker is native-only.
 - The app still needs a two-account browser/device acceptance test for guest request → creator approval → guest stage join, audio/video track publication, reactions, and guest reconnect.
 - Android Kotlin compilation and debug APK packaging are CI checks, not physical-device call/audio-route verification.
 - A new real LIVE broadcast is still required to verify Egress upload, replay completion, signed playback, and delete end-to-end.
