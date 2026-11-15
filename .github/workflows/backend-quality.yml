@@ -1,5 +1,7 @@
 name: Backend quality
 
+# Account deletion media cleanup is a release-critical privacy regression suite.
+
 on:
   pull_request:
     branches: [main]
