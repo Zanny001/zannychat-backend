@@ -135,3 +135,11 @@ test('LiveKit room deletion accepts only generated LIVE and group room prefixes'
   await assert.rejects(roomAdmin.deleteLiveKitRoom('zlive_not-a-valid-id', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }));
   await assert.rejects(roomAdmin.deleteLiveKitRoom('zgc_not-a-valid-id', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }));
 });
+
+
+test('explicit LIVE and group-call leaves renew last-seen timestamps atomically', () => {
+  assert.ok(migration.includes('CREATE OR REPLACE FUNCTION public.leave_group_call_room'));
+  assert.ok(migration.includes('CREATE OR REPLACE FUNCTION public.leave_live_stream'));
+  assert.ok(migration.includes("status = 'left', left_at = COALESCE(left_at, now()), last_seen_at = now()"));
+  assert.ok(migration.includes("REVOKE ALL ON FUNCTION public.leave_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated"));
+});
