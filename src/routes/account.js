@@ -37,7 +37,7 @@ router.post('/delete', async (req, res) => {
     // Do not cascade-delete session rows while their external media rooms or
     // Egress jobs are still active. The user must leave/end these first.
     const { data: activeLive, error: activeLiveError } = await supabaseAdmin.from('live_streams')
-      .select('id').eq('creator_id', userId).eq('status', 'live').limit(1).maybeSingle();
+      .select('id').eq('creator_id', userId).eq('status', 'live').is('ended_at', null).limit(1).maybeSingle();
     if (activeLiveError) throw activeLiveError;
     if (activeLive) return res.status(409).json({ error: 'End your active LIVE stream before deleting your account.' });
 
@@ -49,7 +49,7 @@ router.post('/delete', async (req, res) => {
 
     const { data: activeCall, error: activeCallError } = await supabaseAdmin.from('call_sessions')
       .select('id').or(`caller_id.eq.${userId},callee_id.eq.${userId}`)
-      .in('status', ['ringing', 'accepted']).limit(1).maybeSingle();
+      .in('status', ['ringing', 'accepted']).is('ended_at', null).limit(1).maybeSingle();
     if (activeCallError) throw activeCallError;
     if (activeCall) return res.status(409).json({ error: 'End your active call before deleting your account.' });
 
