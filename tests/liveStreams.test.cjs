@@ -187,7 +187,7 @@ test('LIVE comments response includes a bounded recent reaction feed for floatin
   assert.ok(route.includes(".select('id,user_id,reaction,created_at')"));
   assert.ok(route.includes(".gt('created_at', reactionSince)"));
   assert.ok(route.includes(".limit(100)"));
-  assert.ok(route.includes("return res.json({ comments, reactions: recentReactions || [] })"));
+  assert.ok(route.includes("return res.json({ comments, reactions })"));
 });
 
 test('LIVE reaction writes have a dedicated per-user rate limit', () => {
