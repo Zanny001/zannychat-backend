@@ -108,6 +108,97 @@ $function$;
 REVOKE ALL ON FUNCTION public.join_group_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.join_group_call_room(uuid, uuid) TO service_role;
 
+-- Explicit leaves update the lease in the same transaction, so a user who
+-- intentionally left cannot be mistaken for a crashed participant and rejoin.
+CREATE OR REPLACE FUNCTION public.leave_group_call_room(p_room_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_room public.group_call_rooms%rowtype;
+  v_joined integer;
+  v_updated integer;
+BEGIN
+  SELECT * INTO v_room
+    FROM public.group_call_rooms
+   WHERE id = p_room_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.group_call_participants
+     SET status = 'left', left_at = COALESCE(left_at, now()), last_seen_at = now()
+   WHERE room_id = p_room_id
+     AND user_id = p_user_id
+     AND status = 'joined';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated = 0 THEN
+    RETURN false;
+  END IF;
+
+  SELECT count(*) INTO v_joined
+    FROM public.group_call_participants
+   WHERE room_id = p_room_id AND status = 'joined';
+
+  IF v_joined = 0 AND v_room.status IN ('ringing','active') THEN
+    UPDATE public.group_call_rooms
+       SET status = 'ended', ended_at = COALESCE(ended_at, now())
+     WHERE id = p_room_id AND status IN ('ringing','active');
+
+    UPDATE public.group_call_participants
+       SET status = 'left', left_at = COALESCE(left_at, now()), last_seen_at = now()
+     WHERE room_id = p_room_id AND status = 'invited';
+
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.leave_group_call_room(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.leave_group_call_room(uuid, uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.leave_live_stream(p_stream_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_stream public.live_streams%rowtype;
+  v_updated integer;
+BEGIN
+  SELECT * INTO v_stream
+    FROM public.live_streams
+   WHERE id = p_stream_id
+   FOR UPDATE;
+
+  IF NOT FOUND OR v_stream.status <> 'live' THEN
+    RETURN false;
+  END IF;
+
+  IF p_user_id = v_stream.creator_id THEN
+    RAISE EXCEPTION 'creator must end the LIVE stream' USING ERRCODE = '42501';
+  END IF;
+
+  UPDATE public.live_stream_participants
+     SET status = 'left', left_at = COALESCE(left_at, now()), last_seen_at = now()
+   WHERE stream_id = p_stream_id
+     AND user_id = p_user_id
+     AND status = 'joined';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.leave_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.leave_live_stream(uuid, uuid) TO service_role;
+
 -- Direct-call conference rooms use their own admission function. Apply the
 -- same block re-check and stale-heartbeat rejoin rule to those rooms too.
 CREATE OR REPLACE FUNCTION public.join_direct_call_room(p_room_id uuid, p_user_id uuid)
