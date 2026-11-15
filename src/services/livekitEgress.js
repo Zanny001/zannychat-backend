@@ -75,7 +75,7 @@ function createEgressToken(config, nowSeconds = Math.floor(Date.now() / 1000)) {
 }
 
 function liveKitEgressUrl(liveKitUrl, method) {
-  if (!/^StartRoomCompositeEgress$|^StopEgress$|^ListEgress$/.test(method)) throw new Error('Unsupported LiveKit Egress method');
+  if (!/^StartEgress$|^StopEgress$|^ListEgress$/.test(method)) throw new Error('Unsupported LiveKit Egress method');
   const url = new URL(String(liveKitUrl || '').trim());
   if (!['wss:', 'https:'].includes(url.protocol) || !url.hostname.endsWith('.livekit.cloud')) {
     throw new Error('LIVE replay requires the managed LiveKit Cloud Egress service');
@@ -107,12 +107,16 @@ async function requestLiveKitEgress(method, body, config, fetchImpl = globalThis
 async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetchImpl }) {
   if (!roomName || !filePath || !replayConfig?.storage) throw new Error('LIVE replay output is not configured');
   const config = replayConfig.egressConfig;
-  return requestLiveKitEgress('StartRoomCompositeEgress', {
+  return requestLiveKitEgress('StartEgress', {
     room_name: roomName,
-    layout: 'grid',
-    file_outputs: [{
-      file_type: 1,
-      filepath: filePath,
+    template: { layout: 'grid' },
+    outputs: [{
+      file: {
+        file_type: 1,
+        filepath: filePath,
+      },
+    }],
+    storage: {
       s3: {
         access_key: replayConfig.storage.accessKey,
         secret: replayConfig.storage.secret,
@@ -121,7 +125,7 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
         endpoint: replayConfig.storage.endpoint,
         force_path_style: true,
       },
-    }],
+    },
     webhooks: [{
       url: replayConfig.webhookUrl,
       signing_key: config.apiKey,
