@@ -51,7 +51,7 @@ describe('CORS production origins', () => {
 
 
 test('rejected CORS origins are attached to the error in a bounded, control-character-safe form', (done) => {
-  createCorsOptions().origin('https://untrusted.example\\nforged', (error, allowed) => {
+  createCorsOptions().origin('https://untrusted.example\nforged', (error, allowed) => {
     assert.equal(allowed, undefined);
     assert.equal(error.status, 403);
     assert.equal(error.corsOrigin, 'https://untrusted.exampleforged');
