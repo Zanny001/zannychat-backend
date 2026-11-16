@@ -9,6 +9,7 @@ const CLEANUP_SCAN_MS = 6 * 60 * 60 * 1000;
 const EXPIRY_MS = MAX_REPLAY_SECONDS * 1000;
 const START_RECOVERY_GRACE_MS = 15 * 60 * 1000;
 const STOP_RETRY_MS = 10 * 1000;
+let started = false;
 
 function scheduleRetry(replayId, egressId) {
   clearLiveReplayStop(replayId);
@@ -167,9 +168,18 @@ async function stopExpiredLiveReplays(now = Date.now()) {
     let egressId = replay.egress_id;
     if (!egressId) {
       try {
-        const listed = await listEgress(replay.room_name, egressConfig);
+        const listed = await listEgress(replay.room_name, egressConfig, undefined, { active: false });
         const found = (listed?.items || []).find((item) => matchesReplayEgress(item, replay));
         egressId = getEgressId(found);
+        if (found && egressId && isTerminalEgressStatus(found.status)) {
+          const { error: persistError } = await supabaseAdmin.from('live_stream_replays')
+            .update({ egress_id: egressId })
+            .eq('id', replay.id)
+            .in('status', ['starting', 'recording']);
+          if (persistError) throw persistError;
+          await finalizeReplay({ event: 'egress_ended', egressInfo: found });
+          continue;
+        }
       } catch (lookupError) {
         console.error('[live-replay] Egress recovery lookup failed', { replayId: replay.id, message: lookupError.message });
         continue;
