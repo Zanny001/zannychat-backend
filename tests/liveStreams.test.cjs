@@ -223,3 +223,22 @@ test('LIVE viewers cannot publish arbitrary LiveKit data packets', () => {
   assert.ok(route.includes('canPublishData: false'));
   assert.ok(route.includes('canPublish,'));
 });
+
+
+test('LIVE discovery returns creator display names only after visibility and block filtering', () => {
+  const publicRouteStart = route.indexOf("router.get('/', async (req, res) => {");
+  const publicRouteEnd = route.indexOf("router.post('/', async (req, res) =>", publicRouteStart);
+  const publicRoute = route.slice(publicRouteStart, publicRouteEnd);
+  const followingRouteStart = route.indexOf("router.get('/following/streams', async (req, res) =>");
+  const followingRouteEnd = route.indexOf("router.get('/', async (req, res) =>", followingRouteStart);
+  const followingRoute = route.slice(followingRouteStart, followingRouteEnd);
+
+  for (const discoveryRoute of [publicRoute, followingRoute]) {
+    assert.ok(discoveryRoute.includes('getBlockedUserIds(req.user.id'));
+    assert.ok(discoveryRoute.includes('getProfileNames(visible.map((stream) => stream.creator_id))'));
+    assert.ok(discoveryRoute.includes('creator_name: creatorNames.get(stream.creator_id) || \'ZannyChat creator\''));
+    assert.ok(discoveryRoute.indexOf('getBlockedUserIds') < discoveryRoute.indexOf('getProfileNames'));
+  }
+  assert.ok(publicRoute.includes(".eq('visibility', 'public')"));
+  assert.ok(followingRoute.includes(".in('visibility', ['public','followers'])"));
+});
