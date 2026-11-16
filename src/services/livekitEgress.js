@@ -55,6 +55,41 @@ function isLiveReplayEnabled(env = process.env, liveKitConfig = getLiveKitConfig
     Boolean(getLiveReplayConfig(env, liveKitConfig));
 }
 
+function parsePositiveNanoseconds(value) {
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint') return null;
+  const text = String(value).trim();
+  if (!/^\\d+$/.test(text)) return null;
+  try {
+    const parsed = BigInt(text);
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function nanosecondsToSeconds(value) {
+  if (value === null || value <= 0n) return 0;
+  const seconds = (value + 999_999_999n) / 1_000_000_000n;
+  const result = Number(seconds);
+  return Number.isSafeInteger(result) ? result : 0;
+}
+
+function getEgressDurationSeconds(file, egressInfo) {
+  const fileDuration = parsePositiveNanoseconds(
+    file?.duration ?? file?.durationNs ?? file?.duration_ns,
+  );
+  if (fileDuration !== null) return nanosecondsToSeconds(fileDuration);
+
+  const startedAt = parsePositiveNanoseconds(
+    egressInfo?.startedAt ?? egressInfo?.started_at ?? file?.startedAt ?? file?.started_at,
+  );
+  const endedAt = parsePositiveNanoseconds(
+    egressInfo?.endedAt ?? egressInfo?.ended_at ?? file?.endedAt ?? file?.ended_at,
+  );
+  if (startedAt === null || endedAt === null || endedAt <= startedAt) return 0;
+  return nanosecondsToSeconds(endedAt - startedAt);
+}
+
 function encode(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
@@ -235,6 +270,7 @@ module.exports = {
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_OUTPUT_SECONDS,
   MAX_REPLAY_BYTES,
+  getEgressDurationSeconds,
   getLiveReplayConfig,
   getLiveKitEgressConfig,
   isLiveReplayEnabled,
