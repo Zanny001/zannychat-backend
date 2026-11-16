@@ -766,7 +766,7 @@ router.get('/following/streams', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_streams')
-      .select('id,creator_id,title,description,started_at,viewer_limit')
+      .select('id,creator_id,title,description,visibility,started_at,viewer_limit')
       .eq('status', 'live').eq('visibility', 'public')
       .order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
