@@ -36,7 +36,7 @@ test('all seven activity tables receive narrowly scoped triggers', () => {
     'pinned_messages', 'conversation_participants', 'profile_details'
   ];
   for (const table of expected) {
-    assert.match(sql, new RegExp('create trigger [a-z_]+ on public\\.' + table, 'i'), table + ' trigger missing');
+    assert.match(sql, new RegExp('create trigger [a-z_]+[\\s\\S]{0,160}on public\\.' + table, 'i'), table + ' trigger missing');
   }
   assert.doesNotMatch(sql, /create policy|drop policy|grant .*public\.|revoke .*public\./i);
 });
