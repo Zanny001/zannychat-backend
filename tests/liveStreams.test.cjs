@@ -242,3 +242,12 @@ test('LIVE discovery returns creator display names only after visibility and blo
   assert.ok(publicRoute.includes(".eq('visibility', 'public')"));
   assert.ok(followingRoute.includes(".in('visibility', ['public','followers'])"));
 });
+
+
+test('public LIVE discovery includes visibility so client Public filtering retains public streams', () => {
+  const publicRouteStart = route.indexOf("router.get('/', async (req, res) => {");
+  const publicRouteEnd = route.indexOf("router.post('/', async (req, res) =>", publicRouteStart);
+  const publicRoute = route.slice(publicRouteStart, publicRouteEnd);
+  assert.match(publicRoute, /\.select\('id,creator_id,title,description,visibility,started_at,viewer_limit'\)/);
+  assert.match(publicRoute, /\.eq\('visibility', 'public'\)/);
+});
