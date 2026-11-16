@@ -101,3 +101,18 @@ The codebase includes direct/group messaging, message replies/edits/deletion mod
 ## Release status
 
 No frontend production deployment, native binary release or replay recording was triggered by this audit. Netlify preview checks are useful source previews; Vercel build-rate-limit failures are account/plan constraints and must not be misreported as application build failures. Production acceptance remains open until the P1 gates above are completed.
+
+
+## Storage inventory snapshot — 2026-11-16
+
+A read-only inventory of the live Supabase Storage buckets returned:
+
+| Bucket | Visibility | Objects | Notes |
+|---|---|---:|---|
+| `avatars` | Public | 3 | All three objects map to profiles whose profile and photo visibility are both `everyone`; this is consistent with the current public-avatar design. |
+| `private-avatars` | Private | 4 | One object is referenced by profile data; three objects were unreferenced across `profile_details.avatar_path`, `profile_details.cover_path`, `profiles.avatar_url` and `profile_details.cover_image_url`. These are orphan-cleanup candidates, not automatically safe to delete. |
+| `chat-media` | Private | 14 | Private message attachments. |
+| `status-media` | Private | 6 | Private status/story media. |
+| `live-replays` | Private | 0 | No completed replay object was present at audit time. |
+
+No Storage object was deleted. The three unreferenced private-avatar objects should be rechecked against every application reference and retention rule, backed up if required, then removed through the Supabase Storage API (not direct SQL deletion from `storage.objects`). The public `avatars` bucket should remain limited to profile/photo visibility `everyone`; private profile photos must continue to use the private bucket and authorized signed URLs.
