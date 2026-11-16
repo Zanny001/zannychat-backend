@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114194000_allow_bidirectional_call_renegotiation.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114172206_allow_bidirectional_call_renegotiation_20261114194000.sql'), 'utf8');
 
 test('accepted 1:1 calls allow either authenticated participant to renegotiate media', () => {
   assert.match(migration, /c\.status <> 'accepted'/);

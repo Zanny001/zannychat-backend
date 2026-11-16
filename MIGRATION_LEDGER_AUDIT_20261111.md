@@ -49,3 +49,16 @@ The production `supabase_migrations.schema_migrations` table stores the applied 
 For the second migration, this is a verified SQL-content match, not merely a filename inference. The repository migration file is therefore renamed to `20261111125224_harden_private_media_upload_rls.sql` so the local version matches the already-applied production ledger. The SQL body is preserved; this is a source-control filename reconciliation only.
 
 No migration was applied, replayed, repaired, reset, or otherwise changed in production during this reconciliation. Do not run `supabase db push` or migration repair as part of this rename. After the PR is merged, developers should pull the updated migration filenames before running the linked migration list.
+
+
+## Follow-up reconciliation — 2026-11-16
+
+A fresh comparison of the production `supabase_migrations.schema_migrations` ledger with backend `main` found 97 applied migration versions. Twenty applied entries had source files whose filename version prefix differed from the production version. For all 20, the SQL stored in the production ledger was retrieved and compared with the matching repository SQL after comment/whitespace normalization; all 20 contents matched. The repository files and their direct regression-test references are renamed to the exact production version prefixes in PR #120. No SQL is re-applied by this reconciliation.
+
+One additional applied entry, `20261115140156_harden_accept_group_invite_search_path`, had no source file on main. Its single stored statement was recovered from the production ledger and restored as `20261115140156_harden_accept_group_invite_search_path.sql`, with a regression test. The migration sets `public.accept_group_invite(text, uuid)` to `search_path = pg_catalog, public`; it is already applied in production and is not re-executed.
+
+The call-history hiding migration appears twice in the production ledger (`20261114232044` and `20261114233751`) with identical stored SQL and the same migration name. Both exact version files are retained so neither applied version appears pending.
+
+After reconciliation, all 97 production-applied versions have a matching version-prefixed SQL file in the branch. Sixty-three older repository migration files (the historical 0001–0064 sequence, excluding versions already represented remotely) remain absent from the remote ledger. This is the legacy/baseline history described above; their absence is not proof that their DDL is absent. No automatic `migration repair`, replay, `db push`, or baseline rewrite was performed. Each of those 63 files still requires a separate schema/data comparison before any status change or push.
+
+The migration-history PR updates only filenames, test file references, one restored missing source file and audit documentation. The contents of the 20 matched applied SQL migrations are preserved. The only new SQL source file is the already-applied one-line search-path hardening statement recovered from the production ledger.
