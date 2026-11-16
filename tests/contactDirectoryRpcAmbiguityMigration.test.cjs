@@ -9,12 +9,9 @@ const migration = fs.readFileSync(
 );
 
 test('contact directory RPC reconciliation removes only the legacy zero-argument overload', () => {
-  assert.match(
-    migration,
-    /DROP FUNCTION IF EXISTS public\\.get_contact_directory\\s*\\(\\s*\\)\\s*;/i,
-  );
-  assert.doesNotMatch(
-    migration,
-    /DROP FUNCTION[^;]*public\\.get_contact_directory\\s*\\(\\s*uuid/i,
+  assert.ok(migration.includes('DROP FUNCTION IF EXISTS public.get_contact_directory();'));
+  assert.equal(
+    migration.includes('DROP FUNCTION IF EXISTS public.get_contact_directory(uuid)'),
+    false,
   );
 });
