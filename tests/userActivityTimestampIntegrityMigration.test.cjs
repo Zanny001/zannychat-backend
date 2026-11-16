@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 const migrationPath = path.join(
   __dirname,
-  '../supabase/migrations/20261116223000_guard_user_activity_server_timestamps.sql'
+  '../supabase/migrations/20261116203426_guard_user_activity_server_timestamps.sql'
 );
 const sql = fs.readFileSync(migrationPath, 'utf8');
 
