@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261115150000_fix_chat_media_extension_guard.sql'),
+  path.join(__dirname, '../supabase/migrations/20261115102211_20261115150000_fix_chat_media_extension_guard.sql'),
   'utf8',
 );
 
