@@ -11,6 +11,7 @@ const {
   stopEgress,
   listEgress,
   verifyLiveKitWebhook,
+  getEgressDurationSeconds,
   validateReplayCredentials,
   MAX_REPLAY_SECONDS,
   MAX_REPLAY_OUTPUT_SECONDS,
@@ -157,3 +158,24 @@ test('read-only replay credential validation fails closed when the S3 key cannot
   assert.equal(calls, 2);
 });
 
+
+
+test('LIVE replay duration parses LiveKit FileInfo nanoseconds exactly', () => {
+  assert.equal(getEgressDurationSeconds({ duration: '300000000000' }, {}), 300);
+  assert.equal(getEgressDurationSeconds({ durationNs: '300000000001' }, {}), 301);
+  assert.equal(getEgressDurationSeconds({ duration_ns: 1_500_000_000 }, {}), 2);
+});
+
+test('LIVE replay duration recovers from negative or missing FileInfo duration using Egress timestamps', () => {
+  const startedAt = '1731660518186023947';
+  const endedAt = '1731660818186023947';
+  assert.equal(getEgressDurationSeconds({ duration: '-1731660518186023947' }, { startedAt, endedAt }), 300);
+  assert.equal(getEgressDurationSeconds({}, { started_at: startedAt, ended_at: endedAt }), 300);
+  assert.equal(getEgressDurationSeconds({ duration: '0' }, { startedAt, endedAt }), 300);
+});
+
+test('LIVE replay duration fails closed when both file duration and Egress timestamps are invalid', () => {
+  assert.equal(getEgressDurationSeconds({ duration: '-1' }, { startedAt: '200', endedAt: '100' }), 0);
+  assert.equal(getEgressDurationSeconds({}, {}), 0);
+  assert.equal(getEgressDurationSeconds({ duration: 'not-a-number' }, { startedAt: '1.5', endedAt: '2.5' }), 0);
+});
