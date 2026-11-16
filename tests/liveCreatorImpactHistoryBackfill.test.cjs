@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114150000_backfill_live_creator_impact_history.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114160810_backfill_live_creator_impact_history_20261114150000.sql'), 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
 
 test('historical LIVE reactions are backfilled only up to the original impact-ledger cutoff', () => {
