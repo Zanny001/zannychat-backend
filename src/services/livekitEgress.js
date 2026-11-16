@@ -181,9 +181,14 @@ async function stopEgress(egressId, config, fetchImpl) {
   return requestLiveKitEgress('StopEgress', { egress_id: egressId }, config, fetchImpl);
 }
 
-async function listEgress(roomName, config, fetchImpl) {
+async function listEgress(roomName, config, fetchImpl, options = {}) {
   if (!roomName) throw new Error('Room name is required');
-  return requestLiveKitEgress('ListEgress', { room_name: roomName, active: true }, config, fetchImpl);
+  const request = {
+    room_name: roomName,
+    active: options.active !== false,
+  };
+  if (options.egressId) request.egress_id = options.egressId;
+  return requestLiveKitEgress('ListEgress', request, config, fetchImpl);
 }
 
 function verifyLiveKitWebhook(rawBody, authorization, config, nowSeconds = Math.floor(Date.now() / 1000)) {
