@@ -22,7 +22,7 @@ function createCorsOptions(allowedOrigins = parseAllowedOrigins()) {
       error.status = 403;
       // Record only the browser Origin header (not path, query, cookies or
       // request body) so rejected preview/custom domains can be diagnosed.
-      error.corsOrigin = String(origin).replace(/[\\r\\n\\t\\x00-\\x1f\\x7f]/g, '').slice(0, 255);
+      error.corsOrigin = String(origin).replace(/[\r\n\t\x00-\x1f\x7f]/g, '').slice(0, 255);
       return callback(error);
     },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
