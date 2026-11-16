@@ -26,7 +26,7 @@ BEGIN
   ELSIF TG_TABLE_NAME = 'pinned_messages' THEN
     NEW.pinned_at := v_now;
   ELSIF TG_TABLE_NAME = 'conversation_participants' THEN
-    IF NEW.last_read_at IS DISTINCT FROM OLD.last_read_at THEN
+    IF NEW.last_read_at IS NOT NULL AND NEW.last_read_at IS DISTINCT FROM OLD.last_read_at THEN
       NEW.last_read_at := v_now;
     END IF;
   ELSIF TG_TABLE_NAME = 'profile_details' THEN
