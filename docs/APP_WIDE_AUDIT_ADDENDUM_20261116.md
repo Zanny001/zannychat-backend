@@ -116,3 +116,36 @@ A read-only inventory of the live Supabase Storage buckets returned:
 | `live-replays` | Private | 0 | No completed replay object was present at audit time. |
 
 No Storage object was deleted. The three unreferenced private-avatar objects should be rechecked against every application reference and retention rule, backed up if required, then removed through the Supabase Storage API (not direct SQL deletion from `storage.objects`). The public `avatars` bucket should remain limited to profile/photo visibility `everyone`; private profile photos must continue to use the private bucket and authorized signed URLs.
+
+
+## Security follow-up — 2026-11-16, 18:10 UTC
+
+### Account-local data isolation and deletion cleanup
+
+- Frontend PR #93 is merged to `main` (merge commit `2c77f05f758ec4f145d8cf94fe94b75a11502f07`). It fixes the Status composer draft key that previously had no user identity. Status text, audience mode and selected recipient IDs now use an account-scoped AsyncStorage key; account changes clear in-memory composer state before the next user's draft is loaded.
+- The legacy global status-draft key is discarded rather than assigned to the first account that happens to sign in after upgrade. This avoids cross-account disclosure; an unsent legacy draft may be lost once the signed-in Status screen migrates.
+- Permanent account deletion now attempts to clear that user's local drafts, pins, pending text outbox, pending attachment outbox, Status draft, and Channel drafts/recent-channel list before local sign-out. The UI reports if local cleanup/sign-out could not be confirmed. Other accounts' prefixed keys are preserved.
+- Both frontend quality workflows passed before PR #93 merge. Vercel reported success for the merged main commit; this is a deployment check, not a physical-device acceptance result.
+
+### Message retraction integrity — production fix applied
+
+- Backend PR #116 is merged (merge commit `f11c2b1abbf3f94116403e0f1f23d4d4c725df5f`). Its migration `20261116180000_guard_message_edit_tombstones.sql` is applied to production Supabase project `vithpppgyjmazxvogvno`.
+- Root cause: the authenticated message UPDATE policy allowed the sender to update text without requiring `deleted_at IS NULL`. Although the client could not update `deleted_at`, it could restore the text field after the authorized deletion RPC had cleared it, undermining the tombstone.
+- The replacement UPDATE policy requires sender ownership, active (non-retracted) state and current conversation membership in both `USING` and `WITH CHECK`. A private invoker trigger provides defence in depth, blocks client-forged edit timestamps and stamps real text edits with the database clock. The existing SECURITY DEFINER deletion RPC remains able to create tombstones.
+- Backend quality and advanced-calling backend workflows both passed for the PR head before merge. The live catalog/ACL test passed. Rollback-only authenticated-role tests verified: active edit succeeds and receives a database timestamp; retracted-message edit updates zero rows; a forged future timestamp raises SQLSTATE 42501; the authorised deletion RPC still clears content and writes a tombstone. All test transactions were rolled back; no production message content was changed.
+
+### Rechecked RLS, grants, Storage and privileged functions
+
+- Every public base table checked had RLS enabled. The 37 public tables flagged by the advisor as “RLS enabled, no policy” were checked individually: the `authenticated` role has no SELECT/INSERT/UPDATE/DELETE grants on any of them. They are service-role/internal tables, so the advisor INFO finding is not an authenticated Data API exposure.
+- No public table was found with RLS disabled or unexpected `anon` table privileges in the read-only inventory.
+- The inspected client-executable SECURITY DEFINER functions had explicit search paths and no `anon` EXECUTE grant. Their generic Supabase advisor warning remains a manual-review reminder, not evidence by itself of a vulnerability; retain the per-function auth.uid()/membership/ownership checks.
+- Storage inventory remains: public `avatars` (3 objects, all mapped to profiles whose profile/photo visibility is `everyone`), private `private-avatars` (4 objects), private `chat-media` (14), private `status-media` (6), and private `live-replays` (0). No object was deleted. The 3 unreferenced private-avatar objects remain cleanup candidates only; do not delete them without a full reference/retention review and Storage API deletion.
+- Supabase Security Advisor still reports leaked-password protection disabled. The connected project tools do not expose an Auth setting update operation; this remains a dashboard configuration task and must not be described as enabled. Keep the zero-budget constraint; do not upgrade plans or introduce a paid password service without approval.
+
+### Remaining security/release gates
+
+1. Enable Supabase leaked-password protection in Auth settings if available on the current plan; otherwise document the plan limitation and keep stronger password guidance without claiming equivalent HIBP enforcement.
+2. Run seeded two-account integration tests for conversation/message read/write, block direction, profile visibility, private avatar/media access, and account deletion. Catalog checks and rollback-only smoke transactions do not replace this suite.
+3. Migrate the native auth adapter and account-deletion cleanup to production-configured Android/iOS binaries; test reinstall, account switch, logout and failed-storage scenarios on real devices.
+4. Design encrypted, bounded local outbox persistence; current queued message text is account-scoped app storage, not Keychain/Keystore encryption.
+5. Do not claim E2EE: messages remain plaintext at the application/database layer and no audited Signal/Olm-style end-to-end protocol is present.
