@@ -6,6 +6,9 @@
 // missing key produces a clean 501 from the route, not a confusing
 // crash in here.
 
+const { isAiQuotaUnavailable } = require('../utils/aiProviderFailure.cjs');
+const { markAiQuotaUnavailable, isAiQuotaCooldownActive } = require('../utils/aiQuotaCooldown.cjs');
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 
@@ -16,6 +19,11 @@ function isAiConfigured() {
 async function askClaude({ system, messages, maxTokens = 400 }) {
   if (!isAiConfigured()) {
     throw new Error('ANTHROPIC_API_KEY is not set');
+  }
+  if (isAiQuotaCooldownActive()) {
+    const error = new Error('AI provider quota is temporarily unavailable');
+    error.code = 'AI_TEMPORARILY_UNAVAILABLE';
+    throw error;
   }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -35,7 +43,9 @@ async function askClaude({ system, messages, maxTokens = 400 }) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Anthropic API error (${response.status}): ${body.slice(0, 300)}`);
+    const error = new Error(`Anthropic API error (${response.status}): ${body.slice(0, 300)}`);
+    if (isAiQuotaUnavailable(error)) markAiQuotaUnavailable();
+    throw error;
   }
 
   const data = await response.json();

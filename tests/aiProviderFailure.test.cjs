@@ -12,13 +12,16 @@ test('recognizes exhausted Anthropic credits without matching unrelated failures
 test('quota exhaustion returns a safe retryable service-unavailable response', () => {
   let statusCode;
   let body;
+  let retryAfter;
   const response = {
+    set(name, value) { if (name === 'Retry-After') retryAfter = value; return this; },
     status(code) { statusCode = code; return this; },
     json(value) { body = value; return this; },
   };
   respondToAiFailure(response, new Error('credit balance is too low'));
   assert.equal(statusCode, 503);
   assert.equal(body.code, 'AI_TEMPORARILY_UNAVAILABLE');
+  assert.equal(retryAfter, '300');
   assert.match(body.error, /temporarily unavailable/i);
   assert.doesNotMatch(JSON.stringify(body), /Anthropic|billing|credit balance/i);
 });
