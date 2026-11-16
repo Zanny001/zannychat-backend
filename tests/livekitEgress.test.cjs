@@ -179,3 +179,17 @@ test('LIVE replay duration fails closed when both file duration and Egress times
   assert.equal(getEgressDurationSeconds({}, {}), 0);
   assert.equal(getEgressDurationSeconds({ duration: 'not-a-number' }, { startedAt: '1.5', endedAt: '2.5' }), 0);
 });
+
+test('LIVE replay reconciliation can list completed Egress by persisted id', async () => {
+  let request;
+  const egressConfig = { url: liveKitConfig.url, apiKey: env.LIVEKIT_EGRESS_API_KEY, apiSecret: env.LIVEKIT_EGRESS_API_SECRET };
+  const result = await listEgress('zlive_recovery_room', egressConfig, async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { ok: true, json: async () => ({ items: [{ egress_id: 'EG_completed', status: 'EGRESS_COMPLETE' }] }) };
+  }, { active: false, egressId: 'EG_completed' });
+  assert.equal(request.url, 'https://zannychat-test.livekit.cloud/twirp/livekit.Egress/ListEgress');
+  assert.equal(request.body.room_name, 'zlive_recovery_room');
+  assert.equal(request.body.active, false);
+  assert.equal(request.body.egress_id, 'EG_completed');
+  assert.equal(result.items[0].status, 'EGRESS_COMPLETE');
+});

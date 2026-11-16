@@ -6,6 +6,7 @@ const path = require('node:path');
 const liveRoutes = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const webhookRoute = fs.readFileSync(path.join(__dirname, '../src/routes/livekitEgressWebhook.js'), 'utf8');
 const worker = fs.readFileSync(path.join(__dirname, '../src/jobs/liveReplayWorker.js'), 'utf8');
+const finalizer = fs.readFileSync(path.join(__dirname, '../src/services/liveReplayFinalizer.js'), 'utf8');
 
 test('only the live creator can start and stop a replay, and only during an active stream', () => {
   assert.match(liveRoutes, /router\.post\('\/:streamId\/replays\/start'/);
@@ -55,13 +56,14 @@ test('Egress webhook verifies raw signed payloads and validates output before ma
   assert.match(webhookRoute, /express\.raw\(\{ type: \['application\/webhook\+json', 'application\/json'\]/);
   assert.match(webhookRoute, /verifyLiveKitWebhook/);
   assert.match(webhookRoute, /event\?\.event !== 'egress_ended'/);
-  assert.match(webhookRoute, /size <= MAX_REPLAY_BYTES/);
-  assert.match(webhookRoute, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
-  assert.match(webhookRoute, /status: 'ready'/);
-  assert.match(webhookRoute, /clearLiveReplayStop/);
-  assert.match(webhookRoute, /sendPushToUser/);
-  assert.match(webhookRoute, /live_replay_ready/);
-  assert.match(webhookRoute, /notification_sent_at/);
+  assert.match(webhookRoute, /finalizeReplay/);
+  assert.match(finalizer, /size <= MAX_REPLAY_BYTES/);
+  assert.match(finalizer, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
+  assert.match(finalizer, /status: 'ready'/);
+  assert.match(finalizer, /clearLiveReplayStop/);
+  assert.match(finalizer, /sendPushToUser/);
+  assert.match(finalizer, /live_replay_ready/);
+  assert.match(finalizer, /notification_sent_at/);
 });
 
 test('server worker stops expired recordings and deletes expired private objects', () => {
@@ -72,7 +74,7 @@ test('server worker stops expired recordings and deletes expired private objects
   assert.match(worker, /STOP_RETRY_MS/);
   assert.match(worker, /CLEANUP_SCAN_MS/);
   assert.match(worker, /live-replays/);
-  assert.match(worker, /status === 'processing'/);
+  assert.match(worker, /\.eq\('status', 'processing'\)/);
 });
 
 test('a replay start that cannot be found during recovery is failed and releases its reservation', () => {
@@ -106,7 +108,25 @@ test('deleting a failed or already-deleted replay releases any outstanding reser
 
 
 test('Egress webhook uses nanosecond-aware duration recovery before accepting a replay', () => {
-  assert.match(webhookRoute, /getEgressDurationSeconds\(file, info\)/);
-  assert.match(webhookRoute, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
-  assert.doesNotMatch(webhookRoute, /function getDurationSeconds\(file\)/);
+  assert.match(finalizer, /getEgressDurationSeconds\(file, info\)/);
+  assert.match(finalizer, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
+  assert.doesNotMatch(finalizer, /function getDurationSeconds\(file\)/);
+});
+
+
+test('completed Egress records are reconciled when the signed completion webhook is lost', () => {
+  assert.match(worker, /async function reconcileCompletedLiveReplays/);
+  assert.match(worker, /active: false/);
+  assert.match(worker, /egressId: replay\.egress_id/);
+  assert.match(worker, /finalizeReplay\(\{ event: 'egress_ended', egressInfo: info \}\)/);
+  assert.match(worker, /startup completed Egress reconciliation/);
+  assert.match(worker, /completed Egress reconciliation/);
+});
+
+test('an Egress start without a persisted id is matched by its exact replay output path before failing', () => {
+  assert.match(worker, /function getEgressOutputPaths/);
+  assert.match(worker, /function matchesReplayEgress/);
+  assert.match(worker, /active: false/);
+  assert.match(worker, /isTerminalEgressStatus\(found\.status\)/);
+  assert.match(worker, /await finalizeReplay\(\{ event: 'egress_ended', egressInfo: found \}\)/);
 });
