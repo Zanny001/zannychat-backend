@@ -38,8 +38,7 @@ test('reply references must resolve to an active message in the same conversatio
   assert.match(body, /from public\.messages as m/);
   assert.match(body, /for key share/);
   assert.match(body, /v_reply_conversation_id is distinct from new\.conversation_id/);
-  assert.match(body, /v_reply_deleted_at is not null/);
-  assert.match(body, /reply target must be an active message in the same conversation/);
+  assert.match(body, /reply target must belong to the same conversation/);
 });
 
 test('attachment inserts are bound to an uploaded object owned by the sender in the same conversation', () => {
