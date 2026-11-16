@@ -19,7 +19,7 @@ test('activity timestamp migration is transactional and uses an invoker-only pin
 });
 
 test('all client-writable activity timestamps are stamped from database time', () => {
-  for (const field of ['viewed_at', 'created_at', 'updated_at', 'pinned_at', 'last_read_at', 'last_seen_at']) {
+  for (const field of ['viewed_at', 'created_at', 'updated_at', 'pinned_at', 'last_read_at', 'last_seen_at', 'last_active_at']) {
     assert.match(sql, new RegExp('new\\.' + field + '\\s*:=\\s*v_now', 'i'), field + ' must be server stamped');
   }
   assert.match(sql, /pg_catalog\.clock_timestamp\(\)/i);
@@ -30,10 +30,12 @@ test('reaction creation time cannot be rewritten and update time is refreshed', 
   assert.match(sql, /new\.updated_at := v_now/i);
 });
 
-test('all seven activity tables receive narrowly scoped triggers', () => {
+test('all fourteen activity tables receive narrowly scoped triggers', () => {
   const expected = [
-    'status_views', 'status_replies', 'message_reactions', 'status_reactions',
-    'pinned_messages', 'conversation_participants', 'profile_details'
+    'blocked_users', 'muted_status_users', 'reports', 'status_audience_recipients',
+    'status_excluded_users', 'status_views', 'status_replies', 'message_reactions',
+    'status_reactions', 'pinned_messages', 'conversation_participants',
+    'profile_details', 'push_tokens', 'user_presence_sessions'
   ];
   for (const table of expected) {
     assert.match(sql, new RegExp('create trigger [a-z_]+[\\s\\S]{0,160}on public\\.' + table, 'i'), table + ' trigger missing');
