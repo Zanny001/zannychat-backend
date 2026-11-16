@@ -129,7 +129,7 @@ No Storage object was deleted. The three unreferenced private-avatar objects sho
 
 ### Message retraction integrity — production fix applied
 
-- Backend PR #116 is merged (merge commit `f11c2b1abbf3f94116403e0f1f23d4d4c725df5f`). Its migration `20261116180000_guard_message_edit_tombstones.sql` is applied to production Supabase project `vithpppgyjmazxvogvno`.
+- Backend PR #116 is merged (merge commit `f11c2b1abbf3f94116403e0f1f23d4d4c725df5f`). Its migration `20261116180139_guard_message_edit_tombstones.sql` is applied to production Supabase project `vithpppgyjmazxvogvno`.
 - Root cause: the authenticated message UPDATE policy allowed the sender to update text without requiring `deleted_at IS NULL`. Although the client could not update `deleted_at`, it could restore the text field after the authorized deletion RPC had cleared it, undermining the tombstone.
 - The replacement UPDATE policy requires sender ownership, active (non-retracted) state and current conversation membership in both `USING` and `WITH CHECK`. A private invoker trigger provides defence in depth, blocks client-forged edit timestamps and stamps real text edits with the database clock. The existing SECURITY DEFINER deletion RPC remains able to create tombstones.
 - Backend quality and advanced-calling backend workflows both passed for the PR head before merge. The live catalog/ACL test passed. Rollback-only authenticated-role tests verified: active edit succeeds and receives a database timestamp; retracted-message edit updates zero rows; a forged future timestamp raises SQLSTATE 42501; the authorised deletion RPC still clears content and writes a tombstone. All test transactions were rolled back; no production message content was changed.
