@@ -13,7 +13,7 @@ on:
       - "package-lock.json"
       - ".github/workflows/**"
   push:
-    branches: [main, fix/live-replay-egress-duration-fallback]
+    branches: [main, fix/live-replay-egress-duration-fallback, fix/live-public-discovery-visibility-field]
     paths:
       - "src/**"
       - "tests/**"
