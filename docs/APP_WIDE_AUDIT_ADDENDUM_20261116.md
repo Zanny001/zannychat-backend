@@ -22,7 +22,7 @@ Read-only Supabase advisor and catalog queries at 2026-11-16 16:46 UTC returned:
 | Such functions executable by anon | 0 | Positive. |
 | Such functions without a pinned search_path | 0 | Positive. |
 | Functions without a direct auth.uid() check | 4 | Reviewed as delegating wrappers: two poll overloads call guarded implementations; the avatar and cover path helpers call privacy-guarded profile functions. Keep this delegation covered by tests. |
-| Supabase Auth leaked-password protection | Disabled | Confirmed outstanding security setting. Enable in Supabase Auth password security settings and validate signup/password-change flows. The available database tools cannot change this Auth dashboard setting. |
+| Supabase Auth leaked-password protection | Disabled; not included on Supabase Free | Confirmed platform limitation. Current Supabase pricing lists leaked-password protection as unavailable on the Free plan. With the ₦0 constraint, do not upgrade or enable paid spend just for this feature. Treat it as a documented residual risk; a best-effort Pwned Passwords k-anonymity warning can be evaluated, but it is not equivalent to provider-enforced password screening. |
 
 The contact-directory RPC was inspected directly in production. The only current signature is `public.get_contact_directory(p_user_id uuid DEFAULT NULL)`; it checks `auth.uid()`, shared conversation membership and bidirectional blocks, and returns no avatar URL when photo visibility denies it. It is executable by authenticated/service_role and not anon. The old zero-argument overload is no longer present.
 
@@ -77,7 +77,7 @@ The codebase includes direct/group messaging, message replies/edits/deletion mod
 
 ### P1 — security/release blockers
 
-1. Enable Supabase Auth leaked-password protection in project Auth settings and test signup/password-change/reset.
+1. Record Supabase Free leaked-password protection as a residual platform limitation under the ₦0 constraint; do not upgrade. Consider a separate best-effort k-anonymity password warning, clearly labelled as non-equivalent to provider enforcement.
 2. Build/install a production-configured native binary containing SecureStore and validate migration, sign-out, reinstall, token refresh and account switching on Android/iOS.
 3. Complete two-account browser and two-device call/LIVE acceptance, including audio routes, reconnect, background/lock, creator/guest/viewer permissions and call teardown.
 4. Complete one real LIVE replay Egress-to-playback-to-delete cycle within the verified free-tier quotas; keep recording disabled if plan/remaining quota cannot be confirmed.
