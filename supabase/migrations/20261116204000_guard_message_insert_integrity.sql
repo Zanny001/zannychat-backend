@@ -12,7 +12,6 @@ AS $function$
 DECLARE
   v_actor uuid := auth.uid();
   v_reply_conversation_id uuid;
-  v_reply_deleted_at timestamptz;
   v_expected_prefix text;
   v_object_name text;
 BEGIN
@@ -30,16 +29,16 @@ BEGIN
   NEW.deleted_at := NULL;
 
   IF NEW.reply_to_id IS NOT NULL THEN
-    SELECT m.conversation_id, m.deleted_at
-      INTO v_reply_conversation_id, v_reply_deleted_at
+    SELECT m.conversation_id
+      INTO v_reply_conversation_id
     FROM public.messages AS m
     WHERE m.id = NEW.reply_to_id
     FOR KEY SHARE;
 
     IF NOT FOUND
        OR v_reply_conversation_id IS DISTINCT FROM NEW.conversation_id
-       OR v_reply_deleted_at IS NOT NULL THEN
-      RAISE EXCEPTION 'Reply target must be an active message in the same conversation'
+ THEN
+      RAISE EXCEPTION 'Reply target must belong to the same conversation'
         USING ERRCODE = '23503';
     END IF;
   END IF;
