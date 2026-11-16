@@ -18,7 +18,7 @@ function insertGuardBody(source) {
 }
 
 test('message insert integrity migration is transactional and installs a BEFORE INSERT trigger', () => {
-  assert.match(sql, /^\s*begin;/i);
+  assert.match(sql, /BEGIN;/i);
   assert.match(sql, /create trigger guard_message_insert_integrity\s+before insert on public\.messages/i);
   assert.match(sql, /execute function private\.guard_message_insert_integrity\(\)/i);
   assert.match(sql, /\bcommit;\s*$/i);
