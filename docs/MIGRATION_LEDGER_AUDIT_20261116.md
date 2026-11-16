@@ -85,3 +85,13 @@ DROP TRIGGER IF EXISTS user_presence_sessions_server_timestamp_before_write ON p
 DROP FUNCTION IF EXISTS private.stamp_user_activity_timestamps();
 COMMIT;
 ```
+
+
+## Activity timestamp dispatcher correction
+
+- **Applied migration version:** `20261116203635`
+- **Migration name:** `fix_user_activity_timestamp_dispatch`
+- **Repository file:** `supabase/migrations/20261116203635_fix_user_activity_timestamp_dispatch.sql`
+- **Status:** Applied and verified in production.
+
+A post-apply review identified that the first shared timestamp function version had attached all 14 triggers but lacked explicit dispatch branches for the insert-only block/mute/report/status-audience/reply/reaction tables. The corrective migration replaces the function body with explicit branches for all 14 attached tables and raises an exception for an unexpected trigger table. Catalog verification after correction confirms all 14 triggers remain attached and anon/authenticated cannot directly execute the function. No data or RLS policy was modified by the correction.
