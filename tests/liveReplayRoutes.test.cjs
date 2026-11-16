@@ -74,7 +74,7 @@ test('server worker stops expired recordings and deletes expired private objects
   assert.match(worker, /STOP_RETRY_MS/);
   assert.match(worker, /CLEANUP_SCAN_MS/);
   assert.match(worker, /live-replays/);
-  assert.match(worker, /status === 'processing'/);
+  assert.match(worker, /\.eq\('status', 'processing'\)/);
 });
 
 test('a replay start that cannot be found during recovery is failed and releases its reservation', () => {
