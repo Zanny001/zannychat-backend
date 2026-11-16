@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261115170000_status_media_native_picker_mime_types.sql'),
+  path.join(__dirname, '../supabase/migrations/20261115102858_20261115170000_status_media_native_picker_mime_types.sql'),
   'utf8',
 );
 
@@ -24,7 +24,7 @@ test('status-media does not alter the existing 50 MiB size limit or authorizatio
 
 test('final status-media allowlist does not advertise unsupported cross-platform video formats', () => {
   const finalMigration = fs.readFileSync(
-    path.join(__dirname, '../supabase/migrations/20261115190000_status_media_supported_video_formats.sql'),
+    path.join(__dirname, '../supabase/migrations/20261115104217_20261115190000_status_media_supported_video_formats.sql'),
     'utf8',
   );
   assert.ok(finalMigration.includes("'video/mp4'"));
