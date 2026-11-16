@@ -157,11 +157,14 @@ async function cleanupExpiredLiveReplays(now = Date.now()) {
     const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove(paths);
     if (removeError) throw removeError;
   }
+  // A processing row that reaches its retention deadline without a valid
+  // Egress completion webhook is not a successful replay. Release its
+  // reservation instead of charging the full allowance for a missing file.
   for (const row of rows.filter((item) => item.status === 'processing')) {
     const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
       p_replay_id: row.id,
-      p_actual_seconds: MAX_REPLAY_SECONDS,
-      p_success: true,
+      p_actual_seconds: 0,
+      p_success: false,
     });
     if (quotaError) throw quotaError;
   }

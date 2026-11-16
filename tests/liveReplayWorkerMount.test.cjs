@@ -45,3 +45,13 @@ test('startup validates room-admin credentials through a read-only ListParticipa
   assert.ok(worker.includes("safeRun('read-only room admin credential validation'"));
   assert.ok(worker.includes("console.info('[live-stage] room admin credential validation'"));
 });
+
+
+test('expired processing replays release their reservation instead of consuming full replay quota', () => {
+  const processing = worker.indexOf("for (const row of rows.filter((item) => item.status === 'processing'))");
+  const failed = worker.indexOf("p_actual_seconds: 0", processing);
+  assert.ok(processing >= 0);
+  assert.ok(failed > processing);
+  assert.ok(worker.indexOf("p_success: false", processing) > processing);
+  assert.ok(!worker.slice(processing, worker.indexOf("for (const row of rows.filter((item) => item.status === 'failed'", processing)).includes("p_actual_seconds: MAX_REPLAY_SECONDS"));
+});
