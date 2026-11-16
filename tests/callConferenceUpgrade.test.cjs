@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114173000_call_conference_upgrade_and_invites.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114165118_20261114173000_call_conference_upgrade_and_invites.sql'), 'utf8');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
-const lifecycleMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114180000_call_conference_participant_end_hardening.sql'), 'utf8');
-const triggerPrivilegeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114183000_revoke_call_conference_trigger_execute.sql'), 'utf8');
-const joinGuardsMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114190000_call_conference_join_guards.sql'), 'utf8');
+const lifecycleMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114165121_20261114180000_call_conference_participant_end_hardening.sql'), 'utf8');
+const triggerPrivilegeMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114165301_20261114183000_revoke_call_conference_trigger_execute.sql'), 'utf8');
+const joinGuardsMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114165617_20261114190000_call_conference_join_guards.sql'), 'utf8');
 
 test('direct calls can be atomically promoted to a private SFU conference', () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS source_call_id uuid/);
