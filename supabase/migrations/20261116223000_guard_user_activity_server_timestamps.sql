@@ -12,10 +12,6 @@ DECLARE
 BEGIN
   IF TG_TABLE_NAME = 'status_views' THEN
     NEW.viewed_at := v_now;
-  ELSIF TG_TABLE_NAME = 'status_replies' THEN
-    NEW.created_at := v_now;
-  ELSIF TG_TABLE_NAME = 'message_reactions' THEN
-    NEW.created_at := v_now;
   ELSIF TG_TABLE_NAME = 'status_reactions' THEN
     IF TG_OP = 'INSERT' THEN
       NEW.created_at := v_now;
@@ -29,6 +25,11 @@ BEGIN
     IF NEW.last_read_at IS NOT NULL AND NEW.last_read_at IS DISTINCT FROM OLD.last_read_at THEN
       NEW.last_read_at := v_now;
     END IF;
+  ELSIF TG_TABLE_NAME = 'push_tokens' THEN
+    NEW.updated_at := v_now;
+  ELSIF TG_TABLE_NAME = 'user_presence_sessions' THEN
+    NEW.last_active_at := v_now;
+    NEW.updated_at := v_now;
   ELSIF TG_TABLE_NAME = 'profile_details' THEN
     IF TG_OP = 'INSERT' THEN
       IF NEW.last_seen_at IS NOT NULL THEN
@@ -47,6 +48,31 @@ $function$;
 
 REVOKE ALL ON FUNCTION private.stamp_user_activity_timestamps()
   FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS status_views_server_timestamp_before_insert ON public.status_views;
+CREATE TRIGGER blocked_users_server_timestamp_before_insert
+  BEFORE INSERT ON public.blocked_users
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS muted_status_users_server_timestamp_before_insert ON public.muted_status_users;
+CREATE TRIGGER muted_status_users_server_timestamp_before_insert
+  BEFORE INSERT ON public.muted_status_users
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS reports_server_timestamp_before_insert ON public.reports;
+CREATE TRIGGER reports_server_timestamp_before_insert
+  BEFORE INSERT ON public.reports
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS status_audience_recipients_server_timestamp_before_insert ON public.status_audience_recipients;
+CREATE TRIGGER status_audience_recipients_server_timestamp_before_insert
+  BEFORE INSERT ON public.status_audience_recipients
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS status_excluded_users_server_timestamp_before_insert ON public.status_excluded_users;
+CREATE TRIGGER status_excluded_users_server_timestamp_before_insert
+  BEFORE INSERT ON public.status_excluded_users
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
 
 DROP TRIGGER IF EXISTS status_views_server_timestamp_before_insert ON public.status_views;
 CREATE TRIGGER status_views_server_timestamp_before_insert
@@ -76,6 +102,16 @@ CREATE TRIGGER pinned_messages_server_timestamp_before_insert
 DROP TRIGGER IF EXISTS conversation_participants_read_cursor_server_timestamp_before_update ON public.conversation_participants;
 CREATE TRIGGER conversation_participants_read_cursor_server_timestamp_before_update
   BEFORE UPDATE OF last_read_at ON public.conversation_participants
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS push_tokens_server_timestamp_before_write ON public.push_tokens;
+CREATE TRIGGER push_tokens_server_timestamp_before_write
+  BEFORE INSERT OR UPDATE ON public.push_tokens
+  FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
+
+DROP TRIGGER IF EXISTS user_presence_sessions_server_timestamp_before_write ON public.user_presence_sessions;
+CREATE TRIGGER user_presence_sessions_server_timestamp_before_write
+  BEFORE INSERT OR UPDATE ON public.user_presence_sessions
   FOR EACH ROW EXECUTE FUNCTION private.stamp_user_activity_timestamps();
 
 DROP TRIGGER IF EXISTS profile_details_activity_server_timestamp_before_write ON public.profile_details;
