@@ -244,7 +244,8 @@ app.use((req, res) => {
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(err);
+  if (err?.corsOrigin) console.warn('[cors] rejected browser origin', err.corsOrigin);
+  else console.error(err);
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
   const message = status === 403 ? 'Origin not allowed'
     : status === 413 ? 'Request body too large'

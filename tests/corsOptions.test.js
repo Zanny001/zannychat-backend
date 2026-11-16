@@ -48,3 +48,14 @@ describe('CORS production origins', () => {
     });
   });
 });
+
+
+test('rejected CORS origins are attached to the error in a bounded, control-character-safe form', (done) => {
+  createCorsOptions().origin('https://untrusted.example\nforged', (error, allowed) => {
+    expect(allowed).toBeUndefined();
+    expect(error.status).toBe(403);
+    expect(error.corsOrigin).toBe('https://untrusted.exampleforged');
+    expect(error.corsOrigin.length).toBeLessThanOrEqual(255);
+    done();
+  });
+});
