@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114201000_preserve_direct_call_media_mode_on_upgrade.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114193400_preserve_direct_call_media_mode_on_upgrade_20261114201000.sql'), 'utf8');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/groupCalls.js'), 'utf8');
 
 test('conference promotion wrapper validates media mode and reuses atomic participant authorization', () => {
