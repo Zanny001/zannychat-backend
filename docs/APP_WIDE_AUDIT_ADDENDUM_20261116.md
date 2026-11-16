@@ -149,3 +149,30 @@ No Storage object was deleted. The three unreferenced private-avatar objects sho
 3. Migrate the native auth adapter and account-deletion cleanup to production-configured Android/iOS binaries; test reinstall, account switch, logout and failed-storage scenarios on real devices.
 4. Design encrypted, bounded local outbox persistence; current queued message text is account-scoped app storage, not Keychain/Keystore encryption.
 5. Do not claim E2EE: messages remain plaintext at the application/database layer and no audited Signal/Olm-style end-to-end protocol is present.
+
+
+## Production activity and authorization snapshot — 2026-11-16, 18:20 UTC
+
+Read-only row counts show the current production feature usage state:
+
+| Area | Rows | Active/usable state |
+|---|---:|---|
+| Direct call sessions | 71 | 43 cancelled, 22 ended, 6 missed, 0 active |
+| Group call rooms | 0 | No production group-call room has been recorded yet |
+| Group call participants | 0 | No production group-call participant has been recorded yet |
+| Call signaling rows | 0 | No retained signaling rows at snapshot time |
+| LIVE streams | 12 | 0 active |
+| LIVE participants | 19 | 0 joined/active |
+| LIVE replays | 0 | No replay row/object to exercise playback against |
+
+Call notification queues contained 42 call-end records (41 expired, 1 pending; no overdue pending item) and 58 call-invitation records (all expired). Expired invitation records reflect the invitation TTL/terminal lifecycle and should not be counted as delivery success. These database counts are not proof that call delivery, audio/video routing, push notifications, or replay playback worked on physical devices.
+
+### Additional message authorization smoke tests
+
+After the message-edit guard migration was applied, rollback-only SQL tests also verified that:
+
+- A different authenticated account cannot edit another sender's active message.
+- A real profile that is not a member of the target conversation cannot edit that message.
+- Both attempts updated zero rows and were rolled back; no production message content was changed.
+
+The release gate remains two-account browser plus two-physical-device acceptance for calls, messaging, LIVE roles and replay lifecycle. Production row counts indicate that group calling and replay remain unexercised in production so far.
