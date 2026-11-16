@@ -2,7 +2,7 @@ name: Advanced calling backend checks
 
 on:
   push:
-    branches: [main, release/backend-advanced-calling-live-1.2.241]
+    branches: [main, release/backend-advanced-calling-live-1.2.241, fix/live-replay-egress-duration-fallback]
   pull_request:
     branches: [main]
 

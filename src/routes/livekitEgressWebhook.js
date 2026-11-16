@@ -1,6 +1,6 @@
 const express = require('express');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
-const { getLiveKitEgressConfig, verifyLiveKitWebhook, MAX_REPLAY_BYTES, MAX_REPLAY_OUTPUT_SECONDS } = require('../services/livekitEgress');
+const { getLiveKitEgressConfig, verifyLiveKitWebhook, getEgressDurationSeconds, MAX_REPLAY_BYTES, MAX_REPLAY_OUTPUT_SECONDS } = require('../services/livekitEgress');
 const { clearLiveReplayStop } = require('../jobs/liveReplayWorker');
 const { sendPushToUser } = require('../config/pushClient');
 
@@ -13,12 +13,6 @@ function getEgressInfo(event) {
 
 function getFileResults(info) {
   return info?.fileResults || info?.file_results || [];
-}
-
-function getDurationSeconds(file) {
-  const raw = Number(file?.duration || file?.durationNs || file?.duration_ns || 0);
-  if (!Number.isFinite(raw) || raw <= 0) return 0;
-  return raw >= 1_000_000_000 ? Math.ceil(raw / 1_000_000_000) : Math.ceil(raw);
 }
 
 function isComplete(status) {
@@ -93,7 +87,7 @@ async function finalizeReplay(event) {
     return filename === replay.file_path || filename.endsWith('/' + replay.file_path) || filename.endsWith(replay.file_path);
   });
   const size = Number(file?.size || file?.sizeBytes || file?.size_bytes || 0);
-  const durationSeconds = getDurationSeconds(file);
+  const durationSeconds = getEgressDurationSeconds(file, info);
   const valid = isComplete(info?.status) && Boolean(file) &&
     size > 0 && size <= MAX_REPLAY_BYTES &&
     durationSeconds > 0 && durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS;
