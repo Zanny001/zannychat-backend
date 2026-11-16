@@ -4,6 +4,7 @@ DO $$
 DECLARE
   v_policy record;
   v_function record;
+  v_column text;
 BEGIN
   SELECT qual, with_check INTO v_policy
   FROM pg_policies
@@ -15,7 +16,7 @@ BEGIN
   IF v_policy.qual IS NULL OR v_policy.with_check IS NULL THEN
     RAISE EXCEPTION 'active-message UPDATE policy is missing USING or WITH CHECK';
   END IF;
-  IF position('deleted_at IS NULL' IN upper(v_policy.qual)) = 0
+  IF position('DELETED_AT IS NULL' IN upper(v_policy.qual)) = 0
      OR position('DELETED_AT IS NULL' IN upper(v_policy.with_check)) = 0 THEN
     RAISE EXCEPTION 'message UPDATE policy does not exclude retracted messages';
   END IF;
@@ -56,13 +57,13 @@ BEGIN
      OR NOT has_column_privilege('authenticated', 'public.messages', 'edited_at', 'UPDATE') THEN
     RAISE EXCEPTION 'authenticated message edit column grants are missing';
   END IF;
-  FOREACH v_function IN ARRAY ARRAY[
+  FOREACH v_column IN ARRAY ARRAY[
     'id', 'conversation_id', 'sender_id', 'created_at', 'reply_to_id',
     'media_url', 'media_type', 'media_name', 'media_size',
     'media_duration', 'shared_user_id', 'deleted_at'
   ] LOOP
-    IF has_column_privilege('authenticated', 'public.messages', v_function::text, 'UPDATE') THEN
-      RAISE EXCEPTION 'authenticated unexpectedly has UPDATE on messages.%', v_function;
+    IF has_column_privilege('authenticated', 'public.messages', v_column, 'UPDATE') THEN
+      RAISE EXCEPTION 'authenticated unexpectedly has UPDATE on messages.%', v_column;
     END IF;
   END LOOP;
 END;
