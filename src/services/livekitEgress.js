@@ -58,7 +58,7 @@ function isLiveReplayEnabled(env = process.env, liveKitConfig = getLiveKitConfig
 function parsePositiveNanoseconds(value) {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint') return null;
   const text = String(value).trim();
-  if (!/^\\d+$/.test(text)) return null;
+  if (!/^\d+$/.test(text)) return null;
   try {
     const parsed = BigInt(text);
     return parsed > 0n ? parsed : null;
