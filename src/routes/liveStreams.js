@@ -753,7 +753,10 @@ router.get('/following/streams', async (req, res) => {
     const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
     const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
       .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
-    return res.json({ streams: visible });
+    const creatorNames = await getProfileNames(visible.map((stream) => stream.creator_id));
+    return res.json({ streams: visible.map((stream) => ({
+      ...stream, creator_name: creatorNames.get(stream.creator_id) || 'ZannyChat creator',
+    })) });
   } catch (error) {
     console.error('[live] followed stream discovery failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load followed creators' });
@@ -770,7 +773,10 @@ router.get('/', async (req, res) => {
     const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
     const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
       .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
-    return res.json({ streams: visible });
+    const creatorNames = await getProfileNames(visible.map((stream) => stream.creator_id));
+    return res.json({ streams: visible.map((stream) => ({
+      ...stream, creator_name: creatorNames.get(stream.creator_id) || 'ZannyChat creator',
+    })) });
   } catch (error) {
     console.error('[live] discover failed:', error?.message || error);
     return res.status(503).json({ error: 'LIVE discovery is temporarily unavailable' });
