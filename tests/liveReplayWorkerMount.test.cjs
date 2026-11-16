@@ -48,7 +48,7 @@ test('startup validates room-admin credentials through a read-only ListParticipa
 
 
 test('expired processing replays release their reservation instead of consuming full replay quota', () => {
-  const processing = worker.indexOf("for (const row of rows.filter((item) => item.status === 'processing'))");
+  const processing = worker.indexOf("for (const row of rows.filter((item) => item.status === 'processing' || item.status === 'failed' || item.status === 'deleted'))");
   const failed = worker.indexOf("p_actual_seconds: 0", processing);
   assert.ok(processing >= 0);
   assert.ok(failed > processing);
