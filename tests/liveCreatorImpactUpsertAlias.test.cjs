@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114151000_fix_live_creator_impact_upsert_alias.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261114160816_fix_live_creator_impact_upsert_alias_20261114151000.sql'), 'utf8');
 
 test('LIVE creator impact upsert declares the target alias used by conflict updates', () => {
   assert.ok(migration.includes('INSERT INTO public.live_creator_impact AS current_impact'));
