@@ -1,4 +1,5 @@
 function isAiQuotaUnavailable(error) {
+  if (error?.code === 'AI_TEMPORARILY_UNAVAILABLE') return true;
   const message = String(error?.message || error || '');
   return /credit balance is too low|insufficient[_ ]quota|out of credits|billing.{0,40}credits?/i.test(message);
 }
@@ -8,6 +9,7 @@ function respondToAiFailure(res, error) {
     // Billing/quota exhaustion is an expected temporary feature outage,
     // not an application crash. Never expose provider billing details.
     console.warn('[ai] provider quota unavailable; AI request skipped');
+    res.set?.('Retry-After', '300');
     return res.status(503).json({
       error: 'AI features are temporarily unavailable. You can continue chatting normally.',
       code: 'AI_TEMPORARILY_UNAVAILABLE',
