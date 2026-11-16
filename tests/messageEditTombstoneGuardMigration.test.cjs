@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const sql = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261116180000_guard_message_edit_tombstones.sql'),
+  path.join(__dirname, '../supabase/migrations/20261116180139_guard_message_edit_tombstones.sql'),
   'utf8',
 );
 
