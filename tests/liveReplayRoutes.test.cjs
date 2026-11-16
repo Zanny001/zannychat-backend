@@ -103,3 +103,10 @@ test('deleting a failed or already-deleted replay releases any outstanding reser
   assert.match(body, /p_actual_seconds: 0/);
   assert.match(body, /p_success: false/);
 });
+
+
+test('Egress webhook uses nanosecond-aware duration recovery before accepting a replay', () => {
+  assert.match(webhookRoute, /getEgressDurationSeconds\(file, info\)/);
+  assert.match(webhookRoute, /durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS/);
+  assert.doesNotMatch(webhookRoute, /function getDurationSeconds\(file\)/);
+});
