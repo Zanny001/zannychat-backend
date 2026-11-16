@@ -8,7 +8,7 @@ const rpcs = fs.readFileSync(
   'utf8',
 );
 const hardening = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261114120000_profile_read_privacy_hardening.sql'),
+  path.join(__dirname, '../supabase/migrations/20261115095258_20261114120000_profile_read_privacy_hardening.sql'),
   'utf8',
 );
 const migration = rpcs + '\\n' + hardening;
