@@ -51,3 +51,37 @@ This migration was applied after CI passed and after a transaction-only producti
 The existing `public.validate_call_signal_insert()` trigger now stamps `NEW.created_at` after its per-call/sender advisory lock and uses that server timestamp for the 120-signals-per-minute window. This prevents authenticated callers from supplying an old timestamp to bypass the rate limiter. Existing sender, participant, accepted-session, expiry and signal-type checks remain. Direct EXECUTE is revoked from PUBLIC, anon and authenticated; the trigger remains attached to `public.call_signals`.
 
 Verification: migration CI passed; SQL syntax was validated in a rollback-only transaction; production catalog inspection confirmed the new function body, pinned empty search_path, SECURITY DEFINER status and no anon/authenticated EXECUTE. No call-signal rows were inserted or rewritten by the migration.
+
+
+## User activity and presence timestamp integrity
+
+- **Applied migration version:** `20261116203426`
+- **Migration name:** `guard_user_activity_server_timestamps`
+- **Repository file:** `supabase/migrations/20261116203426_guard_user_activity_server_timestamps.sql`
+- **Status:** Applied and verified in production.
+
+The migration installs 14 narrowly scoped BEFORE INSERT/UPDATE triggers backed by `private.stamp_user_activity_timestamps()`, a SECURITY INVOKER function with an empty pinned search_path and no direct EXECUTE for anon/authenticated. It stamps activity timestamps for blocks, status mutes, reports, status audience/exclusion rows, status views/replies/reactions, message reactions, pinned messages, conversation read cursors, profile activity, push-token updates and presence heartbeats. Explicit NULL read-cursor resets remain possible. Existing profile visibility and pinned-message snapshot triggers are preserved. No RLS policies, table grants, ownership rules or existing rows were changed.
+
+Production verification: Supabase ledger records version `20261116203426`; catalog confirms the function and 14 attached triggers; anon/authenticated direct EXECUTE are both false. DDL was first executed in a rollback-only transaction; migration then applied successfully.
+
+Emergency rollback (reconcile the migration ledger before any subsequent `supabase db push`):
+
+```sql
+BEGIN;
+DROP TRIGGER IF EXISTS blocked_users_server_timestamp_before_insert ON public.blocked_users;
+DROP TRIGGER IF EXISTS muted_status_users_server_timestamp_before_insert ON public.muted_status_users;
+DROP TRIGGER IF EXISTS reports_server_timestamp_before_insert ON public.reports;
+DROP TRIGGER IF EXISTS status_audience_recipients_server_timestamp_before_insert ON public.status_audience_recipients;
+DROP TRIGGER IF EXISTS status_excluded_users_server_timestamp_before_insert ON public.status_excluded_users;
+DROP TRIGGER IF EXISTS status_views_server_timestamp_before_insert ON public.status_views;
+DROP TRIGGER IF EXISTS status_replies_server_timestamp_before_insert ON public.status_replies;
+DROP TRIGGER IF EXISTS message_reactions_server_timestamp_before_insert ON public.message_reactions;
+DROP TRIGGER IF EXISTS status_reactions_server_timestamp_before_write ON public.status_reactions;
+DROP TRIGGER IF EXISTS pinned_messages_server_timestamp_before_insert ON public.pinned_messages;
+DROP TRIGGER IF EXISTS conversation_participants_read_cursor_server_timestamp_before_update ON public.conversation_participants;
+DROP TRIGGER IF EXISTS profile_details_activity_server_timestamp_before_write ON public.profile_details;
+DROP TRIGGER IF EXISTS push_tokens_server_timestamp_before_write ON public.push_tokens;
+DROP TRIGGER IF EXISTS user_presence_sessions_server_timestamp_before_write ON public.user_presence_sessions;
+DROP FUNCTION IF EXISTS private.stamp_user_activity_timestamps();
+COMMIT;
+```
