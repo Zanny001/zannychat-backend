@@ -94,8 +94,9 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
 
-    v_object_name := pg_catalog.substring(
-      NEW.media_url FROM pg_catalog.length('storage://chat-media/') + 1
+    v_object_name := pg_catalog.substr(
+      NEW.media_url,
+      pg_catalog.length('storage://chat-media/') + 1
     );
     IF v_object_name !~ ('^' || NEW.conversation_id::text || '/[^/]+$') THEN
       RAISE EXCEPTION 'Invalid chat attachment object path'
