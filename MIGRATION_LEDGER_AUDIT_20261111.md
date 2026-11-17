@@ -66,6 +66,10 @@ The migration-history PR updates only filenames, test file references, one resto
 
 ## Realtime publication reconciliation — 2026-11-17
 
+After the prior 100-version audit, the production ledger gained one additional integrity migration and three publication-only migrations; the current ledger has 104 entries (99 timestamped and 5 legacy). All four added migrations are present in source control:
+
+- `20261116180139_guard_message_edit_tombstones.sql` preserves message-retraction integrity.
+
 Three publication-only migrations were applied and added to source control:
 
 - `20261117003943_publish_conversation_participants_realtime.sql` adds `public.conversation_participants` to `supabase_realtime`.
