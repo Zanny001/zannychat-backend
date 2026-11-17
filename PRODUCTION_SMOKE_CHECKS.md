@@ -34,4 +34,4 @@ where pubname = 'supabase_realtime'
 order by tablename;
 ```
 
-The current production publication should include `call_sessions`, `call_signals`, `conversation_participants`, `message_delivery_receipts`, `message_reactions`, `messages`, and `status_updates`. Do not add a table without first verifying RLS is enabled, authenticated SELECT is appropriately scoped, and anon has no SELECT access. Realtime delivery must still be tested with two accounts; publication membership alone is not a delivery guarantee.
+The current production publication should include `call_sessions`, `call_signals`, `conversation_participants`, `conversations`, `message_delivery_receipts`, `message_reactions`, `messages`, and `status_updates`. Do not add a table without first verifying RLS is enabled, authenticated SELECT is appropriately scoped, and anon has no SELECT access. Realtime delivery must still be tested with two accounts; publication membership alone is not a delivery guarantee.
