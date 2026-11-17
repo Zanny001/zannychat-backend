@@ -53,12 +53,25 @@ No migration was applied, replayed, repaired, reset, or otherwise changed in pro
 
 ## Follow-up reconciliation — 2026-11-16
 
-A fresh comparison of the production `supabase_migrations.schema_migrations` ledger with backend `main` found 97 applied migration versions. Twenty applied entries had source files whose filename version prefix differed from the production version. For all 20, the SQL stored in the production ledger was retrieved and compared with the matching repository SQL after comment/whitespace normalization; all 20 contents matched. The repository files and their direct regression-test references are renamed to the exact production version prefixes in PR #120. No SQL is re-applied by this reconciliation.
+A fresh comparison of the production `supabase_migrations.schema_migrations` ledger with backend `main` found 99 applied migration versions. Twenty applied entries had source files whose filename version prefix differed from the production version. For all 20, the SQL stored in the production ledger was retrieved and compared with the matching repository SQL after comment/whitespace normalization; all 20 contents matched. The repository files and their direct regression-test references are renamed to the exact production version prefixes in PR #120. No SQL is re-applied by this reconciliation.
 
 One additional applied entry, `20261115140156_harden_accept_group_invite_search_path`, had no source file on main. Its single stored statement was recovered from the production ledger and restored as `20261115140156_harden_accept_group_invite_search_path.sql`, with a regression test. The migration sets `public.accept_group_invite(text, uuid)` to `search_path = pg_catalog, public`; it is already applied in production and is not re-executed.
 
 The call-history hiding migration appears twice in the production ledger (`20261114232044` and `20261114233751`) with identical stored SQL and the same migration name. Both exact version files are retained so neither applied version appears pending.
 
-After reconciliation, all 97 production-applied versions have a matching version-prefixed SQL file in the branch. Sixty-three older repository migration files (the historical 0001–0064 sequence, excluding versions already represented remotely) remain absent from the remote ledger. This is the legacy/baseline history described above; their absence is not proof that their DDL is absent. No automatic `migration repair`, replay, `db push`, or baseline rewrite was performed. Each of those 63 files still requires a separate schema/data comparison before any status change or push.
+After reconciliation, all 99 production-applied versions have a matching version-prefixed SQL file in the branch. Sixty-three older repository migration files (the historical 0001–0064 sequence, excluding versions already represented remotely) remain absent from the remote ledger. This is the legacy/baseline history described above; their absence is not proof that their DDL is absent. No automatic `migration repair`, replay, `db push`, or baseline rewrite was performed. Each of those 63 files still requires a separate schema/data comparison before any status change or push.
 
 The migration-history PR updates only filenames, test file references, one restored missing source file and audit documentation. The contents of the 20 matched applied SQL migrations are preserved. The only new SQL source file is the already-applied one-line search-path hardening statement recovered from the production ledger.
+
+
+## Realtime publication reconciliation — 2026-11-17
+
+Two publication-only migrations were applied and added to source control:
+
+- `20261117003943_publish_conversation_participants_realtime.sql` adds `public.conversation_participants` to `supabase_realtime`.
+- `20261117004155_publish_message_reactions_realtime.sql` adds `public.message_reactions` to `supabase_realtime`.
+
+Production catalog verification confirms the complete current publication inventory:
+`call_sessions`, `call_signals`, `conversation_participants`, `message_delivery_receipts`, `message_reactions`, `messages`, and `status_updates`.
+
+Before publication changes, `conversation_participants` and `message_reactions` were absent even though the frontend subscribed to them. Both tables have RLS enabled, no anon SELECT privilege, and authenticated SELECT policies scoped to conversation membership. No grants or policies were changed; these migrations only add tables to the publication. Catalog membership is not a substitute for two-account event-delivery acceptance.
