@@ -43,7 +43,7 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes("const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other'])"));
   assert.ok(route.includes('stream.creator_id !== req.user.id'));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
-  assert.ok(route.includes('issueToken(req.user, stream.room_name, config, canPublish)'));
+  assert.ok(route.includes("issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room')"));
   assert.ok(route.includes("role, canPublish, canModerate"));
 });
 
