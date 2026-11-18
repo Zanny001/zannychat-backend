@@ -27,3 +27,10 @@ test('CORS rejects unknown browser origins', () => {
     assert.equal(allowed, undefined);
   });
 });
+
+
+test('CORS preflight allows the Supabase apikey header used by browser clients', () => {
+  const options = createCorsOptions(new Set([DEFAULT_PRODUCTION_ORIGIN]));
+  assert.equal(options.allowedHeaders.includes('apikey'), true);
+  assert.equal(options.methods.includes('OPTIONS'), true);
+});
