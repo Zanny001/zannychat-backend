@@ -49,9 +49,6 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Audit dependency vulnerabilities
-        run: npm audit --audit-level=high
-
       - name: Run health and diagnostics tests
         run: |
           yarn run test:health-endpoints
@@ -94,3 +91,7 @@ jobs:
 
       - name: Run backend Jest suite
         run: yarn test
+
+      - name: Audit dependency vulnerabilities
+        if: always()
+        run: npm audit --audit-level=high
