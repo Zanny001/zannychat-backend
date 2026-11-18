@@ -7,6 +7,7 @@ const { createLiveKitToken } = require('../src/services/livekitToken');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
+const experienceMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118221000_live_experience_modes.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -44,6 +45,16 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
   assert.ok(route.includes('issueToken(req.user, stream.room_name, config, canPublish)'));
   assert.ok(route.includes("role, canPublish, canModerate"));
+});
+
+test('LIVE supports separate broadcast, themed video chat and audio room modes with category validation', () => {
+  assert.ok(experienceMigration.includes("DEFAULT 'broadcast'"));
+  assert.ok(experienceMigration.includes("CHECK (experience_mode IN ('broadcast', 'video_chat', 'audio_room'))"));
+  assert.ok(experienceMigration.includes("CHECK (category IN ("));
+  assert.ok(route.includes("LIVE_EXPERIENCE_MODES = new Set(['broadcast', 'video_chat', 'audio_room'])"));
+  assert.ok(route.includes('LIVE_CATEGORIES.has(category)'));
+  assert.ok(route.includes("experienceMode !== 'broadcast' || category !== 'social'"));
+  assert.ok(route.includes("update({ experience_mode: experienceMode, category })"));
 });
 
 test('LIVE reaction feed limits to the newest events and restores chronological display order', () => {
