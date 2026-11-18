@@ -4,7 +4,8 @@ const VERCEL_PRODUCTION_ORIGIN = 'https://zannychat.vercel.app';
 
 function parseAllowedOrigins(value = process.env.CORS_ORIGINS) {
   const configured = typeof value === 'string' ? value.split(',') : [];
-  const origins = [...configured, DEFAULT_PRODUCTION_ORIGIN, ...LEGACY_PRODUCTION_ORIGINS, VERCEL_PRODUCTION_ORIGIN]
+  const extraConfigured = typeof process.env.CORS_EXTRA_ORIGINS === 'string' ? process.env.CORS_EXTRA_ORIGINS.split(',') : [];
+  const origins = [...configured, ...extraConfigured, DEFAULT_PRODUCTION_ORIGIN, ...LEGACY_PRODUCTION_ORIGINS, VERCEL_PRODUCTION_ORIGIN]
     .map((origin) => origin.trim())
     .filter(Boolean);
   if (process.env.NODE_ENV !== 'production') {
@@ -26,7 +27,7 @@ function createCorsOptions(allowedOrigins = parseAllowedOrigins()) {
       return callback(error);
     },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'apikey'],
     optionsSuccessStatus: 204,
     maxAge: 600,
   };

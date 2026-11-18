@@ -27,3 +27,26 @@ test('CORS rejects unknown browser origins', () => {
     assert.equal(allowed, undefined);
   });
 });
+
+
+test('CORS preflight allows the Supabase apikey header used by browser clients', () => {
+  const options = createCorsOptions(new Set([DEFAULT_PRODUCTION_ORIGIN]));
+  assert.equal(options.allowedHeaders.includes('apikey'), true);
+  assert.equal(options.methods.includes('OPTIONS'), true);
+});
+
+
+test('CORS_EXTRA_ORIGINS adds exact preview origins without replacing configured origins', () => {
+  const previous = process.env.CORS_EXTRA_ORIGINS;
+  process.env.CORS_EXTRA_ORIGINS = 'http://localhost:4173, http://127.0.0.1:4173';
+  try {
+    const origins = parseAllowedOrigins('https://existing.example');
+    assert.equal(origins.has('http://localhost:4173'), true);
+    assert.equal(origins.has('http://127.0.0.1:4173'), true);
+    assert.equal(origins.has('https://existing.example'), true);
+    assert.equal(origins.has('https://zannychat.vercel.app'), true);
+  } finally {
+    if (previous === undefined) delete process.env.CORS_EXTRA_ORIGINS;
+    else process.env.CORS_EXTRA_ORIGINS = previous;
+  }
+});
