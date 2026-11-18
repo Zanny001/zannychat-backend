@@ -45,6 +45,9 @@ function issueToken(user, roomName, config, canPublish, audioOnly = false) {
     canPublish,
     canSubscribe: true,
     canPublishData: false,
+    // Five-minute LIVE tokens fit inside LiveKit Cloud's 10-minute revocation window.
+    // Connected participants receive refreshed tokens and are not disconnected by expiry.
+    ttlSeconds: 300,
     ...(canPublish && audioOnly ? { canPublishSources: ['microphone'] } : {}),
     config,
   });
