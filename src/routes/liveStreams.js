@@ -1452,11 +1452,11 @@ router.delete('/:streamId/participants/:userId', async (req, res) => {
       .eq('stream_id', streamId).eq('user_id', userId).eq('invitation_type', 'guest');
     if (inviteError) throw inviteError;
 
-    await notifyLiveUsers([userId], {
+    void notifyLiveUsers([userId], {
       title: 'Removed from LIVE',
       body: 'The creator removed you from this LIVE stream.',
       data: { type: 'live_participant_removed', streamId, creatorId: req.user.id },
-    });
+    }).catch((notifyError) => console.warn('[live] participant removal notification failed:', notifyError?.message || notifyError));
     return res.json({ removed: true, userId, status: 'blocked' });
   } catch (error) {
     console.error('[live] participant removal failed:', error?.message || error);
