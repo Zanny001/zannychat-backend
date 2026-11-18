@@ -1,5 +1,5 @@
 -- Prevent a creator-removed LIVE participant from racing the API guard and rejoining.
--- Preserve follower/private invitation rules and the five-guest capacity check.
+-- Preserve follower/private invitation rules, heartbeat reset, and the five-guest capacity check.
 BEGIN;
 
 CREATE OR REPLACE FUNCTION public.join_live_stream(p_stream_id uuid, p_user_id uuid)
@@ -97,10 +97,21 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.live_stream_participants(stream_id, user_id, role, status, joined_at, left_at)
-  VALUES (p_stream_id, p_user_id, v_role, 'joined', now(), NULL)
+  INSERT INTO public.live_stream_participants AS current_participant
+    (stream_id, user_id, role, status, joined_at, left_at, last_seen_at)
+  VALUES (p_stream_id, p_user_id, v_role, 'joined', now(), NULL, NULL)
   ON CONFLICT (stream_id, user_id) DO UPDATE
-    SET role = EXCLUDED.role, status = 'joined', joined_at = now(), left_at = NULL;
+    SET role = EXCLUDED.role,
+        status = 'joined',
+        joined_at = now(),
+        left_at = NULL,
+        last_seen_at = NULL
+    WHERE current_participant.status <> 'blocked';
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Creator removed this participant from the LIVE stream'
+      USING ERRCODE = '42501';
+  END IF;
 
   IF v_has_invite AND v_invite.invitation_type = 'viewer' AND v_invite.status = 'pending' THEN
     UPDATE public.live_stream_invites
@@ -110,7 +121,6 @@ BEGIN
   RETURN v_role;
 END;
 $function$;
-
 
 REVOKE ALL ON FUNCTION public.join_live_stream(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.join_live_stream(uuid, uuid) TO service_role;
