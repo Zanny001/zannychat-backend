@@ -37,7 +37,7 @@ function validId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 }
 
-function issueToken(user, roomName, config, canPublish) {
+function issueToken(user, roomName, config, canPublish, audioOnly = false) {
   return createLiveKitToken({
     identity: user.id,
     name: user.user_metadata?.name || user.user_metadata?.full_name || 'ZannyChat viewer',
@@ -45,6 +45,7 @@ function issueToken(user, roomName, config, canPublish) {
     canPublish,
     canSubscribe: true,
     canPublishData: false,
+    ...(canPublish && audioOnly ? { canPublishSources: ['microphone'] } : {}),
     config,
   });
 }
@@ -805,7 +806,7 @@ router.post('/', async (req, res) => {
   try {
     const id = randomUUID();
     const roomName = 'zlive_' + id.replace(/-/g, '');
-    const token = issueToken(req.user, roomName, config, true);
+    const token = issueToken(req.user, roomName, config, true, experienceMode === 'audio_room');
     const { data: createdStream, error } = await supabaseAdmin.rpc('create_live_stream', {
       p_stream_id: id,
       p_creator_id: req.user.id,
@@ -893,7 +894,7 @@ router.post('/:streamId/join', async (req, res) => {
       }
     }
     const canPublish = role === 'creator' || role === 'guest';
-    const token = issueToken(req.user, stream.room_name, config, canPublish);
+    const token = issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room');
     const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
