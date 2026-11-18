@@ -19,6 +19,7 @@ function createLiveKitToken({
   canPublish = true,
   canSubscribe = true,
   canPublishData = true,
+  canPublishSources,
   ttlSeconds = 3600,
   nowSeconds = Math.floor(Date.now() / 1000),
   config = getLiveKitConfig(),
@@ -38,6 +39,7 @@ function createLiveKitToken({
       canPublish: Boolean(canPublish),
       canSubscribe: Boolean(canSubscribe),
       canPublishData: Boolean(canPublishData),
+      ...(Array.isArray(canPublishSources) && canPublishSources.length ? { canPublishSources } : {}),
     },
   });
   const unsigned = header + '.' + payload;
