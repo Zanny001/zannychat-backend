@@ -282,3 +282,18 @@ test('LIVE join payload selects experience mode and category from the persisted 
   assert.ok(route.includes("experienceMode !== 'broadcast' || category !== 'social'"));
   assert.ok(route.includes(".update({ experience_mode: experienceMode, category })"));
 });
+
+
+test('Audio LIVE Room tokens restrict publishers to microphone tracks only', () => {
+  const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
+  const token = createLiveKitToken({
+    identity: 'audio-host', room: 'zlive-audio', canPublish: true,
+    canPublishSources: ['microphone'], nowSeconds: 1_800_000_000, config,
+  });
+  const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(payload.video.canPublish, true);
+  assert.deepEqual(payload.video.canPublishSources, ['microphone']);
+  assert.ok(route.includes("experienceMode === 'audio_room'"));
+  assert.ok(route.includes("stream.experience_mode === 'audio_room'"));
+  assert.ok(route.includes("canPublishSources: ['microphone']"));
+});
