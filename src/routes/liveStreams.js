@@ -1428,24 +1428,33 @@ router.delete('/:streamId/participants/:userId', async (req, res) => {
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can remove LIVE participants' });
     if (userId === stream.creator_id) return res.status(400).json({ error: 'The creator cannot remove themselves from the LIVE audience' });
-    const participant = await requireJoined(streamId, userId);
-    if (!participant || !['viewer', 'guest'].includes(participant.role)) {
+    const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
+      .select('id,role,status').eq('stream_id', streamId).eq('user_id', userId).maybeSingle();
+    if (participantError) throw participantError;
+    if (!participant || !['viewer', 'guest'].includes(participant.role)
+        || !['joined', 'blocked'].includes(participant.status)) {
       return res.status(404).json({ error: 'Joined LIVE participant not found' });
     }
 
-    // Revoke the active LiveKit session first. A missing room participant is
-    // acceptable because the database state below still blocks future joins.
+    const now = new Date().toISOString();
+    if (participant.status === 'joined') {
+      const { data: blockedRow, error: blockError } = await supabaseAdmin.from('live_stream_participants')
+        .update({ status: 'blocked', left_at: now, last_seen_at: now })
+        .eq('stream_id', streamId).eq('user_id', userId).eq('status', 'joined')
+        .select('id').maybeSingle();
+      if (blockError) throw blockError;
+      if (!blockedRow) {
+        return res.status(409).json({ error: 'Participant state changed. Refresh Creator Studio and try again.' });
+      }
+    }
+
+    // Persist the stream-scoped block before revoking the media connection.
+    // A retry can finish LiveKit removal if the media service is temporarily unavailable.
     try {
       await removeRoomParticipant(stream.room_name, userId);
     } catch (mediaError) {
       if (mediaError.status !== 404) throw mediaError;
     }
-
-    const now = new Date().toISOString();
-    const { error: blockError } = await supabaseAdmin.from('live_stream_participants')
-      .update({ status: 'blocked', left_at: now, last_seen_at: now })
-      .eq('stream_id', streamId).eq('user_id', userId).eq('status', 'joined');
-    if (blockError) throw blockError;
 
     const { error: inviteError } = await supabaseAdmin.from('live_stream_invites')
       .update({ status: 'revoked', updated_at: now })
