@@ -1,13 +1,7 @@
-name: LIVE production database migrations
+name: LIVE production migration preview
 
 on:
   workflow_dispatch:
-    inputs:
-      apply:
-        description: "Apply the two reviewed LIVE migrations after the dry-run preview"
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -17,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  migrate:
-    name: Preview and optionally apply reviewed migrations
+  preview:
+    name: Preview pending production migrations (no changes)
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -35,30 +29,14 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
+          set -euo pipefail
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::Missing SUPABASE_ACCESS_TOKEN repository/environment secret"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::Missing SUPABASE_DB_PASSWORD repository/environment secret"; exit 1; }
           supabase link --project-ref vithpppgyjmazxvogvno --password "$SUPABASE_DB_PASSWORD"
 
-      - name: Verify only the two reviewed LIVE migrations are pending
-        env:
-          APPLY_MIGRATIONS: ${{ inputs.apply }}
+      - name: Show migration history and dry-run plan
         run: |
           set -euo pipefail
           supabase migration list
           supabase db push --dry-run
-          if [ "$APPLY_MIGRATIONS" != "true" ]; then
-            echo "Preview only. No production database changes were made."
-            exit 0
-          fi
-
-      - name: Apply reviewed migrations
-        if: inputs.apply
-        run: |
-          set -euo pipefail
-          supabase db push
-
-      - name: Verify migration history
-        if: inputs.apply
-        run: |
-          set -euo pipefail
-          supabase migration list
+          echo "Preview complete. This workflow never applies migrations."
