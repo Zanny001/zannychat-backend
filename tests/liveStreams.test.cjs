@@ -276,3 +276,9 @@ test('ending LIVE captures joined participants and best-effort notifies guests a
   assert.ok(endRoute.indexOf("from('live_stream_participants')") < endRoute.indexOf("rpc('end_live_stream'"));
   assert.ok(endRoute.includes('void notifyLiveUsers'));
 });
+
+test('LIVE join payload selects experience mode and category from the persisted stream row', () => {
+  assert.ok(route.includes("experience_mode,category"));
+  assert.ok(route.includes("experienceMode !== 'broadcast' || category !== 'social'"));
+  assert.ok(route.includes(".update({ experience_mode: experienceMode, category })"));
+});
