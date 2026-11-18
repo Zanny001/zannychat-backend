@@ -281,6 +281,10 @@ test('ending LIVE captures joined participants and best-effort notifies guests a
 test('creator-removed LIVE participants are blocked atomically inside database admission', () => {
   assert.ok(removalMigration.includes("IF v_existing_status = 'blocked' THEN"));
   assert.ok(removalMigration.includes("USING ERRCODE = '42501'"));
+  assert.ok(removalMigration.includes('v_stage_joined'));
+  assert.ok(removalMigration.includes('v_invite public.live_stream_invites%rowtype'));
+  assert.ok(removalMigration.includes("v_stream.visibility = 'followers'"));
+  assert.ok(removalMigration.includes("v_stream.visibility = 'private'"));
   assert.ok(route.includes(".update({ status: 'blocked', left_at: now, last_seen_at: now })"));
   assert.ok(route.includes("['joined', 'blocked'].includes(participant.status)"));
   assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
