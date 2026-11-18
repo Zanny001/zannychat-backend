@@ -123,7 +123,11 @@ test('creator guest removal preserves audience membership when LiveKit demotion 
   assert.ok(route.includes('returnedToAudience'));
   assert.ok(route.includes('canSubscribe: true'));
   assert.ok(route.includes("updateRoomParticipantAttributes(stream.room_name, userId, { zannychat_spotlight: '' })"));
-  assert.ok(!route.includes('removeRoomParticipant(stream.room_name, userId)'));
+  const guestRemovalStart = route.indexOf("router.delete('/:streamId/guests/:userId'");
+  const participantRemovalStart = route.indexOf("router.delete('/:streamId/participants/:userId'");
+  const guestRemovalRoute = route.slice(guestRemovalStart, participantRemovalStart);
+  assert.ok(!guestRemovalRoute.includes('removeRoomParticipant(stream.room_name, userId)'));
+  assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
 
 test('only the creator can directly invite, mute, or remove guests and guest publishers are capped', () => {
