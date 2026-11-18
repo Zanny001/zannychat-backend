@@ -136,7 +136,7 @@ async function getProfileNames(userIds) {
 
 async function getStream(streamId) {
   const { data, error } = await supabaseAdmin.from('live_streams')
-    .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at')
+    .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at,experience_mode,category')
     .eq('id', streamId).maybeSingle();
   if (error) throw error;
   return data;
