@@ -7,6 +7,7 @@ const { createLiveKitToken } = require('../src/services/livekitToken');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
+const removalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118223000_block_removed_live_participants.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -274,4 +275,13 @@ test('ending LIVE captures joined participants and best-effort notifies guests a
   assert.ok(endRoute.includes("title: 'LIVE has ended'"));
   assert.ok(endRoute.indexOf("from('live_stream_participants')") < endRoute.indexOf("rpc('end_live_stream'"));
   assert.ok(endRoute.includes('void notifyLiveUsers'));
+});
+
+
+test('creator-removed LIVE participants are blocked atomically inside database admission', () => {
+  assert.ok(removalMigration.includes("IF v_existing_status = 'blocked' THEN"));
+  assert.ok(removalMigration.includes("USING ERRCODE = '42501'"));
+  assert.ok(route.includes(".update({ status: 'blocked', left_at: now, last_seen_at: now })"));
+  assert.ok(route.includes("['joined', 'blocked'].includes(participant.status)"));
+  assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
