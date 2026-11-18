@@ -310,3 +310,14 @@ test('creator-removed LIVE participants are blocked atomically inside database a
   assert.ok(route.includes("['joined', 'blocked'].includes(participant.status)"));
   assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
+
+test('LIVE join tokens expire within LiveKit Cloud token revocation window', () => {
+  const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
+  const token = createLiveKitToken({
+    identity: 'viewer-short-ttl', room: 'zlive-short-ttl',
+    ttlSeconds: 300, nowSeconds: 1_800_000_000, config,
+  });
+  const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(claims.exp - 1_800_000_000, 300);
+  assert.ok(route.includes('ttlSeconds: 300'));
+});
