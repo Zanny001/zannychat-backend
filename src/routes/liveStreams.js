@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
-const { listRoomParticipants, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions, deleteLiveKitRoom } = require('../services/livekitRoomAdmin');
+const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions, deleteLiveKitRoom } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -849,6 +849,12 @@ router.post('/:streamId/join', async (req, res) => {
     if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
       return res.status(403).json({ error: 'This LIVE stream is unavailable' });
     }
+    const { data: existingParticipant, error: existingParticipantError } = await supabaseAdmin.from('live_stream_participants')
+      .select('status').eq('stream_id', streamId).eq('user_id', req.user.id).maybeSingle();
+    if (existingParticipantError) throw existingParticipantError;
+    if (existingParticipant?.status === 'blocked') {
+      return res.status(403).json({ error: 'The creator removed you from this LIVE stream' });
+    }
     const { data: role, error: joinError } = await supabaseAdmin.rpc('join_live_stream', {
       p_stream_id: streamId, p_user_id: req.user.id,
     });
@@ -898,6 +904,7 @@ router.post('/:streamId/heartbeat', async (req, res) => {
       .eq('stream_id', streamId).eq('user_id', req.user.id).maybeSingle();
     if (participantError) throw participantError;
     if (!participant) return res.status(403).json({ error: 'Join this LIVE stream before sending a heartbeat' });
+    if (participant.status === 'blocked') return res.status(403).json({ error: 'The creator removed you from this LIVE stream' });
 
     let rejoined = false;
     if (participant.status === 'left') {
@@ -1410,6 +1417,50 @@ router.delete('/:streamId/guests/:userId', async (req, res) => {
   } catch (error) {
     console.error('[live] guest removal failed:', error?.message || error);
     return res.status(502).json({ error: 'Could not remove the guest from the LIVE stage' });
+  }
+});
+
+router.delete('/:streamId/participants/:userId', async (req, res) => {
+  const { streamId, userId } = req.params;
+  if (!validId(streamId) || !validId(userId)) return res.status(400).json({ error: 'Invalid LIVE participant reference' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can remove LIVE participants' });
+    if (userId === stream.creator_id) return res.status(400).json({ error: 'The creator cannot remove themselves from the LIVE audience' });
+    const participant = await requireJoined(streamId, userId);
+    if (!participant || !['viewer', 'guest'].includes(participant.role)) {
+      return res.status(404).json({ error: 'Joined LIVE participant not found' });
+    }
+
+    // Revoke the active LiveKit session first. A missing room participant is
+    // acceptable because the database state below still blocks future joins.
+    try {
+      await removeRoomParticipant(stream.room_name, userId);
+    } catch (mediaError) {
+      if (mediaError.status !== 404) throw mediaError;
+    }
+
+    const now = new Date().toISOString();
+    const { error: blockError } = await supabaseAdmin.from('live_stream_participants')
+      .update({ status: 'blocked', left_at: now, last_seen_at: now })
+      .eq('stream_id', streamId).eq('user_id', userId).eq('status', 'joined');
+    if (blockError) throw blockError;
+
+    const { error: inviteError } = await supabaseAdmin.from('live_stream_invites')
+      .update({ status: 'revoked', updated_at: now })
+      .eq('stream_id', streamId).eq('user_id', userId).eq('invitation_type', 'guest');
+    if (inviteError) throw inviteError;
+
+    await notifyLiveUsers([userId], {
+      title: 'Removed from LIVE',
+      body: 'The creator removed you from this LIVE stream.',
+      data: { type: 'live_participant_removed', streamId, creatorId: req.user.id },
+    });
+    return res.json({ removed: true, userId, status: 'blocked' });
+  } catch (error) {
+    console.error('[live] participant removal failed:', error?.message || error);
+    return res.status(502).json({ error: 'Could not remove this participant from LIVE' });
   }
 });
 
