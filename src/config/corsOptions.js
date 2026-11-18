@@ -26,7 +26,7 @@ function createCorsOptions(allowedOrigins = parseAllowedOrigins()) {
       return callback(error);
     },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'apikey'],
     optionsSuccessStatus: 204,
     maxAge: 600,
   };
