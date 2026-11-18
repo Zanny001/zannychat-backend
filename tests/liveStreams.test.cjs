@@ -251,3 +251,17 @@ test('public LIVE discovery includes visibility so client Public filtering retai
   assert.match(publicRoute, /\.select\('id,creator_id,title,description,visibility,started_at,viewer_limit'\)/);
   assert.match(publicRoute, /\.eq\('visibility', 'public'\)/);
 });
+
+test('ending LIVE captures joined participants and best-effort notifies guests and viewers', () => {
+  const start = route.indexOf("router.post('/:streamId/end', async (req, res) =>");
+  const end = route.indexOf('\n});', start) + 4;
+  const endRoute = route.slice(start, end);
+  assert.ok(endRoute.includes("from('live_stream_participants')"));
+  assert.ok(endRoute.includes(".eq('stream_id', streamId)"));
+  assert.ok(endRoute.includes(".eq('status', 'joined')"));
+  assert.ok(endRoute.includes("participantIds.filter((id) => id !== stream.creator_id)"));
+  assert.ok(endRoute.includes("type: 'live_stream_ended'"));
+  assert.ok(endRoute.includes("title: 'LIVE has ended'"));
+  assert.ok(endRoute.indexOf("from('live_stream_participants')") < endRoute.indexOf("rpc('end_live_stream'"));
+  assert.ok(endRoute.includes('void notifyLiveUsers'));
+});
