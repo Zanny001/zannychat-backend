@@ -7,6 +7,7 @@ const { createLiveKitToken } = require('../src/services/livekitToken');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
+const experienceMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118221000_live_experience_modes.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -42,8 +43,18 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes("const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other'])"));
   assert.ok(route.includes('stream.creator_id !== req.user.id'));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
-  assert.ok(route.includes('issueToken(req.user, stream.room_name, config, canPublish)'));
+  assert.ok(route.includes("issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room')"));
   assert.ok(route.includes("role, canPublish, canModerate"));
+});
+
+test('LIVE supports separate broadcast, themed video chat and audio room modes with category validation', () => {
+  assert.ok(experienceMigration.includes("DEFAULT 'broadcast'"));
+  assert.ok(experienceMigration.includes("CHECK (experience_mode IN ('broadcast', 'video_chat', 'audio_room'))"));
+  assert.ok(experienceMigration.includes("CHECK (category IN ("));
+  assert.ok(route.includes("LIVE_EXPERIENCE_MODES = new Set(['broadcast', 'video_chat', 'audio_room'])"));
+  assert.ok(route.includes('LIVE_CATEGORIES.has(category)'));
+  assert.ok(route.includes("experienceMode !== 'broadcast' || category !== 'social'"));
+  assert.ok(route.includes("update({ experience_mode: experienceMode, category })"));
 });
 
 test('LIVE reaction feed limits to the newest events and restores chronological display order', () => {
@@ -264,4 +275,25 @@ test('ending LIVE captures joined participants and best-effort notifies guests a
   assert.ok(endRoute.includes("title: 'LIVE has ended'"));
   assert.ok(endRoute.indexOf("from('live_stream_participants')") < endRoute.indexOf("rpc('end_live_stream'"));
   assert.ok(endRoute.includes('void notifyLiveUsers'));
+});
+
+test('LIVE join payload selects experience mode and category from the persisted stream row', () => {
+  assert.ok(route.includes("experience_mode,category"));
+  assert.ok(route.includes("experienceMode !== 'broadcast' || category !== 'social'"));
+  assert.ok(route.includes(".update({ experience_mode: experienceMode, category })"));
+});
+
+
+test('Audio LIVE Room tokens restrict publishers to microphone tracks only', () => {
+  const config = { url: 'wss://media.example.invalid', apiKey: 'key-1', apiSecret: 'secret-1' };
+  const token = createLiveKitToken({
+    identity: 'audio-host', room: 'zlive-audio', canPublish: true,
+    canPublishSources: ['microphone'], nowSeconds: 1_800_000_000, config,
+  });
+  const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(payload.video.canPublish, true);
+  assert.deepEqual(payload.video.canPublishSources, ['microphone']);
+  assert.ok(route.includes("experienceMode === 'audio_room'"));
+  assert.ok(route.includes("stream.experience_mode === 'audio_room'"));
+  assert.ok(route.includes("canPublishSources: ['microphone']"));
 });

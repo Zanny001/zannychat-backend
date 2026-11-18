@@ -30,12 +30,14 @@ const replayConfigValidationLimiter = makeLimiter({
 });
 const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other']);
 const REACTIONS = new Set(['heart','clap','laugh','wow','fire','idea','support']);
+const LIVE_EXPERIENCE_MODES = new Set(['broadcast', 'video_chat', 'audio_room']);
+const LIVE_CATEGORIES = new Set(['entertainment', 'social', 'politics', 'science', 'education', 'finance', 'technology', 'sports', 'business', 'health', 'other']);
 
 function validId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 }
 
-function issueToken(user, roomName, config, canPublish) {
+function issueToken(user, roomName, config, canPublish, audioOnly = false) {
   return createLiveKitToken({
     identity: user.id,
     name: user.user_metadata?.name || user.user_metadata?.full_name || 'ZannyChat viewer',
@@ -43,6 +45,7 @@ function issueToken(user, roomName, config, canPublish) {
     canPublish,
     canSubscribe: true,
     canPublishData: false,
+    ...(canPublish && audioOnly ? { canPublishSources: ['microphone'] } : {}),
     config,
   });
 }
@@ -134,7 +137,7 @@ async function getProfileNames(userIds) {
 
 async function getStream(streamId) {
   const { data, error } = await supabaseAdmin.from('live_streams')
-    .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at')
+    .select('id,creator_id,title,description,room_name,visibility,status,allow_comments,allow_guests,viewer_limit,started_at,experience_mode,category')
     .eq('id', streamId).maybeSingle();
   if (error) throw error;
   return data;
@@ -787,11 +790,15 @@ router.post('/', async (req, res) => {
   const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
   const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
   const visibility = req.body?.visibility || 'public';
+  const experienceMode = req.body?.experienceMode || 'broadcast';
+  const category = req.body?.category || 'social';
   const inviteeIds = Array.isArray(req.body?.inviteeIds) ? req.body.inviteeIds : [];
   const config = getLiveKitConfig();
   if (!config) return res.status(503).json({ error: 'LIVE is not configured on this server. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET on the backend service.' });
   if (!title || title.length > 80 || description.length > 500) return res.status(400).json({ error: 'LIVE title or description is invalid' });
   if (!['public','followers','private'].includes(visibility)) return res.status(400).json({ error: 'Invalid LIVE visibility' });
+  if (!LIVE_EXPERIENCE_MODES.has(experienceMode)) return res.status(400).json({ error: 'Invalid LIVE experience mode' });
+  if (!LIVE_CATEGORIES.has(category)) return res.status(400).json({ error: 'Invalid LIVE discussion category' });
   if (inviteeIds.length > 100 || inviteeIds.some((id) => !validId(id)) || new Set(inviteeIds).size !== inviteeIds.length) return res.status(400).json({ error: 'Invalid private LIVE invitees' });
   if (visibility === 'private' && inviteeIds.length === 0) return res.status(400).json({ error: 'Private LIVE requires at least one invitee' });
   if (visibility !== 'private' && inviteeIds.length > 0) return res.status(400).json({ error: 'Invitees are only valid for private LIVE' });
@@ -799,8 +806,8 @@ router.post('/', async (req, res) => {
   try {
     const id = randomUUID();
     const roomName = 'zlive_' + id.replace(/-/g, '');
-    const token = issueToken(req.user, roomName, config, true);
-    const { data: stream, error } = await supabaseAdmin.rpc('create_live_stream', {
+    const token = issueToken(req.user, roomName, config, true, experienceMode === 'audio_room');
+    const { data: createdStream, error } = await supabaseAdmin.rpc('create_live_stream', {
       p_stream_id: id,
       p_creator_id: req.user.id,
       p_title: title,
@@ -811,6 +818,18 @@ router.post('/', async (req, res) => {
       p_invited_user_ids: inviteeIds,
     });
     if (error) throw error;
+    let stream = createdStream;
+    if (experienceMode !== 'broadcast' || category !== 'social') {
+      const { data: themedStream, error: themeError } = await supabaseAdmin.from('live_streams')
+        .update({ experience_mode: experienceMode, category })
+        .eq('id', id).select('*').single();
+      if (themeError) {
+        await supabaseAdmin.rpc('end_live_stream', { p_stream_id: id, p_creator_id: req.user.id }).catch(() => {});
+        await deleteLiveKitRoom(roomName).catch(() => {});
+        throw themeError;
+      }
+      stream = themedStream;
+    }
     const creatorName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'A ZannyChat creator';
     if (visibility === 'private') {
       await notifyLiveUsers(inviteeIds, {
@@ -875,7 +894,7 @@ router.post('/:streamId/join', async (req, res) => {
       }
     }
     const canPublish = role === 'creator' || role === 'guest';
-    const token = issueToken(req.user, stream.room_name, config, canPublish);
+    const token = issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room');
     const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
