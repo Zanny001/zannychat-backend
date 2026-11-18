@@ -8,6 +8,7 @@ const { createLiveKitToken } = require('../src/services/livekitToken');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
 const experienceMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118221000_live_experience_modes.sql'), 'utf8');
+const removalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118223000_block_removed_live_participants.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -296,4 +297,16 @@ test('Audio LIVE Room tokens restrict publishers to microphone tracks only', () 
   assert.ok(route.includes("experienceMode === 'audio_room'"));
   assert.ok(route.includes("stream.experience_mode === 'audio_room'"));
   assert.ok(route.includes("canPublishSources: ['microphone']"));
+});
+
+test('creator-removed LIVE participants are blocked atomically inside database admission', () => {
+  assert.ok(removalMigration.includes("IF v_existing_status = 'blocked' THEN"));
+  assert.ok(removalMigration.includes("USING ERRCODE = '42501'"));
+  assert.ok(removalMigration.includes('v_stage_joined'));
+  assert.ok(removalMigration.includes('v_invite public.live_stream_invites%rowtype'));
+  assert.ok(removalMigration.includes("v_stream.visibility = 'followers'"));
+  assert.ok(removalMigration.includes("v_stream.visibility = 'private'"));
+  assert.ok(route.includes(".update({ status: 'blocked', left_at: now, last_seen_at: now })"));
+  assert.ok(route.includes("['joined', 'blocked'].includes(participant.status)"));
+  assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
 });
