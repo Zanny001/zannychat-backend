@@ -127,6 +127,16 @@ test('appointed LIVE moderators can hide comments but cannot end the stream', ()
   assert.ok(route.includes("Only the creator can end this LIVE stream"));
 });
 
+test('LIVE creators can remove viewers or guests and blocked participants cannot rejoin or heartbeat', () => {
+  assert.ok(route.includes("router.delete('/:streamId/participants/:userId'"));
+  assert.ok(route.includes('removeRoomParticipant(stream.room_name, userId)'));
+  assert.ok(route.includes("update({ status: 'blocked', left_at: now, last_seen_at: now })"));
+  assert.ok(route.includes("existingParticipant?.status === 'blocked'"));
+  assert.ok(route.includes("participant.status === 'blocked'"));
+  assert.ok(route.includes("type: 'live_participant_removed'"));
+  assert.ok(route.includes("Only the creator can remove LIVE participants"));
+});
+
 test('only the LIVE creator can list joined viewers and manage stream moderators', () => {
   assert.ok(route.includes("router.get('/:streamId/participants'"));
   assert.ok(route.includes("stream.creator_id !== req.user.id"));
