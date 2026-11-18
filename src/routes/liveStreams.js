@@ -1573,6 +1573,19 @@ router.post('/:streamId/end', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    // Capture the active audience before the atomic end operation marks every
+    // participant as left, so guests and viewers can be notified afterwards.
+    let participantIds = [];
+    const { data: joinedParticipants, error: participantLookupError } = await supabaseAdmin
+      .from('live_stream_participants')
+      .select('user_id')
+      .eq('stream_id', streamId)
+      .eq('status', 'joined');
+    if (participantLookupError) {
+      console.error('[live] ended-session participant lookup failed:', participantLookupError.message);
+    } else {
+      participantIds = [...new Set((joinedParticipants || []).map((item) => item.user_id).filter(validId))];
+    }
     const { data: ended, error } = await supabaseAdmin.rpc('end_live_stream', {
       p_stream_id: streamId, p_creator_id: req.user.id,
     });
@@ -1581,6 +1594,14 @@ router.post('/:streamId/end', async (req, res) => {
       throw error;
     }
     if (!ended) return res.status(404).json({ error: 'LIVE stream has ended' });
+    // Push delivery is best-effort and must not delay broadcast teardown.
+    void notifyLiveUsers(participantIds.filter((id) => id !== stream.creator_id), {
+      title: 'LIVE has ended',
+      body: 'The creator has ended this LIVE broadcast.',
+      data: { type: 'live_stream_ended', streamId, creatorId: stream.creator_id },
+    }).catch((notificationError) => {
+      console.error('[live] ended-session notification failed:', notificationError?.message || notificationError);
+    });
     await stopActiveLiveReplayForStream(streamId).catch((replayError) => {
       console.error('[live-replay] stop on stream end failed', { streamId, message: replayError.message });
     });
