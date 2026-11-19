@@ -34,7 +34,7 @@ jobs:
         with:
           version: v2.stable
 
-      - name: Validate credentials
+      - name: Validate credentials and CLI options
         run: |
           set -euo pipefail
           test -n "$SUPABASE_ACCESS_TOKEN"
@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-live-apply.XXXXXX")"
           mkdir -p "$WORKDIR/supabase/migrations"
-          find supabase/migrations -maxdepth 1 -type f -name '20*.sql' -exec cp {} "$WORKDIR/supabase/migrations/" \\;
+          find supabase/migrations -maxdepth 1 -type f -name '20*.sql' -exec cp {} "$WORKDIR/supabase/migrations/" \;
           for version in 0059 0065 0067 0069 0075; do
             matches=(supabase/migrations/"${version}"*.sql)
             test -f "${matches[0]}" || { echo "::error::Missing applied migration source ${version}"; exit 1; }
@@ -64,9 +64,9 @@ jobs:
           enabled = false
           TOML
           test "$(find "$WORKDIR/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -gt 2
-          printf 'workdir=%s\\n' "$WORKDIR" >> "$GITHUB_OUTPUT"
+          printf 'workdir=%s\n' "$WORKDIR" >> "$GITHUB_OUTPUT"
 
-      - name: Revalidate production migration history and exact pending set
+      - name: Revalidate exact production pending set
         env:
           WORKDIR: ${{ steps.workspace.outputs.workdir }}
         run: |
@@ -74,18 +74,18 @@ jobs:
           cd "$WORKDIR"
           supabase link --project-ref vithpppgyjmazxvogvno --password "$SUPABASE_DB_PASSWORD"
           MIGRATION_LIST="$(supabase migration list --linked)"
-          printf '%s\\n' "$MIGRATION_LIST"
-          PENDING="$(printf '%s\\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\\|/ {
+          printf '%s\n' "$MIGRATION_LIST"
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\|/ {
             local_version=$1
             remote_version=$2
             gsub(/[`[:space:]]/, "", local_version)
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="$(printf '%s\\n' 20261118221000 20261118223000 | sort)"
+          EXPECTED="$(printf '%s\n' 20261118221000 20261118223000 | sort)"
           if [ "$PENDING" != "$EXPECTED" ]; then
             echo "::error::Production pending migration set changed; refusing apply."
-            printf 'Expected:\\n%s\\nActual:\\n%s\\n' "$EXPECTED" "$PENDING"
+            printf 'Expected:\n%s\nActual:\n%s\n' "$EXPECTED" "$PENDING"
             exit 1
           fi
           echo "Exact approved pending set confirmed."
@@ -112,9 +112,18 @@ jobs:
         run: |
           set -euo pipefail
           cd "$WORKDIR"
-          supabase migration list --linked | tee "$RUNNER_TEMP/live-migration-history.txt"
-          if grep -E '20261118221000|20261118223000' "$RUNNER_TEMP/live-migration-history.txt" | grep -Eq '\\|[[:space:]]*`?[[:space:]]*\\|'; then
-            echo "::error::An approved LIVE migration is still pending."
+          MIGRATION_LIST="$(supabase migration list --linked)"
+          printf '%s\n' "$MIGRATION_LIST"
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\|/ {
+            local_version=$1
+            remote_version=$2
+            gsub(/[`[:space:]]/, "", local_version)
+            gsub(/[`[:space:]]/, "", remote_version)
+            if (local_version != "" && remote_version == "") print local_version
+          }' | sort)"
+          if [ -n "$PENDING" ]; then
+            echo "::error::Unexpected pending migrations remain after apply:"
+            printf '%s\n' "$PENDING"
             exit 1
           fi
           echo "Production migration history verification complete."
