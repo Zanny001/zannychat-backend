@@ -19,8 +19,8 @@ test('LIVE Event reminders use a private durable per-user delivery queue',()=>{
 test('LIVE Event reminder claims are due-window scoped, idempotent and safe under concurrent workers',()=>{
   assert.ok(migration.includes("e.starts_at<=now()+interval '15 minutes'"));
   assert.ok(migration.includes("e.starts_at>now()"));
-  assert.ok(migration.includes("WHERE status='going'"));
-  assert.ok(migration.includes("WHERE status='accepted'"));
+  assert.ok(migration.includes("a.status='going'"));
+  assert.ok(migration.includes("i.status='accepted'"));
   assert.ok(migration.includes('SELECT a.event_id,a.user_id FROM public.live_event_attendees a'));
   assert.ok(migration.includes('SELECT i.event_id,i.invited_user_id AS user_id FROM public.live_event_invites i'));
   assert.ok(migration.includes('ON CONFLICT(event_id,user_id) DO NOTHING'));
