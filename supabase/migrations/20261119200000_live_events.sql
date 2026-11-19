@@ -295,4 +295,28 @@ CREATE TRIGGER live_event_stream_end_sync
   AFTER UPDATE OF status ON public.live_streams
   FOR EACH ROW EXECUTE FUNCTION public.sync_live_event_after_stream_update();
 
+CREATE OR REPLACE FUNCTION public.reset_live_event_reminders_after_reschedule()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+BEGIN
+  IF NEW.starts_at IS DISTINCT FROM OLD.starts_at THEN
+    UPDATE public.live_event_reminder_deliveries
+      SET status='pending',attempts=0,claimed_at=NULL,sent_at=NULL,
+          last_error=NULL,updated_at=now()
+      WHERE event_id=NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.reset_live_event_reminders_after_reschedule() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS live_event_reschedule_reminders_reset ON public.live_events;
+CREATE TRIGGER live_event_reschedule_reminders_reset
+  AFTER UPDATE OF starts_at ON public.live_events
+  FOR EACH ROW EXECUTE FUNCTION public.reset_live_event_reminders_after_reschedule();
+
 COMMIT;
