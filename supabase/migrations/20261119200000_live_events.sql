@@ -46,6 +46,8 @@ CREATE INDEX IF NOT EXISTS live_events_upcoming_idx
   ON public.live_events(starts_at ASC) WHERE status = 'scheduled';
 CREATE INDEX IF NOT EXISTS live_events_creator_idx
   ON public.live_events(creator_id,starts_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS live_events_stream_id_unique_idx
+  ON public.live_events(stream_id) WHERE stream_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS live_event_attendees_user_idx
   ON public.live_event_attendees(user_id,status,created_at DESC);
 
@@ -253,6 +255,9 @@ BEGIN
   SELECT * INTO v_event FROM public.live_events WHERE id=p_event_id FOR UPDATE;
   IF NOT FOUND OR v_event.creator_id <> p_creator_id THEN RETURN false; END IF;
   IF v_event.stream_id = p_stream_id AND v_event.status = 'live' THEN RETURN true; END IF;
+  IF EXISTS (SELECT 1 FROM public.live_events e WHERE e.stream_id=p_stream_id AND e.id<>p_event_id) THEN
+    RETURN false;
+  END IF;
   IF v_event.status <> 'scheduled' OR v_event.stream_id IS NOT NULL
     OR v_event.starts_at > now() + interval '60 minutes'
     OR v_event.starts_at + make_interval(mins => v_event.duration_minutes) < now() THEN
