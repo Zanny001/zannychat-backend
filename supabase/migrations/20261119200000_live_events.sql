@@ -110,7 +110,7 @@ RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 DECLARE
   v_event public.live_events%ROWTYPE;
   v_stream public.live_streams%ROWTYPE;
@@ -131,7 +131,7 @@ BEGIN
     WHERE id=p_event_id;
   RETURN true;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.attach_live_event_stream(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.attach_live_event_stream(uuid,uuid,uuid) TO service_role;
@@ -141,7 +141,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 BEGIN
   IF NEW.status = 'ended' AND OLD.status IS DISTINCT FROM NEW.status THEN
     UPDATE public.live_events SET status='ended',updated_at=now()
@@ -149,7 +149,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS live_event_stream_end_sync ON public.live_streams;
 CREATE TRIGGER live_event_stream_end_sync
