@@ -115,10 +115,11 @@ DECLARE
   v_event public.live_events%ROWTYPE;
   v_stream public.live_streams%ROWTYPE;
 BEGIN
-  SELECT * INTO v_event FROM public.live_events WHERE id=p_event_id FOR UPDATE;
-  IF NOT FOUND OR v_event.creator_id <> p_creator_id THEN RETURN false; END IF;
+  -- Match the stream -> event lock order used by stream-end synchronization.
   SELECT * INTO v_stream FROM public.live_streams WHERE id=p_stream_id FOR UPDATE;
   IF NOT FOUND OR v_stream.creator_id <> p_creator_id OR v_stream.status <> 'live' THEN RETURN false; END IF;
+  SELECT * INTO v_event FROM public.live_events WHERE id=p_event_id FOR UPDATE;
+  IF NOT FOUND OR v_event.creator_id <> p_creator_id THEN RETURN false; END IF;
   IF v_event.stream_id = p_stream_id AND v_event.status = 'live' THEN RETURN true; END IF;
   IF v_event.status <> 'scheduled' OR v_event.stream_id IS NOT NULL
     OR v_event.starts_at > now() + interval '60 minutes'
