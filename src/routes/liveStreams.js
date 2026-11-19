@@ -650,6 +650,70 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
+router.get('/creators/me/preferences', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('live_creator_preferences')
+      .select('experience_mode,visibility,category,allow_guests,updated_at')
+      .eq('user_id', req.user.id).maybeSingle();
+    if (error) throw error;
+    return res.json({
+      preferences: data ? {
+        experienceMode: data.experience_mode,
+        visibility: data.visibility,
+        category: data.category,
+        allowGuests: data.allow_guests,
+        updatedAt: data.updated_at,
+      } : {
+        experienceMode: 'broadcast',
+        visibility: 'public',
+        category: 'social',
+        allowGuests: false,
+        updatedAt: null,
+      },
+    });
+  } catch (error) {
+    console.error('[live] creator preferences load failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load LIVE creator preferences' });
+  }
+});
+
+router.put('/creators/me/preferences', async (req, res) => {
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const { experienceMode, visibility, category, allowGuests } = body;
+  const allowedKeys = new Set(['experienceMode', 'visibility', 'category', 'allowGuests']);
+  if (Object.keys(body).some((key) => !allowedKeys.has(key))
+      || !LIVE_EXPERIENCE_MODES.has(experienceMode)
+      || !['public', 'followers', 'private'].includes(visibility)
+      || !LIVE_CATEGORIES.has(category)
+      || typeof allowGuests !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid LIVE creator preferences' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.from('live_creator_preferences').upsert({
+      user_id: req.user.id,
+      experience_mode: experienceMode,
+      visibility,
+      category,
+      allow_guests: allowGuests,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+      .select('experience_mode,visibility,category,allow_guests,updated_at').single();
+    if (error) throw error;
+    return res.json({
+      preferences: {
+        experienceMode: data.experience_mode,
+        visibility: data.visibility,
+        category: data.category,
+        allowGuests: data.allow_guests,
+        updatedAt: data.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error('[live] creator preferences save failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not save LIVE creator preferences' });
+  }
+});
+
 router.get('/creators/me/profile', async (req, res) => {
   const creatorId = req.user.id;
   try {
