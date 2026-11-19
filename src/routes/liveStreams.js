@@ -588,6 +588,68 @@ router.delete('/replays/:replayId', async (req, res) => {
   }
 });
 
+router.get('/leaderboard', async (req, res) => {
+  const period = String(req.query.period || 'all_time').trim().toLowerCase();
+  if (period !== 'all_time') {
+    return res.status(400).json({ error: 'Only all-time LIVE rankings are currently available.' });
+  }
+  const requestedLimit = Number(req.query.limit);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 20;
+
+  try {
+    const { data: impactRows, error: impactError } = await supabaseAdmin
+      .from('live_creator_impact')
+      .select('creator_id,impact_score,total_reactions,unique_supporters,updated_at')
+      .order('impact_score', { ascending: false })
+      .order('total_reactions', { ascending: false })
+      .order('unique_supporters', { ascending: false })
+      .order('creator_id', { ascending: true })
+      .limit(200);
+    if (impactError) throw impactError;
+
+    const candidates = impactRows || [];
+    const creatorIds = [...new Set(candidates.map((row) => row.creator_id).filter(validId))];
+    if (!creatorIds.length) {
+      return res.json({ period, entries: [], generatedAt: new Date().toISOString() });
+    }
+
+    const [profilesResult, detailsResult, blockedIds] = await Promise.all([
+      supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id', creatorIds),
+      supabaseAdmin.from('profile_details').select('user_id,profile_visibility').in('user_id', creatorIds),
+      getBlockedUserIds(req.user.id, creatorIds),
+    ]);
+    if (profilesResult.error || detailsResult.error) throw profilesResult.error || detailsResult.error;
+
+    const profilesById = new Map((profilesResult.data || []).map((profile) => [profile.id, profile]));
+    const visibilityById = new Map((detailsResult.data || []).map((details) => [details.user_id, details.profile_visibility]));
+    const entries = candidates
+      .filter((row) => {
+        const profile = profilesById.get(row.creator_id);
+        const visibility = visibilityById.get(row.creator_id) || 'everyone';
+        return Boolean(profile) && visibility === 'everyone' && !blockedIds.has(row.creator_id);
+      })
+      .slice(0, limit)
+      .map((row, index) => {
+        const profile = profilesById.get(row.creator_id);
+        return {
+          rank: index + 1,
+          creatorId: row.creator_id,
+          name: profile.name || 'LIVE Creator',
+          avatarColor: profile.avatar_color || null,
+          impactScore: Number(row.impact_score || 0),
+          totalReactions: Number(row.total_reactions || 0),
+          uniqueSupporters: Number(row.unique_supporters || 0),
+          updatedAt: row.updated_at || null,
+        };
+      });
+
+    return res.json({ period, entries, generatedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('[live-leaderboard] load failed:', error.message);
+    return res.status(500).json({ error: 'Could not load the LIVE leaderboard.' });
+  }
+});
+
 router.get('/creators/me/profile', async (req, res) => {
   const creatorId = req.user.id;
   try {
