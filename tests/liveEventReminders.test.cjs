@@ -21,6 +21,8 @@ test('LIVE Event reminder claims are due-window scoped, idempotent and safe unde
   assert.ok(migration.includes("e.starts_at>now()"));
   assert.ok(migration.includes("a.status='going'"));
   assert.ok(migration.includes("i.status='accepted'"));
+  assert.ok(migration.includes('SELECT e.id AS event_id,e.creator_id AS user_id FROM public.live_events e'));
+  assert.ok(migration.includes('e.creator_id=d.user_id'));
   assert.ok(migration.includes('SELECT a.event_id,a.user_id FROM public.live_event_attendees a'));
   assert.ok(migration.includes('SELECT i.event_id,i.invited_user_id AS user_id FROM public.live_event_invites i'));
   assert.ok(migration.includes('ON CONFLICT(event_id,user_id) DO NOTHING'));
