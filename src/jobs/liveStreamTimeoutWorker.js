@@ -1,0 +1,59 @@
+const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { sendPushToUser } = require('../config/pushClient');
+
+const LIVE_STREAM_MAX_DURATION_SECONDS = 4 * 60 * 60;
+const LIVE_STREAM_WARNING_SECONDS = 10 * 60;
+
+async function runLiveStreamTimeoutWarnings({ admin = supabaseAdmin, send = sendPushToUser } = {}) {
+  if (!admin) return { claimed: 0, sent: 0, failed: 0 };
+  const { data, error } = await admin.rpc('claim_live_stream_timeout_warnings');
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  let sent = 0;
+  let failed = 0;
+
+  for (const warning of rows) {
+    try {
+      const result = await send(warning.recipient_id, {
+        title: 'Your LIVE ends in 10 minutes',
+        body: String(warning.broadcast_title || 'Your LIVE broadcast') +
+          ' will automatically end when it reaches the four-hour limit.',
+        data: { type: 'live_stream_timeout_warning', streamId: warning.broadcast_id },
+      });
+      if (Number(result?.sent || 0) > 0) sent += 1;
+      else failed += 1;
+    } catch (sendError) {
+      failed += 1;
+      console.warn('[live-timeout] creator warning push failed:', sendError?.message || 'provider error');
+    }
+  }
+  return { claimed: rows.length, sent, failed };
+}
+
+function startLiveStreamTimeoutWarningWorker() {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const summary = await runLiveStreamTimeoutWarnings();
+      if (summary.claimed) console.info('[live-timeout] creator warning batch', summary);
+    } catch (error) {
+      console.error('[live-timeout] warning worker failed:', error?.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(tick, 30_000);
+  timer.unref?.();
+  const warmup = setTimeout(tick, 8_000);
+  warmup.unref?.();
+  return timer;
+}
+
+module.exports = {
+  LIVE_STREAM_MAX_DURATION_SECONDS,
+  LIVE_STREAM_WARNING_SECONDS,
+  runLiveStreamTimeoutWarnings,
+  startLiveStreamTimeoutWarningWorker,
+};
