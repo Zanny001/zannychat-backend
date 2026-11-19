@@ -146,7 +146,17 @@ router.post('/events', makeLimiter({ windowMs: 60 * 60 * 1000, max: 5, error: 'E
   if (!validPayload(req.body,CREATE_KEYS)) return res.status(400).json({error:'Invalid LIVE Event details'});
   const values = validateFields(req.body);
   if (!values) return res.status(400).json({error:'Check the title, category, audience, schedule and capacity'});
+  const rawInvitees=Array.isArray(req.body.inviteeIds)?req.body.inviteeIds:[];
+  const inviteeIds=[...new Set(rawInvitees)];
+  if (rawInvitees.length>25 || inviteeIds.some((id)=>!isUuid(id)) || inviteeIds.includes(req.user.id)
+    || (values.visibility==='private' && inviteeIds.length===0)
+    || (values.visibility!=='private' && inviteeIds.length>0)) {
+    return res.status(400).json({error:'Private Events need one to 25 valid invitees; other audiences do not use private invitations'});
+  }
   try {
+    for (const id of inviteeIds) {
+      if (await blockedBetween(req.user.id,id)) return res.status(409).json({error:'An invitee cannot be invited because of a block relationship'});
+    }
     const { data,error } = await supabaseAdmin.rpc('create_live_event',{
       p_creator_id:req.user.id,
       p_title:values.title,
@@ -159,7 +169,20 @@ router.post('/events', makeLimiter({ windowMs: 60 * 60 * 1000, max: 5, error: 'E
     });
     if (error) throw error;
     if (!data) return res.status(429).json({error:'You can have up to five upcoming LIVE Events'});
-    return res.status(201).json({event:shapeEvent(data)});
+    if (inviteeIds.length) {
+      const rows=inviteeIds.map((invited_user_id)=>({event_id:data.id,invited_user_id,invited_by:req.user.id,status:'pending'}));
+      const {error:inviteError}=await supabaseAdmin.from('live_event_invites').insert(rows);
+      if (inviteError) {
+        await supabaseAdmin.from('live_events').update({status:'cancelled',updated_at:new Date().toISOString()})
+          .eq('id',data.id).eq('creator_id',req.user.id).eq('status','scheduled');
+        throw inviteError;
+      }
+      await Promise.allSettled(inviteeIds.map((userId)=>sendPushToUser(userId,{
+        title:'Private LIVE Event invitation',body:'You have been invited to '+data.title,
+        data:{type:'live_event_invitation',eventId:data.id,creatorId:req.user.id},
+      })));
+    }
+    return res.status(201).json({event:shapeEvent(data),invitedCount:inviteeIds.length});
   } catch(error) {
     console.error('[live-events] create failed:',error?.message||error);
     return res.status(503).json({error:'Could not schedule this LIVE Event'});
