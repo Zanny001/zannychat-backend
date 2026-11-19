@@ -93,9 +93,9 @@ BEGIN
   SELECT e.id, recipients.user_id
   FROM public.live_events e
   JOIN (
-    SELECT event_id,user_id FROM public.live_event_attendees WHERE status='going'
+    SELECT a.event_id,a.user_id FROM public.live_event_attendees a WHERE a.status='going'
     UNION
-    SELECT event_id,invited_user_id AS user_id FROM public.live_event_invites WHERE status='accepted'
+    SELECT i.event_id,i.invited_user_id AS user_id FROM public.live_event_invites i WHERE i.status='accepted'
   ) recipients ON recipients.event_id=e.id
   WHERE e.status='scheduled' AND e.starts_at>now()
     AND e.starts_at<=now()+interval '15 minutes'
