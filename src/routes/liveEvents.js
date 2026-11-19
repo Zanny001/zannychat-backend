@@ -10,7 +10,7 @@ router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 45, error: 'LIVE
 const CATEGORIES = new Set(['entertainment','social','politics','science','education','finance','technology','sports','business','health','other']);
 const VISIBILITIES = new Set(['public','followers','private']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CREATE_KEYS = new Set(['title','description','category','visibility','startsAt','durationMinutes','maxAttendees']);
+const CREATE_KEYS = new Set(['title','description','category','visibility','startsAt','durationMinutes','maxAttendees','inviteeIds']);
 const UPDATE_KEYS = new Set(['title','description','category','startsAt','durationMinutes','maxAttendees']);
 
 function isUuid(value) { return UUID.test(String(value || '')); }
@@ -146,6 +146,7 @@ router.post('/events', makeLimiter({ windowMs: 60 * 60 * 1000, max: 5, error: 'E
   if (!validPayload(req.body,CREATE_KEYS)) return res.status(400).json({error:'Invalid LIVE Event details'});
   const values = validateFields(req.body);
   if (!values) return res.status(400).json({error:'Check the title, category, audience, schedule and capacity'});
+  if (Object.hasOwn(req.body,'inviteeIds') && !Array.isArray(req.body.inviteeIds)) return res.status(400).json({error:'Invitees must be a list of account IDs'});
   const rawInvitees=Array.isArray(req.body.inviteeIds)?req.body.inviteeIds:[];
   const inviteeIds=[...new Set(rawInvitees)];
   if (rawInvitees.length>25 || inviteeIds.some((id)=>!isUuid(id)) || inviteeIds.includes(req.user.id)
