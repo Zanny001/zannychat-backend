@@ -107,6 +107,16 @@ BEGIN
     FROM public.live_event_reminder_deliveries d
     JOIN public.live_events e ON e.id=d.event_id
     WHERE e.status='scheduled' AND e.starts_at>now()
+      AND e.starts_at<=now()+interval '15 minutes'
+      AND (
+        EXISTS (SELECT 1 FROM public.live_event_attendees a WHERE a.event_id=d.event_id AND a.user_id=d.user_id AND a.status='going')
+        OR EXISTS (SELECT 1 FROM public.live_event_invites i WHERE i.event_id=d.event_id AND i.invited_user_id=d.user_id AND i.status='accepted')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.blocked_users b
+        WHERE (b.blocker_id=e.creator_id AND b.blocked_id=d.user_id)
+           OR (b.blocker_id=d.user_id AND b.blocked_id=e.creator_id)
+      )
       AND (
         d.status IN ('pending','failed')
         OR (d.status='sending' AND d.claimed_at<now()-interval '10 minutes')
