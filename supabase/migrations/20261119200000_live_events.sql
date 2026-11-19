@@ -300,7 +300,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 BEGIN
   IF NEW.starts_at IS DISTINCT FROM OLD.starts_at THEN
     UPDATE public.live_event_reminder_deliveries
@@ -310,7 +310,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.reset_live_event_reminders_after_reschedule() FROM PUBLIC, anon, authenticated;
 
@@ -324,7 +324,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 DECLARE
   v_going integer;
 BEGIN
@@ -337,7 +337,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.guard_live_event_capacity_update() FROM PUBLIC, anon, authenticated;
 
