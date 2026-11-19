@@ -34,15 +34,29 @@ jobs:
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::Missing SUPABASE_DB_PASSWORD repository/environment secret"; exit 1; }
           supabase --version
 
-      - name: Build an isolated migration workspace
+      - name: Build an isolated migration workspace with applied history
         id: workspace
         run: |
           set -euo pipefail
           WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-live-migrations.XXXXXX")"
           mkdir -p "$WORKDIR/supabase/migrations"
 
-          # Only copy the two reviewed LIVE migrations. Never expose the legacy
-          # 0001-0064 files to the production migration planner.
+          # Retain the source SQL for migrations already represented in the
+          # production ledger. The old 0001-0064 files are intentionally
+          # excluded except 0059, which production records as applied.
+          # All timestamped migrations are retained; only the two reviewed
+          # LIVE migrations below are expected to be pending.
+          find supabase/migrations -maxdepth 1 -type f -name '20*.sql' -exec cp {} "$WORKDIR/supabase/migrations/" \;
+          for version in 0059 0065 0067 0069 0075; do
+            matches=(supabase/migrations/"${version}"*.sql)
+            if [ -f "${matches[0]}" ]; then
+              cp "${matches[0]}" "$WORKDIR/supabase/migrations/"
+            else
+              echo "::error::Expected applied production migration source ${version}*.sql was not found"
+              exit 1
+            fi
+          done
+
           cp supabase/migrations/20261118221000_live_experience_modes.sql "$WORKDIR/supabase/migrations/"
           cp supabase/migrations/20261118223000_block_removed_live_participants.sql "$WORKDIR/supabase/migrations/"
 
@@ -57,9 +71,10 @@ jobs:
           TOML
 
           FILE_COUNT="$(find "$WORKDIR/supabase/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')"
-          test "$FILE_COUNT" = "2" || { echo "::error::Expected exactly two LIVE migration files, found $FILE_COUNT"; exit 1; }
+          echo "Migration source files retained for comparison: $FILE_COUNT"
+          test "$FILE_COUNT" -gt 2 || { echo "::error::Applied migration history was not included"; exit 1; }
           printf 'workdir=%s\n' "$WORKDIR" >> "$GITHUB_OUTPUT"
-          echo "Restricted migration workspace contains:"
+          echo "Isolated workspace migration filenames:"
           find "$WORKDIR/supabase/migrations" -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Link production and preview restricted migration plan
@@ -69,8 +84,29 @@ jobs:
           set -euo pipefail
           cd "$WORKDIR"
           supabase link --project-ref vithpppgyjmazxvogvno --password "$SUPABASE_DB_PASSWORD"
-          echo "=== Restricted local and production migration history ==="
-          supabase migration list --linked
+
+          echo "=== Local and production migration history ==="
+          MIGRATION_LIST="$(supabase migration list --linked)"
+          printf '%s\n' "$MIGRATION_LIST"
+
+          echo "=== Assert exactly the two approved LIVE migrations are pending ==="
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*[0-9]+[[:space:]]*\|/ {
+            local_version=$1
+            remote_version=$2
+            gsub(/[[:space:]]/, "", local_version)
+            gsub(/[[:space:]]/, "", remote_version)
+            if (local_version != "" && remote_version == "") print local_version
+          }' | sort)"
+          EXPECTED="$(printf '%s\n' 20261118221000 20261118223000 | sort)"
+          if [ "$PENDING" != "$EXPECTED" ]; then
+            echo "::error::Unexpected pending migration set."
+            echo "Expected:"
+            printf '%s\n' "$EXPECTED"
+            echo "Actual:"
+            printf '%s\n' "$PENDING"
+            exit 1
+          fi
+
           echo "=== Production dry-run: only the two approved LIVE migrations ==="
           supabase db push --dry-run --linked
           echo "Preview complete. No production migrations were applied."
