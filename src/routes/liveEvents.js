@@ -225,15 +225,22 @@ router.post('/events/:eventId/invites', async (req,res) => {
     for (const id of invitees) {
       if (await blockedBetween(req.user.id,id)) return res.status(409).json({error:'An invitee cannot be invited because of a block relationship'});
     }
-    const rows=invitees.map((invited_user_id)=>({event_id:eventId,invited_user_id,invited_by:req.user.id,status:'pending',updated_at:new Date().toISOString()}));
-    if (!rows.length) return res.status(400).json({error:'Choose at least one other account'});
-    const {error}=await supabaseAdmin.from('live_event_invites').upsert(rows,{onConflict:'event_id,invited_user_id'});
-    if (error) throw error;
-    await Promise.allSettled(invitees.map((userId)=>sendPushToUser(userId,{
+    if (!invitees.length) return res.status(400).json({error:'Choose at least one other account'});
+    const {data:existingInvites,error:inviteReadError}=await supabaseAdmin.from('live_event_invites')
+      .select('invited_user_id,status').eq('event_id',eventId).in('invited_user_id',invitees);
+    if (inviteReadError) throw inviteReadError;
+    const alreadyAccepted=new Set((existingInvites||[]).filter((row)=>row.status==='accepted').map((row)=>row.invited_user_id));
+    const pendingInvitees=invitees.filter((id)=>!alreadyAccepted.has(id));
+    const rows=pendingInvitees.map((invited_user_id)=>({event_id:eventId,invited_user_id,invited_by:req.user.id,status:'pending',updated_at:new Date().toISOString()}));
+    if (rows.length) {
+      const {error}=await supabaseAdmin.from('live_event_invites').upsert(rows,{onConflict:'event_id,invited_user_id'});
+      if (error) throw error;
+    }
+    await Promise.allSettled(pendingInvitees.map((userId)=>sendPushToUser(userId,{
       title:'Private LIVE Event invitation',body:'You have been invited to '+event.title,
       data:{type:'live_event_invitation',eventId,creatorId:req.user.id},
     })));
-    return res.status(200).json({invitedCount:invitees.length});
+    return res.status(200).json({invitedCount:pendingInvitees.length,alreadyAcceptedCount:alreadyAccepted.size});
   } catch(error) {
     console.error('[live-events] invite failed:',error?.message||error);
     return res.status(503).json({error:'Could not send LIVE Event invitations'});
