@@ -46,6 +46,10 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.ok(migration.includes('ENABLE ROW LEVEL SECURITY'));
   assert.ok(migration.includes('REVOKE ALL ON public.live_event_attendees FROM PUBLIC, anon, authenticated'));
   assert.ok(migration.includes('GRANT EXECUTE ON FUNCTION public.rsvp_live_event(uuid,uuid) TO service_role'));
+  assert.ok(migration.includes('FUNCTION public.attach_live_event_stream(p_event_id uuid, p_stream_id uuid, p_creator_id uuid)'));
+  assert.ok(migration.includes("NEW.status = 'ended'"));
+  assert.ok(route.includes("router.get('/events/:eventId/invitees'"));
+  assert.ok(route.includes("router.post('/events/:eventId/attach-stream'"));
 });
 
 test('LIVE Event records do not expose attendee identities in discovery responses',()=>{
