@@ -45,6 +45,8 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.ok(route.includes("router.post('/events/:eventId/invites'"));
   assert.ok(route.includes("router.get('/events/invitations'"));
   assert.ok(route.includes("router.patch('/events/:eventId/invitation'"));
+  assert.ok(route.includes("filter((row)=>row.status==='accepted')"));
+  assert.ok(route.includes('alreadyAccepted.has(id)'));
   assert.ok(route.includes("sendPushToUser(userId"));
   assert.ok(migration.includes('ENABLE ROW LEVEL SECURITY'));
   assert.ok(migration.includes('REVOKE ALL ON public.live_event_attendees FROM PUBLIC, anon, authenticated'));
