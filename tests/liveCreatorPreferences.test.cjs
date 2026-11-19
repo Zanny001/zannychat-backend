@@ -40,3 +40,13 @@ test('LIVE preferences API rejects invalid formats, audiences, categories and gu
   assert.ok(handlers.includes("typeof allowGuests !== 'boolean'"));
   assert.ok(handlers.includes('Invalid LIVE creator preferences'));
 });
+
+test('LIVE preferences production workflow is manually confirmed and narrowly scoped', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '../.github/workflows/live-creator-preferences-migration.yml'), 'utf8');
+  assert.ok(workflow.includes('confirm_production_apply'));
+  assert.ok(workflow.includes('default: false'));
+  assert.ok(workflow.includes('EXPECTED="20261119180000"'));
+  assert.ok(workflow.includes('supabase db push --dry-run --linked'));
+  assert.ok(workflow.includes('supabase db push --linked --yes'));
+  assert.ok(workflow.includes('test "$PENDING" = "20261119180000"'));
+});
