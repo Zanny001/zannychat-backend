@@ -30,6 +30,19 @@ CREATE TABLE IF NOT EXISTS public.live_event_attendees (
   PRIMARY KEY (event_id,user_id)
 );
 
+CREATE TABLE IF NOT EXISTS public.live_event_invites (
+  event_id uuid NOT NULL REFERENCES public.live_events(id) ON DELETE CASCADE,
+  invited_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  invited_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined','revoked')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (event_id,invited_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS live_event_invites_user_idx
+  ON public.live_event_invites(invited_user_id,status,created_at DESC);
+
 CREATE INDEX IF NOT EXISTS live_events_upcoming_idx
   ON public.live_events(starts_at ASC) WHERE status = 'scheduled';
 CREATE INDEX IF NOT EXISTS live_events_creator_idx
@@ -39,10 +52,13 @@ CREATE INDEX IF NOT EXISTS live_event_attendees_user_idx
 
 ALTER TABLE public.live_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_event_attendees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.live_event_invites ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.live_events FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON public.live_event_attendees FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.live_event_invites FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.live_events TO service_role;
 GRANT ALL ON public.live_event_attendees TO service_role;
+GRANT ALL ON public.live_event_invites TO service_role;
 
 CREATE OR REPLACE FUNCTION public.rsvp_live_event(p_event_id uuid, p_user_id uuid)
 RETURNS jsonb
