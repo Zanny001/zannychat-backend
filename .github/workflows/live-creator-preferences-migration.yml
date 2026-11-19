@@ -1,0 +1,126 @@
+name: LIVE creator preferences production migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production_apply:
+        description: "Confirm applying only migration 20261119180000_live_creator_preferences.sql"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zannychat-live-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Preview and apply the single reviewed LIVE preferences migration
+    if: inputs.confirm_production_apply == true
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - name: Check out backend repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: v2.stable
+
+      - name: Validate credentials
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          supabase --version
+
+      - name: Build isolated migration workspace with applied history
+        id: workspace
+        run: |
+          set -euo pipefail
+          WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-live-preferences.XXXXXX")"
+          mkdir -p "$WORKDIR/supabase/migrations"
+          find supabase/migrations -maxdepth 1 -type f -name '20*.sql' -exec cp {} "$WORKDIR/supabase/migrations/" \;
+          for version in 0059 0065 0067 0069 0075; do
+            matches=(supabase/migrations/"${version}"*.sql)
+            test -f "${matches[0]}" || { echo "::error::Missing applied production migration $version"; exit 1; }
+            cp "${matches[0]}" "$WORKDIR/supabase/migrations/"
+          done
+          cat > "$WORKDIR/supabase/config.toml" <<'TOML'
+          project_id = "zannychat-live-preferences-production"
+          [db.migrations]
+          enabled = true
+          [db.seed]
+          enabled = false
+          TOML
+          printf 'workdir=%s\n' "$WORKDIR" >> "$GITHUB_OUTPUT"
+
+      - name: Link production and assert exactly one pending migration
+        env:
+          WORKDIR: ${{ steps.workspace.outputs.workdir }}
+        run: |
+          set -euo pipefail
+          cd "$WORKDIR"
+          supabase link --project-ref vithpppgyjmazxvogvno --password "$SUPABASE_DB_PASSWORD"
+          MIGRATION_LIST="$(supabase migration list --linked)"
+          printf '%s\n' "$MIGRATION_LIST"
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\|/ {
+            local_version=$1; remote_version=$2
+            gsub(/[`[:space:]]/, "", local_version)
+            gsub(/[`[:space:]]/, "", remote_version)
+            if (local_version != "" && remote_version == "") print local_version
+          }' | sort)"
+          EXPECTED="20261119180000"
+          if [ "$PENDING" != "$EXPECTED" ]; then
+            echo "::error::Refusing production migration: expected exactly $EXPECTED pending."
+            printf 'Actual pending migrations:\n%s\n' "$PENDING"
+            exit 1
+          fi
+          supabase db push --dry-run --linked
+
+      - name: Revalidate exact pending set before apply
+        env:
+          WORKDIR: ${{ steps.workspace.outputs.workdir }}
+        run: |
+          set -euo pipefail
+          cd "$WORKDIR"
+          MIGRATION_LIST="$(supabase migration list --linked)"
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\|/ {
+            local_version=$1; remote_version=$2
+            gsub(/[`[:space:]]/, "", local_version)
+            gsub(/[`[:space:]]/, "", remote_version)
+            if (local_version != "" && remote_version == "") print local_version
+          }' | sort)"
+          test "$PENDING" = "20261119180000" || { echo "::error::Pending migration set changed; refusing apply."; exit 1; }
+          supabase db push --dry-run --linked
+
+      - name: Apply the single reviewed migration
+        env:
+          WORKDIR: ${{ steps.workspace.outputs.workdir }}
+        run: |
+          set -euo pipefail
+          cd "$WORKDIR"
+          supabase db push --linked --yes
+
+      - name: Verify production migration history is clean
+        env:
+          WORKDIR: ${{ steps.workspace.outputs.workdir }}
+        run: |
+          set -euo pipefail
+          cd "$WORKDIR"
+          MIGRATION_LIST="$(supabase migration list --linked)"
+          printf '%s\n' "$MIGRATION_LIST"
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*`?[0-9]+`?[[:space:]]*\|/ {
+            local_version=$1; remote_version=$2
+            gsub(/[`[:space:]]/, "", local_version)
+            gsub(/[`[:space:]]/, "", remote_version)
+            if (local_version != "" && remote_version == "") print local_version
+          }' | sort)"
+          test -z "$PENDING" || { echo "::error::Unexpected pending migrations remain: $PENDING"; exit 1; }
