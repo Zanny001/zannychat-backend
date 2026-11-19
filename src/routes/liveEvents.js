@@ -204,8 +204,9 @@ router.post('/events/:eventId/cancel', async (req,res) => {
 
 router.post('/events/:eventId/invites', async (req,res) => {
   const {eventId}=req.params;
-  const userIds=Array.isArray(req.body?.userIds) ? [...new Set(req.body.userIds)] : [];
-  if (!isUuid(eventId) || !userIds.length || userIds.length>25 || userIds.some((id)=>!isUuid(id))) {
+  const rawUserIds=Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+  const userIds=[...new Set(rawUserIds)];
+  if (!isUuid(eventId) || !rawUserIds.length || rawUserIds.length>25 || !userIds.length || userIds.some((id)=>!isUuid(id))) {
     return res.status(400).json({error:'Choose between one and 25 valid invitees'});
   }
   try {
@@ -251,7 +252,12 @@ router.get('/events/invitations', async (req,res) => {
     const {data:profiles,error:profileError}=creatorIds.length ? await supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id',creatorIds) : {data:[],error:null};
     if (profileError) throw profileError;
     const profileById=new Map((profiles||[]).map((row)=>[row.id,row]));
-    return res.json({invitations:(invites||[]).filter((row)=>byId.has(row.event_id)).map((invite)=>{
+    const visibleInvites=[];
+    for (const invite of invites||[]) {
+      const event=byId.get(invite.event_id);
+      if (event && await canView(event,req.user.id)) visibleInvites.push(invite);
+    }
+    return res.json({invitations:visibleInvites.map((invite)=>{
       const event=byId.get(invite.event_id), creator=profileById.get(event.creator_id);
       return {...shapeEvent(event,0,'invited'),invitedAt:invite.created_at,creator:{id:event.creator_id,name:creator?.name||'LIVE Creator',avatarColor:creator?.avatar_color||null}};
     })});
@@ -267,6 +273,9 @@ router.patch('/events/:eventId/invitation', async (req,res) => {
     return res.status(400).json({error:'Invalid LIVE Event invitation response'});
   }
   try {
+    const {data:event,error:eventError}=await supabaseAdmin.from('live_events').select('id,creator_id,visibility,status,starts_at').eq('id',eventId).maybeSingle();
+    if (eventError) throw eventError;
+    if (!event || !await canView(event,req.user.id)) return res.status(404).json({error:'LIVE Event invitation not found'});
     const {data,error}=await supabaseAdmin.from('live_event_invites').update({status,updated_at:new Date().toISOString()})
       .eq('event_id',eventId).eq('invited_user_id',req.user.id).eq('status','pending')
       .select('event_id,status').maybeSingle();
