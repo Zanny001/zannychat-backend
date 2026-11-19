@@ -60,6 +60,75 @@ GRANT ALL ON public.live_event_attendees TO service_role;
 GRANT ALL ON public.live_event_invites TO service_role;
 
 
+
+CREATE TABLE IF NOT EXISTS public.live_event_reminder_deliveries (
+  event_id uuid NOT NULL REFERENCES public.live_events(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','sent','failed')),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  claimed_at timestamptz,
+  sent_at timestamptz,
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (event_id,user_id)
+);
+
+CREATE INDEX IF NOT EXISTS live_event_reminders_pending_idx
+  ON public.live_event_reminder_deliveries(status,claimed_at,created_at)
+  WHERE status IN ('pending','failed','sending');
+
+ALTER TABLE public.live_event_reminder_deliveries ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.live_event_reminder_deliveries FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.live_event_reminder_deliveries TO service_role;
+
+CREATE OR REPLACE FUNCTION public.claim_live_event_reminders(p_limit integer DEFAULT 50)
+RETURNS TABLE(event_id uuid,user_id uuid,event_title text,starts_at timestamptz)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+BEGIN
+  INSERT INTO public.live_event_reminder_deliveries(event_id,user_id)
+  SELECT e.id, recipients.user_id
+  FROM public.live_events e
+  JOIN (
+    SELECT event_id,user_id FROM public.live_event_attendees WHERE status='going'
+    UNION
+    SELECT event_id,invited_user_id AS user_id FROM public.live_event_invites WHERE status='accepted'
+  ) recipients ON recipients.event_id=e.id
+  WHERE e.status='scheduled' AND e.starts_at>now()
+    AND e.starts_at<=now()+interval '15 minutes'
+  ON CONFLICT(event_id,user_id) DO NOTHING;
+
+  RETURN QUERY
+  WITH candidates AS (
+    SELECT d.event_id,d.user_id
+    FROM public.live_event_reminder_deliveries d
+    JOIN public.live_events e ON e.id=d.event_id
+    WHERE e.status='scheduled' AND e.starts_at>now()
+      AND (
+        d.status IN ('pending','failed')
+        OR (d.status='sending' AND d.claimed_at<now()-interval '10 minutes')
+      )
+    ORDER BY e.starts_at,d.created_at
+    LIMIT LEAST(GREATEST(COALESCE(p_limit,50),1),100)
+    FOR UPDATE OF d SKIP LOCKED
+  ), claimed AS (
+    UPDATE public.live_event_reminder_deliveries d
+    SET status='sending',attempts=d.attempts+1,claimed_at=now(),updated_at=now(),last_error=NULL
+    FROM candidates c
+    WHERE d.event_id=c.event_id AND d.user_id=c.user_id
+    RETURNING d.event_id,d.user_id
+  )
+  SELECT c.event_id,c.user_id,e.title,e.starts_at
+  FROM claimed c JOIN public.live_events e ON e.id=c.event_id;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.claim_live_event_reminders(integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_live_event_reminders(integer) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.create_live_event(
   p_creator_id uuid,
   p_title text,
