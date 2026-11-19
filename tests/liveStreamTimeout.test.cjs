@@ -31,12 +31,14 @@ test('hard timeout ends connected creators too while preserving stale-heartbeat 
   assert.match(heartbeatMigration, /CREATE OR REPLACE FUNCTION public\.cleanup_stale_media_participants/);
 });
 
-test('timeout warning claim is atomic and service-role-only', () => {
+test('timeout warning claim and retry release are service-role-only', () => {
   assert.match(migration, /UPDATE public\.live_streams AS s/);
   assert.match(migration, /SET timeout_warning_sent_at = now\(\)/);
   assert.match(migration, /timeout_warning_sent_at IS NULL/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) TO service_role/);
+  assert.match(migration, /release_live_stream_timeout_warning/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.release_live_stream_timeout_warning\(uuid\) TO service_role/);
 });
 
 test('warning worker remains quiet until the explicitly approved migration exists', async () => {
@@ -47,25 +49,30 @@ test('warning worker remains quiet until the explicitly approved migration exist
   assert.deepEqual(summary, { claimed: 0, sent: 0, failed: 0, migrationPending: true });
 });
 
-test('warning worker sends one creator-only push per atomically claimed stream', async () => {
-  const calls = [];
+test('warning worker releases failed pushes for retry and keeps successful claims', async () => {
+  const rpcCalls = [];
+  let attempt = 0;
   const summary = await worker.runLiveStreamTimeoutWarnings({
-    admin: { rpc: async (name) => ({
-      data: name === 'claim_live_stream_timeout_warnings'
-        ? [{ recipient_id: 'creator-1', broadcast_id: 'stream-1', broadcast_title: 'Test LIVE' }]
-        : [],
-      error: null,
-    }) },
-    send: async (userId, notification) => {
-      calls.push({ userId, notification });
+    admin: { rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      if (name === 'claim_live_stream_timeout_warnings') {
+        return { data: [
+          { recipient_id: 'creator-1', broadcast_id: 'stream-failed', broadcast_title: 'Retry LIVE' },
+          { recipient_id: 'creator-2', broadcast_id: 'stream-sent', broadcast_title: 'Sent LIVE' },
+        ], error: null };
+      }
+      return { data: true, error: null };
+    } },
+    send: async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error('provider unavailable');
       return { sent: 1 };
     },
   });
-  assert.deepEqual(summary, { claimed: 1, sent: 1, failed: 0 });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].userId, 'creator-1');
-  assert.equal(calls[0].notification.data.type, 'live_stream_timeout_warning');
-  assert.equal(calls[0].notification.data.streamId, 'stream-1');
+  assert.deepEqual(summary, { claimed: 2, sent: 1, failed: 1 });
+  assert.deepEqual(rpcCalls.filter((call) => call.name === 'release_live_stream_timeout_warning'), [
+    { name: 'release_live_stream_timeout_warning', args: { p_broadcast_id: 'stream-failed' } },
+  ]);
 });
 
 test('backend starts the warning worker alongside stale participant and replay cleanup', () => {
