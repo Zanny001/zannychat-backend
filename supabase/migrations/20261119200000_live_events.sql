@@ -87,7 +87,7 @@ RETURNS TABLE(event_id uuid,user_id uuid,event_title text,starts_at timestamptz)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 BEGIN
   INSERT INTO public.live_event_reminder_deliveries(event_id,user_id)
   SELECT e.id, recipients.user_id
@@ -124,7 +124,7 @@ BEGIN
   SELECT c.event_id,c.user_id,e.title,e.starts_at
   FROM claimed c JOIN public.live_events e ON e.id=c.event_id;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.claim_live_event_reminders(integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_live_event_reminders(integer) TO service_role;
