@@ -27,7 +27,7 @@ test('LIVE preferences API only reads and writes the authenticated account', () 
   assert.ok(handlers.includes("user_id: req.user.id"));
   assert.ok(handlers.includes("onConflict: 'user_id'"));
   assert.ok(handlers.includes("experience_mode: experienceMode"));
-  assert.ok(handlers.includes("visibility,category,allow_guests"));
+  assert.ok(handlers.includes("visibility,category,allow_guests,updated_at"));
 });
 
 test('LIVE preferences API rejects invalid formats, audiences, categories and guest values', () => {
