@@ -332,9 +332,13 @@ router.post('/:streamId/replays/start', async (req, res) => {
 
     const { data: reserved, error: quotaError } = await supabaseAdmin.rpc('reserve_live_replay_quota', { p_replay_id: replayId });
     if (quotaError) {
-      await supabaseAdmin.rpc('finalize_live_replay_quota', {
-        p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
-      }).catch(() => {});
+      try {
+        await supabaseAdmin.rpc('finalize_live_replay_quota', {
+          p_replay_id: replayId, p_actual_seconds: 0, p_success: false,
+        });
+      } catch {
+        // Best-effort quota cleanup must not mask the original reservation error.
+      }
       await supabaseAdmin.from('live_stream_replays').delete().eq('id', replayId);
       throw quotaError;
     }
@@ -827,7 +831,11 @@ router.post('/', async (req, res) => {
         .update({ experience_mode: experienceMode, category })
         .eq('id', id).select('*').single();
       if (themeError) {
-        await supabaseAdmin.rpc('end_live_stream', { p_stream_id: id, p_creator_id: req.user.id }).catch(() => {});
+        try {
+          await supabaseAdmin.rpc('end_live_stream', { p_stream_id: id, p_creator_id: req.user.id });
+        } catch {
+          // Best-effort rollback must not mask the original themed-stream update error.
+        }
         await deleteLiveKitRoom(roomName).catch(() => {});
         throw themeError;
       }
