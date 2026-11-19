@@ -319,4 +319,31 @@ CREATE TRIGGER live_event_reschedule_reminders_reset
   AFTER UPDATE OF starts_at ON public.live_events
   FOR EACH ROW EXECUTE FUNCTION public.reset_live_event_reminders_after_reschedule();
 
+CREATE OR REPLACE FUNCTION public.guard_live_event_capacity_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+DECLARE
+  v_going integer;
+BEGIN
+  SELECT count(*)::integer INTO v_going
+    FROM public.live_event_attendees
+    WHERE event_id=OLD.id AND status='going';
+  IF NEW.max_attendees < v_going THEN
+    RAISE EXCEPTION 'Event capacity cannot be lower than the current RSVP count'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.guard_live_event_capacity_update() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS live_event_capacity_guard ON public.live_events;
+CREATE TRIGGER live_event_capacity_guard
+  BEFORE UPDATE OF max_attendees ON public.live_events
+  FOR EACH ROW EXECUTE FUNCTION public.guard_live_event_capacity_update();
+
 COMMIT;
