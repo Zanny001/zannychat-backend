@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS public.live_events (
     CHECK (status IN ('scheduled','cancelled','live','ended')),
   stream_id uuid REFERENCES public.live_streams(id) ON DELETE SET NULL,
   max_attendees integer NOT NULL DEFAULT 500 CHECK (max_attendees BETWEEN 1 AND 500),
-  reminder_sent_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
