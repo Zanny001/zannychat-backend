@@ -55,6 +55,7 @@
     "test:profile-status-call-history": "node --test tests/profileStatusCallHistoryMigration.test.cjs",
     "test:group-calls": "node --test tests/groupCalls.test.cjs tests/callConferenceUpgrade.test.cjs tests/callConferenceMediaModeMigration.test.cjs tests/mediaParticipantHeartbeatCleanup.test.cjs tests/mediaHeartbeatOptInMigration.test.cjs",
     "test:live-streams": "node --test tests/liveStreams.test.cjs tests/liveStageManagement.test.cjs tests/liveCreatorImpactMigration.test.cjs tests/liveCreatorImpact.test.cjs tests/liveCreatorImpactHistoryBackfill.test.cjs tests/liveCreatorImpactUpsertAlias.test.cjs tests/livekitRoomDeletion.test.cjs tests/liveCreatorPreferences.test.cjs",
+    "test:live-events": "node --test tests/liveEvents.test.cjs",
     "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs",
     "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
     "test:discovery-feed": "node --test tests/discoveryFeedRoute.test.cjs",
