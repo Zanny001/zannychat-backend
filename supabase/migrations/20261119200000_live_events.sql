@@ -104,4 +104,55 @@ $$;
 REVOKE ALL ON FUNCTION public.rsvp_live_event(uuid,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.rsvp_live_event(uuid,uuid) TO service_role;
 
+
+CREATE OR REPLACE FUNCTION public.attach_live_event_stream(p_event_id uuid, p_stream_id uuid, p_creator_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+DECLARE
+  v_event public.live_events%ROWTYPE;
+  v_stream public.live_streams%ROWTYPE;
+BEGIN
+  SELECT * INTO v_event FROM public.live_events WHERE id=p_event_id FOR UPDATE;
+  IF NOT FOUND OR v_event.creator_id <> p_creator_id THEN RETURN false; END IF;
+  SELECT * INTO v_stream FROM public.live_streams WHERE id=p_stream_id FOR UPDATE;
+  IF NOT FOUND OR v_stream.creator_id <> p_creator_id OR v_stream.status <> 'live' THEN RETURN false; END IF;
+  IF v_event.stream_id = p_stream_id AND v_event.status = 'live' THEN RETURN true; END IF;
+  IF v_event.status <> 'scheduled' OR v_event.stream_id IS NOT NULL
+    OR v_event.starts_at > now() + interval '60 minutes'
+    OR v_event.starts_at + make_interval(mins => v_event.duration_minutes) < now() THEN
+    RETURN false;
+  END IF;
+  UPDATE public.live_events
+    SET stream_id=p_stream_id,status='live',updated_at=now()
+    WHERE id=p_event_id;
+  RETURN true;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.attach_live_event_stream(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.attach_live_event_stream(uuid,uuid,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.sync_live_event_after_stream_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+BEGIN
+  IF NEW.status = 'ended' AND OLD.status IS DISTINCT FROM NEW.status THEN
+    UPDATE public.live_events SET status='ended',updated_at=now()
+      WHERE stream_id=NEW.id AND status='live';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS live_event_stream_end_sync ON public.live_streams;
+CREATE TRIGGER live_event_stream_end_sync
+  AFTER UPDATE OF status ON public.live_streams
+  FOR EACH ROW EXECUTE FUNCTION public.sync_live_event_after_stream_update();
+
 COMMIT;
