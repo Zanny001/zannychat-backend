@@ -23,6 +23,7 @@ test('LIVE Event scheduling validates bounded dates, durations, capacity and exa
   assert.ok(route.includes("rpc('create_live_event'"));
   assert.ok(migration.includes('FUNCTION public.create_live_event('));
   assert.ok(route.includes("router.patch('/events/:eventId'"));
+  assert.ok(route.includes("const UPDATE_KEYS = new Set(['title','description','category','startsAt','durationMinutes','maxAttendees'])"));
   assert.ok(route.includes("router.post('/events/:eventId/cancel'"));
 });
 
