@@ -288,6 +288,48 @@ router.patch('/events/:eventId/invitation', async (req,res) => {
   }
 });
 
+
+router.get('/events/:eventId/invitees', async (req,res) => {
+  const {eventId}=req.params;
+  if (!isUuid(eventId)) return res.status(400).json({error:'Invalid LIVE Event'});
+  try {
+    const {data:event,error:eventError}=await supabaseAdmin.from('live_events').select('id,creator_id,visibility,status').eq('id',eventId).maybeSingle();
+    if (eventError) throw eventError;
+    if (!event) return res.status(404).json({error:'LIVE Event not found'});
+    if (event.creator_id!==req.user.id) return res.status(403).json({error:'Only the creator can load Event invitees'});
+    if (event.visibility!=='private') return res.status(409).json({error:'Only private Events have invitees'});
+    const {data,error}=await supabaseAdmin.from('live_event_invites').select('invited_user_id')
+      .eq('event_id',eventId).eq('status','accepted').limit(25);
+    if (error) throw error;
+    const inviteeIds=[];
+    for (const row of data||[]) {
+      if (!await blockedBetween(req.user.id,row.invited_user_id)) inviteeIds.push(row.invited_user_id);
+    }
+    return res.json({inviteeIds});
+  } catch(error) {
+    console.error('[live-events] invitees load failed:',error?.message||error);
+    return res.status(503).json({error:'Could not load accepted Event invitees'});
+  }
+});
+
+router.post('/events/:eventId/attach-stream', async (req,res) => {
+  const {eventId}=req.params, streamId=req.body?.streamId;
+  if (!isUuid(eventId)||!isUuid(streamId)||Object.keys(req.body||{}).some((key)=>key!=='streamId')) {
+    return res.status(400).json({error:'Invalid LIVE Event stream reference'});
+  }
+  try {
+    const {data,error}=await supabaseAdmin.rpc('attach_live_event_stream',{
+      p_event_id:eventId,p_stream_id:streamId,p_creator_id:req.user.id,
+    });
+    if (error) throw error;
+    if (data!==true) return res.status(409).json({error:'This Event cannot be connected to that LIVE stream'});
+    return res.json({attached:true,eventId,streamId});
+  } catch(error) {
+    console.error('[live-events] stream attachment failed:',error?.message||error);
+    return res.status(503).json({error:'Could not connect LIVE Event to the broadcast'});
+  }
+});
+
 router.post('/events/:eventId/rsvp', async (req,res) => {
   const {eventId}=req.params;
   if (!isUuid(eventId)) return res.status(400).json({error:'Invalid LIVE Event'});
