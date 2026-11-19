@@ -1,0 +1,49 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const route = fs.readFileSync(path.join(__dirname,'../src/routes/liveEvents.js'),'utf8');
+const migration = fs.readFileSync(path.join(__dirname,'../supabase/migrations/20261119200000_live_events.sql'),'utf8');
+const index = fs.readFileSync(path.join(__dirname,'../src/index.js'),'utf8');
+
+test('LIVE Events are mounted behind authenticated routes and per-user rate limits',()=>{
+  assert.ok(route.includes('router.use(requireAuth'));
+  assert.ok(route.includes("max: 45"));
+  assert.ok(route.includes("max: 5"));
+  assert.ok(index.includes("app.use('/live', liveEventsRouter)"));
+});
+
+test('LIVE Event scheduling validates bounded dates, durations, capacity and exact writable fields',()=>{
+  assert.ok(route.includes('delta < 10 * 60 * 1000'));
+  assert.ok(route.includes('delta > 90 * 24 * 60 * 60 * 1000'));
+  assert.ok(route.includes('duration < 15 || duration > 240'));
+  assert.ok(route.includes('capacity < 1 || capacity > 500'));
+  assert.ok(route.includes('Object.keys(body).some((key) => !keys.has(key))'));
+  assert.ok(route.includes("router.patch('/events/:eventId'"));
+  assert.ok(route.includes("router.post('/events/:eventId/cancel'"));
+});
+
+test('LIVE Event audiences respect bidirectional blocks and follower-only visibility',()=>{
+  assert.ok(route.includes('async function blockedBetween(a, b)'));
+  assert.ok(route.includes("eq('blocker_id',a).eq('blocked_id',b)"));
+  assert.ok(route.includes("eq('blocker_id',b).eq('blocked_id',a)"));
+  assert.ok(route.includes("event.visibility === 'followers'"));
+  assert.ok(route.includes("eq('follower_id',viewerId)"));
+});
+
+test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',()=>{
+  assert.ok(route.includes("rpc('rsvp_live_event'"));
+  assert.ok(migration.includes('SELECT * INTO v_event FROM public.live_events WHERE id = p_event_id FOR UPDATE'));
+  assert.ok(migration.includes('v_count >= v_event.max_attendees'));
+  assert.ok(migration.includes('PRIMARY KEY (event_id,user_id)'));
+  assert.ok(migration.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(migration.includes('REVOKE ALL ON public.live_event_attendees FROM PUBLIC, anon, authenticated'));
+  assert.ok(migration.includes('GRANT EXECUTE ON FUNCTION public.rsvp_live_event(uuid,uuid) TO service_role'));
+});
+
+test('LIVE Event records do not expose attendee identities in discovery responses',()=>{
+  assert.ok(route.includes("select('event_id').in('event_id',ids).eq('status','going')"));
+  assert.ok(!route.includes("select('event_id,user_id')"));
+  assert.ok(route.includes('attendeeCount'));
+});
