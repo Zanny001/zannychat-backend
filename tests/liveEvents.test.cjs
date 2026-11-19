@@ -21,6 +21,9 @@ test('LIVE Event scheduling validates bounded dates, durations, capacity and exa
   assert.ok(route.includes('capacity < 1 || capacity > 500'));
   assert.ok(route.includes('Object.keys(body).some((key) => !keys.has(key))'));
   assert.ok(route.includes("rpc('create_live_event'"));
+  assert.ok(route.includes("values.visibility==='private' && inviteeIds.length===0"));
+  assert.ok(route.includes("values.visibility!=='private' && inviteeIds.length>0"));
+  assert.ok(route.includes("from('live_event_invites').insert(rows)"));
   assert.ok(migration.includes('FUNCTION public.create_live_event('));
   assert.ok(route.includes("router.patch('/events/:eventId'"));
   assert.ok(route.includes("const UPDATE_KEYS = new Set(['title','description','category','startsAt','durationMinutes','maxAttendees'])"));
