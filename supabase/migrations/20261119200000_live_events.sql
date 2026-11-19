@@ -60,6 +60,43 @@ GRANT ALL ON public.live_events TO service_role;
 GRANT ALL ON public.live_event_attendees TO service_role;
 GRANT ALL ON public.live_event_invites TO service_role;
 
+
+CREATE OR REPLACE FUNCTION public.create_live_event(
+  p_creator_id uuid,
+  p_title text,
+  p_description text,
+  p_category text,
+  p_visibility text,
+  p_starts_at timestamptz,
+  p_duration_minutes integer,
+  p_max_attendees integer
+)
+RETURNS public.live_events
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+DECLARE
+  v_event public.live_events%ROWTYPE;
+  v_count integer;
+BEGIN
+  PERFORM 1 FROM auth.users WHERE id=p_creator_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  SELECT count(*)::integer INTO v_count FROM public.live_events
+    WHERE creator_id=p_creator_id AND status='scheduled' AND starts_at>now();
+  IF v_count>=5 THEN RETURN NULL; END IF;
+  INSERT INTO public.live_events(
+    creator_id,title,description,category,visibility,starts_at,duration_minutes,max_attendees
+  ) VALUES (
+    p_creator_id,p_title,p_description,p_category,p_visibility,p_starts_at,p_duration_minutes,p_max_attendees
+  ) RETURNING * INTO v_event;
+  RETURN v_event;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.create_live_event(uuid,text,text,text,text,timestamptz,integer,integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_live_event(uuid,text,text,text,text,timestamptz,integer,integer) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.rsvp_live_event(p_event_id uuid, p_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
