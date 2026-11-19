@@ -7,6 +7,13 @@ const LIVE_STREAM_WARNING_SECONDS = 10 * 60;
 async function runLiveStreamTimeoutWarnings({ admin = supabaseAdmin, send = sendPushToUser } = {}) {
   if (!admin) return { claimed: 0, sent: 0, failed: 0 };
   const { data, error } = await admin.rpc('claim_live_stream_timeout_warnings');
+  // The migration is deliberately applied only after operator approval. During
+  // the short code-first rollout window, keep this optional worker quiet and
+  // retry on its next tick once PostgREST exposes the approved RPC.
+  if (error && (error.code === 'PGRST202' || error.code === '42883'
+      || /claim_live_stream_timeout_warnings.*(not found|does not exist)/i.test(error.message || ''))) {
+    return { claimed: 0, sent: 0, failed: 0, migrationPending: true };
+  }
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
   let sent = 0;

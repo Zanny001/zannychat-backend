@@ -39,6 +39,14 @@ test('timeout warning claim is atomic and service-role-only', () => {
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) TO service_role/);
 });
 
+test('warning worker remains quiet until the explicitly approved migration exists', async () => {
+  const summary = await worker.runLiveStreamTimeoutWarnings({
+    admin: { rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'claim_live_stream_timeout_warnings not found' } }) },
+    send: async () => { throw new Error('must not send before RPC is available'); },
+  });
+  assert.deepEqual(summary, { claimed: 0, sent: 0, failed: 0, migrationPending: true });
+});
+
 test('warning worker sends one creator-only push per atomically claimed stream', async () => {
   const calls = [];
   const summary = await worker.runLiveStreamTimeoutWarnings({
