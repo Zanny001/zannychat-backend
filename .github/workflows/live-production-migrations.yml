@@ -15,6 +15,11 @@ jobs:
     name: Preview pending production migrations (no changes)
     runs-on: ubuntu-latest
     environment: production
+    env:
+      # Supabase CLI commands in every step need the access token.
+      # Keep credentials at job scope so migration list and db push inherit them.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - name: Check out backend repository
         uses: actions/checkout@v4
@@ -24,14 +29,12 @@ jobs:
         with:
           version: v2.stable
 
-      - name: Link production project
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      - name: Validate credentials and link production project
         run: |
           set -euo pipefail
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::Missing SUPABASE_ACCESS_TOKEN repository/environment secret"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::Missing SUPABASE_DB_PASSWORD repository/environment secret"; exit 1; }
+          supabase --version
           supabase link --project-ref vithpppgyjmazxvogvno --password "$SUPABASE_DB_PASSWORD"
 
       - name: Show migration history and dry-run plan
