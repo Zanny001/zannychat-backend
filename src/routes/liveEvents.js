@@ -147,14 +147,18 @@ router.post('/events', makeLimiter({ windowMs: 60 * 60 * 1000, max: 5, error: 'E
   const values = validateFields(req.body);
   if (!values) return res.status(400).json({error:'Check the title, category, audience, schedule and capacity'});
   try {
-    const { count,error:countError } = await supabaseAdmin.from('live_events')
-      .select('id',{count:'exact',head:true}).eq('creator_id',req.user.id).eq('status','scheduled')
-      .gt('starts_at',new Date().toISOString());
-    if (countError) throw countError;
-    if ((count||0)>=5) return res.status(429).json({error:'You can have up to five upcoming LIVE Events'});
-    const { data,error } = await supabaseAdmin.from('live_events')
-      .insert({creator_id:req.user.id,...values}).select('*').single();
+    const { data,error } = await supabaseAdmin.rpc('create_live_event',{
+      p_creator_id:req.user.id,
+      p_title:values.title,
+      p_description:values.description,
+      p_category:values.category,
+      p_visibility:values.visibility,
+      p_starts_at:values.starts_at,
+      p_duration_minutes:values.duration_minutes,
+      p_max_attendees:values.max_attendees,
+    });
     if (error) throw error;
+    if (!data) return res.status(429).json({error:'You can have up to five upcoming LIVE Events'});
     return res.status(201).json({event:shapeEvent(data)});
   } catch(error) {
     console.error('[live-events] create failed:',error?.message||error);
