@@ -327,10 +327,12 @@ router.post('/events/:eventId/attach-stream', async (req,res) => {
     });
     if (error) throw error;
     if (data!==true) return res.status(409).json({error:'This Event cannot be connected to that LIVE stream'});
-    const [{data:event},{data:attendees}] = await Promise.all([
+    const [eventResult,attendeeResult] = await Promise.all([
       supabaseAdmin.from('live_events').select('title').eq('id',eventId).maybeSingle(),
       supabaseAdmin.from('live_event_attendees').select('user_id').eq('event_id',eventId).eq('status','going'),
     ]);
+    if (eventResult.error || attendeeResult.error) throw eventResult.error || attendeeResult.error;
+    const event=eventResult.data, attendees=attendeeResult.data;
     await Promise.allSettled((attendees||[]).filter((row)=>row.user_id!==req.user.id).map(async(row)=>{
       if (await blockedBetween(req.user.id,row.user_id)) return;
       await sendPushToUser(row.user_id,{
