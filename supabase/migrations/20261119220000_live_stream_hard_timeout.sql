@@ -29,6 +29,30 @@ $function$;
 REVOKE ALL ON FUNCTION public.claim_live_stream_timeout_warnings() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_live_stream_timeout_warnings() TO service_role;
 
+-- Failed push delivery releases the claim so the worker can retry. A
+-- successfully delivered warning remains claimed and cannot be duplicated.
+CREATE OR REPLACE FUNCTION public.release_live_stream_timeout_warning(p_broadcast_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_released integer := 0;
+BEGIN
+  UPDATE public.live_streams
+     SET timeout_warning_sent_at = NULL
+   WHERE id = p_broadcast_id
+     AND status = 'live'
+     AND timeout_warning_sent_at IS NOT NULL;
+  GET DIAGNOSTICS v_released = ROW_COUNT;
+  RETURN v_released > 0;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.release_live_stream_timeout_warning(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.release_live_stream_timeout_warning(uuid) TO service_role;
+
 -- The existing stale-heartbeat behavior remains unchanged. The additional
 -- started_at predicate is the hard maximum-duration backstop.
 CREATE OR REPLACE FUNCTION public.cleanup_stale_media_participants(p_stale_before timestamptz)
