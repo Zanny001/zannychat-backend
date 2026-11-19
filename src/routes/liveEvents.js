@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { sendPushToUser } = require('../config/pushClient');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 45, error: 'LIVE Events are rate-limited.' }));
@@ -77,6 +78,12 @@ async function canView(event, viewerId) {
   if (event.visibility === 'followers') {
     const { data,error } = await supabaseAdmin.from('live_creator_follows')
       .select('creator_id').eq('creator_id',event.creator_id).eq('follower_id',viewerId).maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+  if (event.visibility === 'private') {
+    const { data,error } = await supabaseAdmin.from('live_event_invites')
+      .select('event_id').eq('event_id',event.id).eq('invited_user_id',viewerId).in('status',['pending','accepted']).maybeSingle();
     if (error) throw error;
     return Boolean(data);
   }
@@ -191,6 +198,84 @@ router.post('/events/:eventId/cancel', async (req,res) => {
   } catch(error) {
     console.error('[live-events] cancel failed:',error?.message||error);
     return res.status(503).json({error:'Could not cancel LIVE Event'});
+  }
+});
+
+
+router.post('/events/:eventId/invites', async (req,res) => {
+  const {eventId}=req.params;
+  const userIds=Array.isArray(req.body?.userIds) ? [...new Set(req.body.userIds)] : [];
+  if (!isUuid(eventId) || !userIds.length || userIds.length>25 || userIds.some((id)=>!isUuid(id))) {
+    return res.status(400).json({error:'Choose between one and 25 valid invitees'});
+  }
+  try {
+    const {data:event,error:readError}=await supabaseAdmin.from('live_events').select('id,creator_id,visibility,status,starts_at,title')
+      .eq('id',eventId).maybeSingle();
+    if (readError) throw readError;
+    if (!event) return res.status(404).json({error:'LIVE Event not found'});
+    if (event.creator_id!==req.user.id) return res.status(403).json({error:'Only the creator can invite guests'});
+    if (event.visibility!=='private') return res.status(409).json({error:'Invitations are only used for private LIVE Events'});
+    if (event.status!=='scheduled' || Date.parse(event.starts_at)<=Date.now()) return res.status(409).json({error:'This Event is no longer accepting invitations'});
+    const invitees=userIds.filter((id)=>id!==req.user.id);
+    for (const id of invitees) {
+      if (await blockedBetween(req.user.id,id)) return res.status(409).json({error:'An invitee cannot be invited because of a block relationship'});
+    }
+    const rows=invitees.map((invited_user_id)=>({event_id:eventId,invited_user_id,invited_by:req.user.id,status:'pending',updated_at:new Date().toISOString()}));
+    if (!rows.length) return res.status(400).json({error:'Choose at least one other account'});
+    const {error}=await supabaseAdmin.from('live_event_invites').upsert(rows,{onConflict:'event_id,invited_user_id'});
+    if (error) throw error;
+    await Promise.allSettled(invitees.map((userId)=>sendPushToUser(userId,{
+      title:'Private LIVE Event invitation',body:'You have been invited to '+event.title,
+      data:{type:'live_event_invitation',eventId,creatorId:req.user.id},
+    })));
+    return res.status(200).json({invitedCount:invitees.length});
+  } catch(error) {
+    console.error('[live-events] invite failed:',error?.message||error);
+    return res.status(503).json({error:'Could not send LIVE Event invitations'});
+  }
+});
+
+router.get('/events/invitations', async (req,res) => {
+  try {
+    const {data:invites,error}=await supabaseAdmin.from('live_event_invites')
+      .select('event_id,invited_by,status,created_at').eq('invited_user_id',req.user.id).eq('status','pending')
+      .order('created_at',{ascending:false}).limit(50);
+    if (error) throw error;
+    const ids=(invites||[]).map((row)=>row.event_id);
+    const {data:events,error:eventError}=ids.length ? await supabaseAdmin.from('live_events')
+      .select('id,creator_id,title,description,category,visibility,starts_at,duration_minutes,status,max_attendees')
+      .in('id',ids).eq('status','scheduled').gt('starts_at',new Date().toISOString()) : {data:[],error:null};
+    if (eventError) throw eventError;
+    const byId=new Map((events||[]).map((row)=>[row.id,row]));
+    const creatorIds=[...new Set((events||[]).map((row)=>row.creator_id))];
+    const {data:profiles,error:profileError}=creatorIds.length ? await supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id',creatorIds) : {data:[],error:null};
+    if (profileError) throw profileError;
+    const profileById=new Map((profiles||[]).map((row)=>[row.id,row]));
+    return res.json({invitations:(invites||[]).filter((row)=>byId.has(row.event_id)).map((invite)=>{
+      const event=byId.get(invite.event_id), creator=profileById.get(event.creator_id);
+      return {...shapeEvent(event,0,'invited'),invitedAt:invite.created_at,creator:{id:event.creator_id,name:creator?.name||'LIVE Creator',avatarColor:creator?.avatar_color||null}};
+    })});
+  } catch(error) {
+    console.error('[live-events] invitations load failed:',error?.message||error);
+    return res.status(503).json({error:'Could not load LIVE Event invitations'});
+  }
+});
+
+router.patch('/events/:eventId/invitation', async (req,res) => {
+  const {eventId}=req.params, status=req.body?.status;
+  if (!isUuid(eventId) || !['accepted','declined'].includes(status) || Object.keys(req.body||{}).some((key)=>key!=='status')) {
+    return res.status(400).json({error:'Invalid LIVE Event invitation response'});
+  }
+  try {
+    const {data,error}=await supabaseAdmin.from('live_event_invites').update({status,updated_at:new Date().toISOString()})
+      .eq('event_id',eventId).eq('invited_user_id',req.user.id).eq('status','pending')
+      .select('event_id,status').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({error:'Pending LIVE Event invitation not found'});
+    return res.json({eventId,status:data.status});
+  } catch(error) {
+    console.error('[live-events] invitation response failed:',error?.message||error);
+    return res.status(503).json({error:'Could not respond to LIVE Event invitation'});
   }
 });
 
