@@ -208,6 +208,7 @@ router.patch('/events/:eventId', async (req,res) => {
     if (!data) return res.status(409).json({error:'Event changed while you were editing it'});
     return res.json({event:shapeEvent(data)});
   } catch(error) {
+    if (error?.code==='23514') return res.status(409).json({error:'Capacity cannot be lower than the current RSVP count'});
     console.error('[live-events] update failed:',error?.message||error);
     return res.status(503).json({error:'Could not update LIVE Event'});
   }
