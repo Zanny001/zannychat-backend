@@ -10,6 +10,7 @@ const aiRouter = require('./routes/ai');
 const internalRouter = require('./routes/internal');
 const liveKitEgressWebhookRouter = require('./routes/livekitEgressWebhook');
 const { startLiveReplayWorker } = require('./jobs/liveReplayWorker');
+const { startLiveEventReminderWorker } = require('./jobs/liveEventReminders');
 const linkPreviewRouter = require('./routes/linkPreview');
 const safetyRouter = require('./routes/safety');
 const accountRouter = require('./routes/account');
@@ -20,6 +21,7 @@ const callHistoryRouter = require('./routes/callHistory');
 const liveHistoryRouter = require('./routes/liveHistory');
 const groupCallsRouter = require('./routes/groupCalls');
 const liveStreamsRouter = require('./routes/liveStreams');
+const liveEventsRouter = require('./routes/liveEvents');
 
 // Retry transient call-push failures while the API process is awake. The
 // authenticated /calls/:id/notify route handles immediate delivery; this
@@ -231,6 +233,7 @@ app.use('/discovery', discoveryRouter);
 app.use('/calls/history', callHistoryRouter);
 app.use('/calls', callsRouter);
 app.use('/group-calls', groupCallsRouter);
+app.use('/live', liveEventsRouter);
 app.use('/live', liveStreamsRouter);
 app.use('/live', liveHistoryRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
@@ -267,6 +270,7 @@ if (require.main === module) {
     startCallSessionCleanupWorker();
     startAccountStorageCleanupWorker();
     startLiveReplayWorker();
+    startLiveEventReminderWorker();
   });
 }
 
