@@ -56,6 +56,7 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.ok(route.includes("router.get('/events/:eventId/invitees'"));
   assert.ok(route.includes("router.post('/events/:eventId/attach-stream'"));
   assert.ok(route.includes("type:'live_event_started'"));
+  assert.ok(route.includes('if (!await canView(event,row.user_id)) return;'));
   assert.ok(route.includes('sendPushToUser(row.user_id'));
 });
 
