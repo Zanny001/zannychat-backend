@@ -54,6 +54,8 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.equal((migration.match(/AS \$\$/g)||[]).length,5,'all five PL/pgSQL functions must have valid dollar-quote openers');
   assert.equal((migration.match(/^\$\$;$/gm)||[]).length,5,'all five PL/pgSQL functions must have valid dollar-quote closers');
   assert.ok(migration.includes('FUNCTION public.attach_live_event_stream(p_event_id uuid, p_stream_id uuid, p_creator_id uuid)'));
+  assert.ok(migration.includes('CREATE UNIQUE INDEX IF NOT EXISTS live_events_stream_id_unique_idx'));
+  assert.ok(migration.includes("e.stream_id=p_stream_id AND e.id<>p_event_id"));
   assert.ok(migration.includes("NEW.status = 'ended'"));
   assert.ok(route.includes("router.get('/events/:eventId/invitees'"));
   assert.ok(route.includes("router.post('/events/:eventId/attach-stream'"));
