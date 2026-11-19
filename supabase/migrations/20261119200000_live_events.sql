@@ -116,6 +116,19 @@ BEGIN
         OR EXISTS (SELECT 1 FROM public.live_event_attendees a WHERE a.event_id=d.event_id AND a.user_id=d.user_id AND a.status='going')
         OR EXISTS (SELECT 1 FROM public.live_event_invites i WHERE i.event_id=d.event_id AND i.invited_user_id=d.user_id AND i.status='accepted')
       )
+      AND (
+        e.creator_id=d.user_id
+        OR e.visibility='public'
+        OR (e.visibility='followers' AND EXISTS (
+          SELECT 1 FROM public.live_creator_follows f
+          WHERE f.creator_id=e.creator_id AND f.follower_id=d.user_id
+        ))
+        OR (e.visibility='private' AND EXISTS (
+          SELECT 1 FROM public.live_event_invites i
+          WHERE i.event_id=d.event_id AND i.invited_user_id=d.user_id
+            AND i.status IN ('pending','accepted')
+        ))
+      )
       AND NOT EXISTS (
         SELECT 1 FROM public.blocked_users b
         WHERE (b.blocker_id=e.creator_id AND b.blocked_id=d.user_id)
