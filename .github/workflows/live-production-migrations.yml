@@ -90,7 +90,7 @@ jobs:
           printf '%s\n' "$MIGRATION_LIST"
 
           echo "=== Assert exactly the two approved LIVE migrations are pending ==="
-          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*[0-9]+[[:space:]]*\\|/ {
+          PENDING="$(printf '%s\n' "$MIGRATION_LIST" | awk -F'|' '/^[[:space:]]*[0-9]+[[:space:]]*\|/ {
             local_version=$1
             remote_version=$2
             gsub(/[[:space:]]/, "", local_version)
