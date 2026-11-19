@@ -11,7 +11,7 @@ const CATEGORIES = new Set(['entertainment','social','politics','science','educa
 const VISIBILITIES = new Set(['public','followers','private']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CREATE_KEYS = new Set(['title','description','category','visibility','startsAt','durationMinutes','maxAttendees']);
-const UPDATE_KEYS = new Set(['title','description','category','visibility','startsAt','durationMinutes','maxAttendees']);
+const UPDATE_KEYS = new Set(['title','description','category','startsAt','durationMinutes','maxAttendees']);
 
 function isUuid(value) { return UUID.test(String(value || '')); }
 function parseSchedule(value) {
