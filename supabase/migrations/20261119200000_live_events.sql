@@ -93,6 +93,9 @@ BEGIN
   SELECT e.id, recipients.user_id
   FROM public.live_events e
   JOIN (
+    SELECT e.id AS event_id,e.creator_id AS user_id FROM public.live_events e
+      WHERE e.status='scheduled' AND e.starts_at>now() AND e.starts_at<=now()+interval '15 minutes'
+    UNION
     SELECT a.event_id,a.user_id FROM public.live_event_attendees a WHERE a.status='going'
     UNION
     SELECT i.event_id,i.invited_user_id AS user_id FROM public.live_event_invites i WHERE i.status='accepted'
@@ -109,7 +112,8 @@ BEGIN
     WHERE e.status='scheduled' AND e.starts_at>now()
       AND e.starts_at<=now()+interval '15 minutes'
       AND (
-        EXISTS (SELECT 1 FROM public.live_event_attendees a WHERE a.event_id=d.event_id AND a.user_id=d.user_id AND a.status='going')
+        e.creator_id=d.user_id
+        OR EXISTS (SELECT 1 FROM public.live_event_attendees a WHERE a.event_id=d.event_id AND a.user_id=d.user_id AND a.status='going')
         OR EXISTS (SELECT 1 FROM public.live_event_invites i WHERE i.event_id=d.event_id AND i.invited_user_id=d.user_id AND i.status='accepted')
       )
       AND NOT EXISTS (
