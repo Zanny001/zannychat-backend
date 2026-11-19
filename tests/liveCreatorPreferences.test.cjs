@@ -39,6 +39,8 @@ test('LIVE preferences API rejects invalid formats, audiences, categories and gu
   assert.ok(handlers.includes('LIVE_CATEGORIES.has(category)'));
   assert.ok(handlers.includes("typeof allowGuests !== 'boolean'"));
   assert.ok(handlers.includes('Invalid LIVE creator preferences'));
+  assert.ok(handlers.includes('Object.keys(body).some((key) => !allowedKeys.has(key))'));
+  assert.ok(handlers.includes('updated_at: new Date().toISOString()'));
 });
 
 test('LIVE preferences production workflow is manually confirmed and narrowly scoped', () => {
