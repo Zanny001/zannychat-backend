@@ -23,6 +23,9 @@ test('LIVE Event reminder claims are due-window scoped, idempotent and safe unde
   assert.ok(migration.includes("WHERE status='accepted'"));
   assert.ok(migration.includes('ON CONFLICT(event_id,user_id) DO NOTHING'));
   assert.ok(migration.includes('FOR UPDATE OF d SKIP LOCKED'));
+  assert.ok(migration.includes('b.blocker_id=e.creator_id AND b.blocked_id=d.user_id'));
+  assert.ok(migration.includes('b.blocker_id=d.user_id AND b.blocked_id=e.creator_id'));
+  assert.ok(migration.includes("e.starts_at<=now()+interval '15 minutes'"));
   assert.ok(migration.includes("d.status='sending' AND d.claimed_at<now()-interval '10 minutes'"));
   assert.ok(migration.includes('GRANT EXECUTE ON FUNCTION public.claim_live_event_reminders(integer) TO service_role'));
 });
