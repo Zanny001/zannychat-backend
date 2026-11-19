@@ -37,6 +37,12 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.ok(migration.includes('SELECT * INTO v_event FROM public.live_events WHERE id = p_event_id FOR UPDATE'));
   assert.ok(migration.includes('v_count >= v_event.max_attendees'));
   assert.ok(migration.includes('PRIMARY KEY (event_id,user_id)'));
+  assert.ok(migration.includes('public.live_event_invites'));
+  assert.ok(migration.includes('PRIMARY KEY (event_id,invited_user_id)'));
+  assert.ok(route.includes("router.post('/events/:eventId/invites'"));
+  assert.ok(route.includes("router.get('/events/invitations'"));
+  assert.ok(route.includes("router.patch('/events/:eventId/invitation'"));
+  assert.ok(route.includes("sendPushToUser(userId"));
   assert.ok(migration.includes('ENABLE ROW LEVEL SECURITY'));
   assert.ok(migration.includes('REVOKE ALL ON public.live_event_attendees FROM PUBLIC, anon, authenticated'));
   assert.ok(migration.includes('GRANT EXECUTE ON FUNCTION public.rsvp_live_event(uuid,uuid) TO service_role'));
