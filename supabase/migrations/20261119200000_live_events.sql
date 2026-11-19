@@ -75,7 +75,7 @@ RETURNS public.live_events
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $$
 DECLARE
   v_event public.live_events%ROWTYPE;
   v_count integer;
@@ -92,7 +92,7 @@ BEGIN
   ) RETURNING * INTO v_event;
   RETURN v_event;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.create_live_event(uuid,text,text,text,text,timestamptz,integer,integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_live_event(uuid,text,text,text,text,timestamptz,integer,integer) TO service_role;
@@ -187,6 +187,8 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.sync_live_event_after_stream_update() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS live_event_stream_end_sync ON public.live_streams;
 CREATE TRIGGER live_event_stream_end_sync
