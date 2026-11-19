@@ -22,7 +22,7 @@ test('LIVE Event scheduling validates bounded dates, durations, capacity and exa
   assert.ok(route.includes('Object.keys(body).some((key) => !keys.has(key))'));
   assert.ok(route.includes("rpc('create_live_event'"));
   assert.ok(route.includes("values.visibility==='private' && inviteeIds.length===0"));
-  assert.ok(route.includes("'inviteeIds']"));
+  assert.ok(route.includes("'maxAttendees','inviteeIds'"));
   assert.ok(route.includes("Object.hasOwn(req.body,'inviteeIds') && !Array.isArray(req.body.inviteeIds)"));
   assert.ok(route.includes("from('live_event_invites').insert(rows)"));
   assert.ok(route.includes("values.visibility!=='private' && inviteeIds.length>0"));
