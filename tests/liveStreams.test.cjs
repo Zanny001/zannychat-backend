@@ -321,3 +321,10 @@ test('LIVE join tokens expire within LiveKit Cloud token revocation window', () 
   assert.equal(claims.exp - 1_800_000_000, 300);
   assert.ok(route.includes('ttlSeconds: 300'));
 });
+
+
+test('LIVE best-effort RPC cleanup awaits Supabase thenables without calling a missing catch method', () => {
+  assert.match(route, /try\s*\{\s*await supabaseAdmin\.rpc\('finalize_live_replay_quota'/);
+  assert.match(route, /try\s*\{\s*await supabaseAdmin\.rpc\('end_live_stream'/);
+  assert.doesNotMatch(route, /supabaseAdmin\.rpc\([^\n]*\)\.catch\(/);
+});
