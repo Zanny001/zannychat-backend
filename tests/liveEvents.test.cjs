@@ -55,6 +55,8 @@ test('LIVE Event RSVPs are atomic, capacity-limited and private to the server',(
   assert.ok(migration.includes("NEW.status = 'ended'"));
   assert.ok(route.includes("router.get('/events/:eventId/invitees'"));
   assert.ok(route.includes("router.post('/events/:eventId/attach-stream'"));
+  assert.ok(route.includes("type:'live_event_started'"));
+  assert.ok(route.includes('sendPushToUser(row.user_id'));
 });
 
 test('LIVE Event records do not expose attendee identities in discovery responses',()=>{
