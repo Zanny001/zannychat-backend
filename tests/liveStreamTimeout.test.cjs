@@ -20,6 +20,9 @@ test('LIVE has a four-hour server-enforced hard maximum and a ten-minute warning
   assert.match(migration, /started_at <= now\(\) - interval '4 hours'/);
   assert.match(migration, /started_at <= now\(\) - interval '3 hours 50 minutes'/);
   assert.match(migration, /timeout_warning_sent_at IS NULL/);
+  assert.match(migration, /timeout_warning_claimed_at IS NULL/);
+  assert.match(migration, /timeout_warning_claimed_at < now\(\) - interval '10 minutes'/);
+  assert.match(migration, /mark_live_stream_timeout_warning_sent/);
 });
 
 test('hard timeout ends connected creators too while preserving stale-heartbeat cleanup', () => {
@@ -33,11 +36,13 @@ test('hard timeout ends connected creators too while preserving stale-heartbeat 
 
 test('timeout warning claim and retry release are service-role-only', () => {
   assert.match(migration, /UPDATE public\.live_streams AS s/);
+  assert.match(migration, /SET timeout_warning_claimed_at = now\(\)/);
   assert.match(migration, /SET timeout_warning_sent_at = now\(\)/);
   assert.match(migration, /timeout_warning_sent_at IS NULL/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) TO service_role/);
   assert.match(migration, /release_live_stream_timeout_warning/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public.mark_live_stream_timeout_warning_sent\(uuid\) TO service_role/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.release_live_stream_timeout_warning\(uuid\) TO service_role/);
 });
 
