@@ -223,9 +223,10 @@ async function stopActiveLiveReplayForStream(streamId) {
 
 async function requireJoined(streamId, userId) {
   const { data, error } = await supabaseAdmin.from('live_stream_participants')
-    .select('id,role,status').eq('stream_id', streamId).eq('user_id', userId).maybeSingle();
+    .select('id,role,status,left_at').eq('stream_id', streamId).eq('user_id', userId)
+    .eq('status', 'joined').is('left_at', null).maybeSingle();
   if (error) throw error;
-  return data?.status === 'joined' ? data : null;
+  return data || null;
 }
 
 async function canModerateLive(stream, userId) {
@@ -1479,7 +1480,23 @@ router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error
     publishLiveFeedChanged(stream);
     return res.status(201).json({ accepted: true, impact });
   } catch (error) {
-    console.error('[live] reaction failed:', error?.message || error);
+    // Keep expected authorization/lifecycle rejections distinct from service failures.
+    // The SQL writer independently checks joined + left_at IS NULL to close race windows.
+    if (error?.code === '42501') {
+      return res.status(403).json({ error: 'Join this LIVE stream before reacting' });
+    }
+    if (error?.code === '22023') {
+      return res.status(400).json({ error: 'Unsupported LIVE reaction' });
+    }
+    if (error?.code === 'P0001') {
+      return res.status(404).json({ error: 'LIVE stream has ended' });
+    }
+    console.error('[live] reaction failed:', {
+      code: error?.code || null,
+      message: error?.message || String(error),
+      details: error?.details || null,
+      hint: error?.hint || null,
+    });
     return res.status(503).json({ error: 'Could not send LIVE reaction' });
   }
 });
