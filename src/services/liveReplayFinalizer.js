@@ -18,6 +18,21 @@ function isComplete(status) {
   return status === 'EGRESS_COMPLETE' || status === 3;
 }
 
+async function releaseReplayNotificationClaim(admin, replayId, claimToken) {
+  try {
+    const { error } = await admin.rpc('release_live_replay_ready_notification', {
+      p_replay_id: replayId,
+      p_claim_token: claimToken,
+    });
+    if (error) throw error;
+  } catch (releaseError) {
+    console.error('[live-replay] notification claim release failed', {
+      replayId,
+      message: releaseError.message,
+    });
+  }
+}
+
 async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
   if (legacyReplayNotificationsInFlight.has(replay.id)) return;
   legacyReplayNotificationsInFlight.add(replay.id);
@@ -30,7 +45,7 @@ async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
     if (readError) throw readError;
     if (!currentReplay || currentReplay.notification_sent_at) return;
 
-    await sendPush(replay.creator_id, {
+    const delivery = await sendPush(replay.creator_id, {
       title: 'Your LIVE replay is ready',
       body: 'Your private replay is ready to watch for the next seven days.',
       data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
@@ -76,6 +91,10 @@ async function notifyReplayReady(replay, dependencies = {}) {
       body: 'Your private replay is ready to watch for the next seven days.',
       data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
     });
+    if (delivery && typeof delivery === 'object' && Number(delivery.sent || 0) < 1) {
+      await releaseReplayNotificationClaim(admin, replay.id, claimToken);
+      return { pending: true, noTokens: Boolean(delivery.noTokens), failed: Number(delivery.failed || 0) };
+    }
     const { data: completed, error: completeError } = await admin.rpc('complete_live_replay_ready_notification', {
       p_replay_id: replay.id,
       p_claim_token: claimToken,
@@ -83,18 +102,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
     if (completeError) throw completeError;
     if (!completed) throw new Error('LIVE replay notification claim was lost before completion');
   } catch (error) {
-    try {
-      const { error: releaseError } = await admin.rpc('release_live_replay_ready_notification', {
-        p_replay_id: replay.id,
-        p_claim_token: claimToken,
-      });
-      if (releaseError) throw releaseError;
-    } catch (releaseError) {
-      console.error('[live-replay] notification claim release failed', {
-        replayId: replay.id,
-        message: releaseError.message,
-      });
-    }
+    await releaseReplayNotificationClaim(admin, replay.id, claimToken);
     throw error;
   }
 }
