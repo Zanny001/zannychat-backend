@@ -34,7 +34,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
       .eq('id', replay.id)
       .maybeSingle();
     if (readError) throw readError;
-    if (currentReplay?.notification_sent_at) return;
+    if (!currentReplay || currentReplay.notification_sent_at) return;
 
     await sendPush(replay.creator_id, {
       title: 'Your LIVE replay is ready',
