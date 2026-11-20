@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    name: Preview and apply the four reviewed worker/foreign-key/session/replay migrations
+    name: Preview and apply the three remaining worker/foreign-key/session migrations
     if: inputs.confirm_production_apply == true
     runs-on: ubuntu-latest
     environment: production
@@ -49,7 +49,7 @@ jobs:
           WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-worker-leases.XXXXXX")"
           mkdir -p "$WORKDIR/supabase/migrations"
 
-          # Retain timestamped sources except four LIVE migrations whose production
+          # Retain timestamped sources except five LIVE migrations whose production
           # ledger versions differ from their filenames. A read-only comparison
           # confirmed each stored SQL statement exactly matches its source:
           # 20261119180000 -> ledger 20261119184056 (creator preferences)
@@ -128,7 +128,7 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 20261120150000 | sort)"
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 | sort)"
           test "$PENDING" = "$EXPECTED" || {
             echo "::error::Pending migration set changed; refusing apply."
             printf '%s\n' "$PENDING"
