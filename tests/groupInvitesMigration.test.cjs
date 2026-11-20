@@ -34,3 +34,19 @@ test('group invite history is admin-only and never returns token hashes', () => 
   assert.match(route, /select\('id,created_at,expires_at,max_uses,use_count,revoked_at'\)/);
   assert.match(route, /status: invite\.revoked_at/);
 });
+
+
+test('invite acceptance applies recipient privacy and block checks before the atomic service-role RPC', () => {
+  const start = route.indexOf("router.post('/invites/accept'");
+  const end = route.indexOf("router.get('/:conversationId/invites'", start);
+  const acceptance = route.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(acceptance, /from\('group_invites'\)/);
+  assert.match(acceptance, /select\('id,conversation_id,created_by,expires_at,max_uses,use_count,revoked_at'\)/);
+  assert.match(acceptance, /from\('profile_details'\)\.select\('user_id,group_invite_permission'\)/);
+  assert.match(acceptance, /from\('blocked_users'\)/);
+  assert.match(acceptance, /evaluateGroupInvitePrivacy\(/);
+  assert.match(acceptance, /if \(!privacy\.allowed\) return res\.status\(403\)/);
+  assert.ok(acceptance.indexOf('evaluateGroupInvitePrivacy(') < acceptance.indexOf("rpc('accept_group_invite'"));
+  assert.match(acceptance, /if \(!existingMembership\)/);
+});
