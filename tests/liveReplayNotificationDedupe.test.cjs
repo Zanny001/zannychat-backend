@@ -9,6 +9,7 @@ function createSharedState({ rowExists = true, status = 'ready', notificationSen
     notificationSentAt,
     notificationClaimedAt: null,
     notificationClaimToken: null,
+    notificationRetryAfter: null,
     tokenCounter: 0,
   };
 }
@@ -18,7 +19,7 @@ function createFakeAdmin(state) {
     async rpc(name, args) {
       assert.ok(args.p_replay_id === 'replay-1');
       if (name === 'claim_live_replay_ready_notification') {
-        if (!state.rowExists || state.status !== 'ready' || state.notificationSentAt || state.notificationClaimToken) {
+        if (!state.rowExists || state.status !== 'ready' || state.notificationSentAt || state.notificationClaimToken || (state.notificationRetryAfter && state.notificationRetryAfter > Date.now())) {
           return { data: null, error: null };
         }
         state.tokenCounter += 1;
@@ -32,12 +33,14 @@ function createFakeAdmin(state) {
         state.notificationSentAt = new Date().toISOString();
         state.notificationClaimedAt = null;
         state.notificationClaimToken = null;
+        state.notificationRetryAfter = null;
         return { data: true, error: null };
       }
       if (name === 'release_live_replay_ready_notification') {
         if (state.notificationClaimToken !== args.p_claim_token || state.notificationSentAt) return { data: false, error: null };
         state.notificationClaimedAt = null;
         state.notificationClaimToken = null;
+        state.notificationRetryAfter = Date.now() + 10 * 60 * 1000;
         return { data: true, error: null };
       }
       throw new Error('Unexpected RPC: ' + name);
@@ -59,7 +62,7 @@ test('separate backend instances cannot claim the same replay-ready notification
   let sends = 0;
   let releaseSend;
   const sendGate = new Promise((resolve) => { releaseSend = resolve; });
-  const sendPush = async () => { sends += 1; await sendGate; };
+  const sendPush = async () => { sends += 1; await sendGate; return { sent: 1, failed: 0 }; };
 
   const first = notifyReplayReady(replay, { admin: firstAdmin, sendPush });
   await Promise.resolve();
@@ -79,7 +82,7 @@ test('a stale replay object does not resend after the durable sent marker is set
   const state = createSharedState();
   const admin = createFakeAdmin(state);
   let sends = 0;
-  const sendPush = async () => { sends += 1; };
+  const sendPush = async () => { sends += 1; return { sent: 1, failed: 0 }; };
 
   await notifyReplayReady(replay, { admin, sendPush });
   await notifyReplayReady(replay, { admin, sendPush });
@@ -112,9 +115,11 @@ test('failed push delivery releases its claim so a later worker can retry', asyn
   );
   assert.equal(state.notificationClaimToken, null);
   assert.equal(state.notificationClaimedAt, null);
+  assert.ok(state.notificationRetryAfter > Date.now());
 
+  state.notificationRetryAfter = Date.now() - 1;
   let sends = 0;
-  await notifyReplayReady(replay, { admin, sendPush: async () => { sends += 1; } });
+  await notifyReplayReady(replay, { admin, sendPush: async () => { sends += 1; return { sent: 1, failed: 0 }; } });
   assert.equal(sends, 1);
   assert.ok(state.notificationSentAt);
 });
@@ -146,4 +151,27 @@ test('legacy per-process notification path remains available until the durable c
   await notifyReplayReady(replay, { admin, sendPush });
   assert.equal(sends, 1);
   assert.ok(notificationSentAt);
+});
+
+
+test('zero accepted Expo tickets leaves the replay notification pending with a retry backoff', async () => {
+  const state = createSharedState();
+  const admin = createFakeAdmin(state);
+  await notifyReplayReady(replay, {
+    admin,
+    sendPush: async () => ({ sent: 0, failed: 0, noTokens: true }),
+  });
+  assert.equal(state.notificationSentAt, null);
+  assert.equal(state.notificationClaimToken, null);
+  assert.ok(state.notificationRetryAfter > Date.now());
+});
+
+test('partial Expo acceptance marks the notification sent to avoid duplicating accepted device pushes', async () => {
+  const state = createSharedState();
+  await notifyReplayReady(replay, {
+    admin: createFakeAdmin(state),
+    sendPush: async () => ({ sent: 1, failed: 2 }),
+  });
+  assert.ok(state.notificationSentAt);
+  assert.equal(state.notificationRetryAfter, null);
 });
