@@ -131,7 +131,7 @@ jobs:
           }
           supabase db push --dry-run --linked
 
-      - name: Apply the two confirmed production migrations
+      - name: Apply the three confirmed production migrations
         env:
           WORKDIR: ${{ steps.workspace.outputs.workdir }}
         run: |
