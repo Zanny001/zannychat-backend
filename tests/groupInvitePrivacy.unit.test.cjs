@@ -56,3 +56,14 @@ test('group invite privacy rejects blocks in either direction', () => {
     assert.match(result.reason, /cannot be invited/);
   }
 });
+
+
+test('unknown group invite preference fails closed', () => {
+  const result = evaluateGroupInvitePrivacy({
+    inviterId, inviteeIds: [inviteeId],
+    profileDetails: [{ user_id: inviteeId, group_invite_permission: 'unexpected' }],
+    membershipRows: [], blockedRows: [],
+  });
+  assert.equal(result.allowed, false);
+  assert.match(result.reason, /unavailable invitation preference/);
+});
