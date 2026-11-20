@@ -26,7 +26,7 @@ test('guarded worker/index migration workflow excludes only the four SQL-verifie
 test('guarded production workflow still requires exactly the three new migrations and explicit confirmation', () => {
   assert.match(workflow, /confirm_production_apply/);
   assert.match(workflow, /if: inputs\.confirm_production_apply == true/);
-  assert.match(workflow, /20261120120000 20261120130000 \| sort/);
+  assert.match(workflow, /20261120120000 20261120130000 20261120140000 \| sort/);
   assert.match(workflow, /20261120140000/);
   assert.match(workflow, /supabase db push --dry-run --linked/);
   assert.match(workflow, /supabase db push --linked --yes/);
