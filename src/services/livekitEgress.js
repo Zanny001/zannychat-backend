@@ -149,6 +149,10 @@ async function startRoomCompositeEgress({ roomName, filePath, replayConfig, fetc
       file: {
         file_type: 1,
         filepath: filePath,
+        // Replay playback uses the MP4 plus the signed Egress webhook metadata.
+        // The private bucket intentionally accepts video/mp4 only, so suppress
+        // LiveKit's optional application/json manifest upload.
+        disable_manifest: true,
       },
     }],
     storage: {
