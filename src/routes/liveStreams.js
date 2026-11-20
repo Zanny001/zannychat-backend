@@ -1397,6 +1397,7 @@ router.post('/:streamId/comments/:commentId/hide', async (req, res) => {
       .select('id,moderation_status').maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'LIVE comment not found' });
+    publishLiveFeedChanged(stream);
     return res.json({ hidden: true, comment: data });
   } catch (error) {
     console.error('[live] comment moderation failed:', error?.message || error);
