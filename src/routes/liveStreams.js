@@ -1562,7 +1562,8 @@ router.delete('/:streamId/guests/:userId', async (req, res) => {
       await updateRoomParticipantPermissions(stream.room_name, userId, {
         canPublish: false,
         canSubscribe: true,
-        canPublishData: true,
+        // Feed updates are server-authoritative; demoted viewers must not publish room data.
+        canPublishData: false,
       });
       const { error: demoteError } = await supabaseAdmin.from('live_stream_participants')
         .update({ role: 'viewer', status: 'joined', left_at: null })
