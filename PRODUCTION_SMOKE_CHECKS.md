@@ -15,11 +15,11 @@ For authenticated Realtime acceptance, use two test accounts in one shared conve
 
 
 Current production targets (verified project configuration):
-- Frontend: https://zannychat.netlify.app (site remains live; production deploys are currently paused by Netlify credit limits)
+- Frontend: https://zannychat.vercel.app (verified Vercel production domain; confirm the current production deployment in Vercel before release acceptance)
 - Backend: https://zannychat-backend-1.onrender.com
 - Supabase project URL: https://vithpppgyjmazxvogvno.supabase.co
 
-The smoke script defaults to these frontend/backend hosts. Override with `ZANNYCHAT_FRONTEND_URL` and `ZANNYCHAT_BACKEND_URL` for staging.
+The smoke script defaults to these canonical frontend/backend hosts. Override with `ZANNYCHAT_FRONTEND_URL` and `ZANNYCHAT_BACKEND_URL` for staging.
 
 
 ## Supabase Realtime publication check
