@@ -19,3 +19,10 @@ test('event creation requires a future start time and RSVP is upserted per user'
   assert.match(sql, /on conflict\(event_id,user_id\) do update/i);
   assert.match(sql, /p_response not in \('going','maybe','not_going'\)/i);
 });
+
+
+test('LIVE Event invite and reminder user foreign keys have supporting leading-column indexes', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261120130000_index_live_event_foreign_keys.sql'), 'utf8');
+  assert.match(migration, /CREATE INDEX IF NOT EXISTS live_event_invites_invited_by_idx\s+ON public\.live_event_invites \(invited_by\)/i);
+  assert.match(migration, /CREATE INDEX IF NOT EXISTS live_event_reminder_deliveries_user_id_idx\s+ON public\.live_event_reminder_deliveries \(user_id\)/i);
+});
