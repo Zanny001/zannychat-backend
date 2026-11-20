@@ -23,6 +23,9 @@ function evaluateGroupInvitePrivacy({ inviterId, inviteeIds, profileDetails = []
   const preferenceByUser = new Map((profileDetails || []).map((row) => [row.user_id, row.group_invite_permission]));
   for (const inviteeId of invited) {
     const permission = preferenceByUser.get(inviteeId) || 'everyone';
+    if (!['everyone', 'contacts', 'nobody'].includes(permission)) {
+      return { allowed: false, reason: 'One or more selected members have an unavailable invitation preference.' };
+    }
     if (permission === 'nobody' || (permission === 'contacts' && !contacts.has(inviteeId))) {
       return { allowed: false, reason: 'One or more selected members do not accept group invitations from this account.' };
     }
