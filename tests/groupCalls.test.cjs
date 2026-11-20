@@ -241,3 +241,24 @@ test('group-call admission rechecks bidirectional blocks against joined and invi
 test('group-call LiveKit tokens do not expose unused data-channel publishing', () => {
   assert.ok(route.includes('canPublishData: false'));
 });
+
+
+test('group call creation, invite and direct-call promotion enforce recipient call preferences before RPC/push', () => {
+  assert.ok(route.includes("require('../utils/callInvitePrivacy.cjs')"));
+  assert.ok(route.includes("select('user_id,call_permission')"));
+  assert.ok(route.includes('loadCallInvitePrivacyContext'));
+
+  const upgradeStart = route.indexOf("router.post('/upgrade/:callId'");
+  const createStart = route.indexOf("router.post('/',");
+  const inviteStart = route.indexOf("router.post('/:roomId/invite'");
+  const leaveStart = route.indexOf("router.post('/:roomId/leave'");
+  const upgrade = route.slice(upgradeStart, createStart);
+  const create = route.slice(createStart, route.indexOf("router.get('/history'", createStart));
+  const invite = route.slice(inviteStart, leaveStart);
+
+  assert.ok(upgrade.indexOf('evaluateCallInvitePrivacy(') < upgrade.indexOf("rpc('promote_direct_call_to_group_room_with_media'"));
+  assert.ok(create.includes('candidateInviteeIds.filter'));
+  assert.ok(create.includes('evaluateCallInvitePrivacy('));
+  assert.ok(create.includes('p_invited_user_ids: invitedUserIds'));
+  assert.ok(invite.indexOf('evaluateCallInvitePrivacy(') < invite.indexOf("rpc('invite_group_call_participants'"));
+});
