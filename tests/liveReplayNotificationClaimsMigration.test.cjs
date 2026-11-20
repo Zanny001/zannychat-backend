@@ -11,6 +11,10 @@ const finalizer = fs.readFileSync(
   path.join(__dirname, '../src/services/liveReplayFinalizer.js'),
   'utf8',
 );
+const worker = fs.readFileSync(
+  path.join(__dirname, '../src/jobs/liveReplayWorker.js'),
+  'utf8',
+);
 
 test('replay notification claims are durable, expiring and token-bound', () => {
   assert.match(migration, /notification_claimed_at timestamptz/);
@@ -39,4 +43,13 @@ test('replay notification sender claims before push and completes only after del
   const release = finalizer.indexOf("admin.rpc('release_live_replay_ready_notification'");
   assert.ok(claim >= 0 && push > claim && complete > push && release > complete);
   assert.doesNotMatch(finalizer, /replayReadyNotificationsInFlight/);
+});
+
+
+test('worker periodically retries ready replays whose notification marker is still empty', () => {
+  assert.match(worker, /async function deliverPendingReplayReadyNotifications/);
+  assert.match(worker, /\.eq\('status', 'ready'\)/);
+  assert.match(worker, /\.is\('notification_sent_at', null\)/);
+  assert.match(worker, /startup pending replay-ready notifications/);
+  assert.match(worker, /setInterval\(\(\) => safeRun\('pending replay-ready notifications'/);
 });
