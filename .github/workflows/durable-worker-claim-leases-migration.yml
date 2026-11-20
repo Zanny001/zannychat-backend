@@ -1,10 +1,10 @@
-name: Apply worker, LIVE Event index, session inventory and replay notification migrations
+name: Apply worker, LIVE Event index and session inventory migrations
 
 on:
   workflow_dispatch:
     inputs:
       confirm_production_apply:
-        description: "Confirm applying exactly migrations 20261120120000, 20261120130000, 20261120140000 and 20261120150000 to production"
+        description: "Confirm applying exactly migrations 20261120120000, 20261120130000 and 20261120140000 to production"
         required: true
         type: boolean
         default: false
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    name: Preview and apply the four reviewed worker/foreign-key/session/replay migrations
+    name: Preview and apply the three remaining worker/foreign-key/session migrations
     if: inputs.confirm_production_apply == true
     runs-on: ubuntu-latest
     environment: production
@@ -49,13 +49,17 @@ jobs:
           WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-worker-leases.XXXXXX")"
           mkdir -p "$WORKDIR/supabase/migrations"
 
-          # Retain timestamped sources except four LIVE migrations whose production
+          # Retain timestamped sources except five LIVE migrations whose production
           # ledger versions differ from their filenames. A read-only comparison
           # confirmed each stored SQL statement exactly matches its source:
           # 20261119180000 -> ledger 20261119184056 (creator preferences)
           # 20261119200000 -> ledger 20261119204054 (LIVE events)
           # 20261119210000 -> ledger 20261119205846 (reminder claim fix)
           # 20261119220000 -> ledger 20261119220130 (LIVE hard timeout)
+          # 20261120150000 -> ledger 20261120232530 (replay notification claims)
+          # The replay-claim SQL was applied from this exact source through the
+          # Management API on 2026-11-20; omit its filename so the CLI does not
+          # replay it under a second migration version.
           # Excluding these source filenames prevents false pending entries
           # and, critically, prevents any attempt to replay their SQL.
           find supabase/migrations -maxdepth 1 -type f -name '20*.sql' \
@@ -63,6 +67,7 @@ jobs:
             ! -name '20261119200000_live_events.sql' \
             ! -name '20261119210000_fix_live_event_reminder_claim_ambiguity.sql' \
             ! -name '20261119220000_live_stream_hard_timeout.sql' \
+            ! -name '20261120150000_live_replay_notification_claims.sql' \
             -exec cp {} "$WORKDIR/supabase/migrations/" \;
 
           # Retain the legacy source files that the production ledger records.
@@ -82,7 +87,7 @@ jobs:
 
           printf 'workdir=%s\n' "$WORKDIR" >> "$GITHUB_OUTPUT"
 
-      - name: Link production and assert exactly one pending migration
+      - name: Link production and assert exactly three pending migrations
         env:
           WORKDIR: ${{ steps.workspace.outputs.workdir }}
         run: |
@@ -99,9 +104,9 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 20261120150000 | sort)"
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 | sort)"
           if [ "$PENDING" != "$EXPECTED" ]; then
-            echo "::error::Refusing production apply: expected exactly the four reviewed pending migrations."
+            echo "::error::Refusing production apply: expected exactly the three remaining reviewed pending migrations."
             printf 'Expected: %s\nActual:\n%s\n' "$EXPECTED" "$PENDING"
             exit 1
           fi
@@ -123,7 +128,7 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 20261120150000 | sort)"
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 | sort)"
           test "$PENDING" = "$EXPECTED" || {
             echo "::error::Pending migration set changed; refusing apply."
             printf '%s\n' "$PENDING"
@@ -131,7 +136,7 @@ jobs:
           }
           supabase db push --dry-run --linked
 
-      - name: Apply the four confirmed production migrations
+      - name: Apply the three confirmed production migrations
         env:
           WORKDIR: ${{ steps.workspace.outputs.workdir }}
         run: |
@@ -159,4 +164,4 @@ jobs:
             printf '%s\n' "$PENDING"
             exit 1
           }
-          echo "Worker-lease, LIVE Event index, read-only session inventory and replay notification migrations applied; migration history verified."
+          echo "Worker-lease, LIVE Event index and read-only session inventory migrations applied; migration history verified."
