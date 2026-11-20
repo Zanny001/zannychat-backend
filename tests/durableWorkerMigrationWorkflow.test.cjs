@@ -14,6 +14,7 @@ test('guarded worker/index migration workflow excludes the five SQL-verified LIV
     '20261119200000_live_events.sql',
     '20261119210000_fix_live_event_reminder_claim_ambiguity.sql',
     '20261119220000_live_stream_hard_timeout.sql',
+    '20261120150000_live_replay_notification_claims.sql',
   ]) {
     assert.ok(workflow.includes("! -name '" + filename + "'"), filename + ' must not be replayed');
   }
@@ -22,7 +23,6 @@ test('guarded worker/index migration workflow excludes the five SQL-verified LIV
   assert.ok(workflow.includes('20261119205846'));
   assert.ok(workflow.includes('20261119220130'));
   assert.ok(workflow.includes('20261120232530'));
-  assert.ok(workflow.includes("! -name '20261120150000_live_replay_notification_claims.sql'"));
 });
 
 test('guarded production workflow still requires exactly the three remaining migrations and explicit confirmation', () => {
