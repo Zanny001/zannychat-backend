@@ -15,42 +15,44 @@ function isComplete(status) {
   return status === 'EGRESS_COMPLETE' || status === 3;
 }
 
-const replayReadyNotificationsInFlight = new Set();
-
 async function notifyReplayReady(replay, dependencies = {}) {
   const admin = dependencies.admin || supabaseAdmin;
   const sendPush = dependencies.sendPush || sendPushToUser;
   const now = dependencies.now || (() => new Date());
-  if (!replay?.id || replay.notification_sent_at || replayReadyNotificationsInFlight.has(replay.id)) return;
+  if (!replay?.id || replay.notification_sent_at) return;
 
-  replayReadyNotificationsInFlight.add(replay.id);
+  const { data: claimToken, error: claimError } = await admin.rpc('claim_live_replay_ready_notification', {
+    p_replay_id: replay.id,
+  });
+  if (claimError) throw claimError;
+  if (!claimToken) return;
+
   try {
-    // The webhook and recovery worker can finalize the same replay concurrently.
-    // Re-read the persisted marker after taking the process-local lock so a
-    // stale replay object cannot send a second notification after success.
-    const { data: currentReplay, error: readError } = await admin
-      .from('live_stream_replays')
-      .select('notification_sent_at')
-      .eq('id', replay.id)
-      .maybeSingle();
-    if (readError) throw readError;
-    if (!currentReplay || currentReplay.notification_sent_at) return;
-
     await sendPush(replay.creator_id, {
       title: 'Your LIVE replay is ready',
       body: 'Your private replay is ready to watch for the next seven days.',
       data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
     });
-    const { error } = await admin.from('live_stream_replays')
-      .update({ notification_sent_at: now().toISOString() })
-      .eq('id', replay.id)
-      .is('notification_sent_at', null);
-    if (error) throw error;
-  } finally {
-    replayReadyNotificationsInFlight.delete(replay.id);
+    const { data: completed, error: completeError } = await admin.rpc('complete_live_replay_ready_notification', {
+      p_replay_id: replay.id,
+      p_claim_token: claimToken,
+    });
+    if (completeError) throw completeError;
+    if (!completed) throw new Error('LIVE replay notification claim was lost before completion');
+  } catch (error) {
+    const { error: releaseError } = await admin.rpc('release_live_replay_ready_notification', {
+      p_replay_id: replay.id,
+      p_claim_token: claimToken,
+    });
+    if (releaseError) {
+      console.error('[live-replay] notification claim release failed', {
+        replayId: replay.id,
+        message: releaseError.message,
+      });
+    }
+    throw error;
   }
 }
-
 async function finalizeReplay(event) {
   const info = getEgressInfo(event);
   const egressId = info?.egressId || info?.egress_id;
