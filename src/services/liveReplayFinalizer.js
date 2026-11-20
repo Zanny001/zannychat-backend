@@ -87,7 +87,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
   if (!claimToken) return { skipped: true };
 
   try {
-    await sendPush(replay.creator_id, {
+    const delivery = await sendPush(replay.creator_id, {
       title: 'Your LIVE replay is ready',
       body: 'Your private replay is ready to watch for the next seven days.',
       data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
