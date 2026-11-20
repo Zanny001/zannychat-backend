@@ -6,6 +6,7 @@ const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
 const { cleanupEndedGroupCallMedia } = require('../jobs/groupCallMediaCleanup');
 const { sendPushToUser } = require('../config/pushClient');
+const { evaluateCallInvitePrivacy } = require('../utils/callInvitePrivacy.cjs');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 20, error: 'Group-call actions are rate-limited.' }));
@@ -42,6 +43,26 @@ async function getGroupMembership(conversationId, userId) {
   return { conversation, membership, members: members || [] };
 }
 
+async function loadCallInvitePrivacyContext(callerId, inviteeIds) {
+  const uniqueInvitees = [...new Set((inviteeIds || []).filter((id) => id && id !== callerId))];
+  if (!uniqueInvitees.length) return { profileDetails: [], membershipRows: [], blockedRows: [] };
+  const [detailsResult, membershipResult, blocksResult] = await Promise.all([
+    supabaseAdmin.from('profile_details').select('user_id,call_permission').in('user_id', uniqueInvitees),
+    supabaseAdmin.from('conversation_participants').select('conversation_id,user_id').in('user_id', [callerId, ...uniqueInvitees]),
+    supabaseAdmin.from('blocked_users').select('blocker_id,blocked_id')
+      .or(`blocker_id.eq.${callerId},blocked_id.eq.${callerId}`),
+  ]);
+  const detailsUnavailableOnOldSchema = detailsResult.error?.code === '42P01';
+  if ((detailsResult.error && !detailsUnavailableOnOldSchema) || membershipResult.error || blocksResult.error) {
+    throw new Error('Unable to check call invitation permissions');
+  }
+  return {
+    profileDetails: detailsUnavailableOnOldSchema ? [] : (detailsResult.data || []),
+    membershipRows: membershipResult.data || [],
+    blockedRows: blocksResult.data || [],
+  };
+}
+
 router.post('/upgrade/:callId', async (req, res) => {
   const callId = String(req.params.callId || '');
   const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
@@ -66,6 +87,10 @@ router.post('/upgrade/:callId', async (req, res) => {
     if (call.status !== 'accepted' || call.group_room_id) {
       return res.status(409).json({ error: 'This call can no longer be upgraded' });
     }
+
+    const privacyContext = await loadCallInvitePrivacyContext(req.user.id, userIds);
+    const privacy = evaluateCallInvitePrivacy({ callerId: req.user.id, inviteeIds: userIds, ...privacyContext });
+    if (!privacy.allowed) return res.status(403).json({ error: privacy.reason });
 
     const mediaCallType = requestedCallType || call.call_type;
     const roomId = randomUUID();
@@ -117,22 +142,20 @@ router.post('/', async (req, res) => {
     if (group.members.length < 2 || group.members.length > 16) {
       return res.status(409).json({ error: 'Group calls currently support 2 to 16 group members' });
     }
-    const { data: blocks, error: blocksError } = await supabaseAdmin.from('blocked_users')
-      .select('blocker_id,blocked_id')
-      .or(`blocker_id.eq.${req.user.id},blocked_id.eq.${req.user.id}`);
-    if (blocksError) throw blocksError;
-    const blockedIds = new Set((blocks || []).map((row) =>
-      row.blocker_id === req.user.id ? row.blocked_id : row.blocker_id
-    ));
-    const eligibleMembers = group.members.filter((member) =>
-      member.user_id === req.user.id || !blockedIds.has(member.user_id)
+    const candidateInviteeIds = group.members
+      .map((member) => member.user_id)
+      .filter((userId) => userId !== req.user.id);
+    const privacyContext = await loadCallInvitePrivacyContext(req.user.id, candidateInviteeIds);
+    const invitedUserIds = candidateInviteeIds.filter((userId) =>
+      evaluateCallInvitePrivacy({ callerId: req.user.id, inviteeIds: [userId], ...privacyContext }).allowed
     );
-    if (eligibleMembers.length < 2) return res.status(409).json({ error: 'No other eligible group members can join this call' });
+    const eligibleMembers = [
+      ...group.members.filter((member) => member.user_id === req.user.id),
+      ...group.members.filter((member) => invitedUserIds.includes(member.user_id)),
+    ];
+    if (eligibleMembers.length < 2) return res.status(409).json({ error: 'No other group members currently accept calls from this account' });
     const roomId = randomUUID();
     const roomName = 'zgc_' + roomId.replace(/-/g, '');
-    const invitedUserIds = eligibleMembers
-      .filter((member) => member.user_id !== req.user.id)
-      .map((member) => member.user_id);
     const token = tokenFor(req.user, roomName, config);
     const { data: room, error: roomError } = await supabaseAdmin.rpc('create_group_call_room', {
       p_conversation_id: conversationId,
@@ -372,6 +395,10 @@ router.post('/:roomId/invite', async (req, res) => {
     } else if (req.user.id !== room.host_user_id) {
       return res.status(403).json({ error: 'Only the call host can invite people to this conference' });
     }
+
+    const privacyContext = await loadCallInvitePrivacyContext(req.user.id, userIds);
+    const privacy = evaluateCallInvitePrivacy({ callerId: req.user.id, inviteeIds: userIds, ...privacyContext });
+    if (!privacy.allowed) return res.status(403).json({ error: privacy.reason });
 
     const { data: invitedIds, error: inviteError } = await supabaseAdmin.rpc('invite_group_call_participants', {
       p_room_id: roomId,
