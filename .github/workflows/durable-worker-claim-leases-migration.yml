@@ -1,10 +1,10 @@
-name: Apply durable worker claim lease migration
+name: Apply durable worker and LIVE Event index migrations
 
 on:
   workflow_dispatch:
     inputs:
       confirm_production_apply:
-        description: "Confirm applying only migration 20261120120000_durable_worker_claim_leases.sql to production"
+        description: "Confirm applying exactly migrations 20261120120000 and 20261120130000 to production"
         required: true
         type: boolean
         default: false
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    name: Preview and apply the single reviewed worker-lease migration
+    name: Preview and apply the two reviewed worker/foreign-key migrations
     if: inputs.confirm_production_apply == true
     runs-on: ubuntu-latest
     environment: production
@@ -91,7 +91,7 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="20261120120000"
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 | sort)"
           if [ "$PENDING" != "$EXPECTED" ]; then
             echo "::error::Refusing production apply: expected exactly one pending migration."
             printf 'Expected: %s\nActual:\n%s\n' "$EXPECTED" "$PENDING"
@@ -115,7 +115,8 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          test "$PENDING" = "20261120120000" || {
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 | sort)"
+          test "$PENDING" = "$EXPECTED" || {
             echo "::error::Pending migration set changed; refusing apply."
             printf '%s\n' "$PENDING"
             exit 1
@@ -150,4 +151,4 @@ jobs:
             printf '%s\n' "$PENDING"
             exit 1
           }
-          echo "Worker-lease migration applied and migration history verified."
+          echo "Worker-lease and LIVE Event index migrations applied; migration history verified."
