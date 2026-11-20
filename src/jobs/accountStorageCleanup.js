@@ -62,30 +62,49 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
     if (error) throw error;
 
     for (const job of jobs || []) {
+      const claimedAt = new Date().toISOString();
+      const leaseExpiredBefore = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: claimedRows, error: claimError } = await admin
+        .from('account_storage_cleanup_jobs')
+        .update({ claimed_at: claimedAt })
+        .eq('id', job.id)
+        .in('status', ['held', 'pending'])
+        .or('claimed_at.is.null,claimed_at.lt.' + leaseExpiredBefore)
+        .select('id,user_id,attempts,status');
+      if (claimError) throw claimError;
+      // Database row claims coordinate independent backend processes.
+      const claimedJob = claimedRows?.[0];
+      if (!claimedJob) continue;
+
       try {
-        if (job.status === 'held') {
-          const { data: authUser, error: authLookupError } = await admin.auth.admin.getUserById(job.user_id);
+        if (claimedJob.status === 'held') {
+          const { data: authUser, error: authLookupError } = await admin.auth.admin.getUserById(claimedJob.user_id);
           const userMissing = !authUser?.user
             && (authLookupError?.status === 404 || authLookupError?.code === 'user_not_found'
               || /user.*not found/i.test(String(authLookupError?.message || '')));
-          if (authUser?.user || !userMissing) continue;
+          if (authUser?.user || !userMissing) {
+            await admin.from('account_storage_cleanup_jobs').update({ claimed_at: null }).eq('id', claimedJob.id).eq('claimed_at', claimedAt);
+            continue;
+          }
           const { error: releaseError } = await admin
             .from('account_storage_cleanup_jobs')
             .update({ status: 'pending', next_attempt_at: new Date().toISOString() })
-            .eq('id', job.id)
-            .eq('status', 'held');
+            .eq('id', claimedJob.id)
+            .eq('status', 'held')
+            .eq('claimed_at', claimedAt);
           if (releaseError) throw releaseError;
         }
-        const removed = await removeUserPersonalStorage(admin, job.user_id);
+        const removed = await removeUserPersonalStorage(admin, claimedJob.user_id);
         const { error: deleteError } = await admin
           .from('account_storage_cleanup_jobs')
           .delete()
-          .eq('id', job.id);
+          .eq('id', claimedJob.id)
+          .eq('claimed_at', claimedAt);
         if (deleteError) throw deleteError;
         summary.processed += 1;
         summary.removed += removed;
       } catch (error) {
-        const attempts = Number(job.attempts || 0) + 1;
+        const attempts = Number(claimedJob.attempts || 0) + 1;
         const message = String(error?.message || error || 'Storage cleanup failed').slice(0, 500);
         const { error: updateError } = await admin
           .from('account_storage_cleanup_jobs')
@@ -93,8 +112,10 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
             attempts,
             last_error: message,
             next_attempt_at: retryAt(attempts),
+            claimed_at: null,
           })
-          .eq('id', job.id);
+          .eq('id', claimedJob.id)
+          .eq('claimed_at', claimedAt);
         if (updateError) {
           console.error('[account-storage-cleanup] could not persist retry state:', updateError.message || updateError);
         }
