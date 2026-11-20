@@ -18,7 +18,6 @@ function isComplete(status) {
 async function notifyReplayReady(replay, dependencies = {}) {
   const admin = dependencies.admin || supabaseAdmin;
   const sendPush = dependencies.sendPush || sendPushToUser;
-  const now = dependencies.now || (() => new Date());
   if (!replay?.id || replay.notification_sent_at) return;
 
   const { data: claimToken, error: claimError } = await admin.rpc('claim_live_replay_ready_notification', {
