@@ -63,3 +63,14 @@ test('LIVE creators can react on their own broadcast without awarding themselves
   assert.doesNotMatch(body, /Creators cannot award themselves impact/);
   assert.match(body, /p\.status = 'joined'/, 'non-creator viewers still need an active joined participant row');
 });
+
+
+test('LIVE creator reactions do not require a viewer participant row; viewers and guests still do', () => {
+  const start = routes.indexOf("router.post('/:streamId/react'");
+  const end = routes.indexOf("router.patch('/:streamId/guests/:userId/mute'", start);
+  const handler = routes.slice(start, end);
+  assert.ok(start >= 0 && end > start, 'LIVE reaction route is present');
+  assert.ok(handler.includes("stream.creator_id !== req.user.id && !await requireJoined(streamId, req.user.id)"));
+  assert.ok(handler.includes("rpc('record_live_creator_impact'"));
+  assert.ok(handler.indexOf("stream.creator_id !== req.user.id && !await requireJoined") < handler.indexOf("rpc('record_live_creator_impact'"));
+});
