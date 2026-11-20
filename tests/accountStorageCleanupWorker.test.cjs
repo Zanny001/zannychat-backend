@@ -45,3 +45,40 @@ test('account storage cleanup retry worker is mounted in the backend process', (
   assert.ok(index.includes('function startAccountStorageCleanupWorker()'));
   assert.ok(index.includes('startAccountStorageCleanupWorker();'));
 });
+
+
+const { runAccountStorageCleanup } = require('../src/jobs/accountStorageCleanup');
+
+test('account storage cleanup remains usable while the durable claimed_at migration is pending', async () => {
+  const deleted = [];
+  const job = { id: 'job-1', user_id: 'deleted-user', attempts: 0, status: 'pending' };
+  const admin = {
+    from(table) {
+      if (table === 'objects') {
+        return { select() { return this; }, in() { return this; }, or() { return this; }, order() { return this; }, range() { return Promise.resolve({ data: [], error: null }); } };
+      }
+      assert.equal(table, 'account_storage_cleanup_jobs');
+      let operation = 'select';
+      let values = null;
+      const query = {
+        select() { return this; }, update(patch) { operation = 'update'; values = patch; return this; },
+        delete() { operation = 'delete'; return this; }, in() { return this; }, lte() { return this; },
+        order() { return this; }, limit() { return Promise.resolve({ data: [job], error: null }); },
+        eq() { return this; }, or() { return this; },
+        then(resolve, reject) {
+          if (operation === 'update' && Object.prototype.hasOwnProperty.call(values || {}, 'claimed_at')) {
+            return Promise.resolve({ data: null, error: { code: 'PGRST204', message: "Could not find the 'claimed_at' column of 'account_storage_cleanup_jobs' in the schema cache" } }).then(resolve, reject);
+          }
+          if (operation === 'delete') deleted.push(true);
+          return Promise.resolve({ data: null, error: null }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+    schema(name) { assert.equal(name, 'storage'); return this; },
+    storage: { from() { return { remove: async () => ({ data: [], error: null }) }; } },
+  };
+  const result = await runAccountStorageCleanup({ admin, limit: 1 });
+  assert.deepEqual(result, { skipped: false, processed: 1, removed: 0, failed: 0 });
+  assert.deepEqual(deleted, [true]);
+});

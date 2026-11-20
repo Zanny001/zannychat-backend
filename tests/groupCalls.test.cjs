@@ -278,3 +278,36 @@ test('group call creation, invite and direct-call promotion enforce recipient ca
   assert.ok(create.includes('p_invited_user_ids: invitedUserIds'));
   assert.ok(invite.indexOf('evaluateCallInvitePrivacy(') < invite.indexOf("rpc('invite_group_call_participants'"));
 });
+
+
+test('group-call media cleanup falls back safely while its durable lease column is pending', async () => {
+  const room = { id: 'room-legacy', room_name: 'zgc_0123456789abcdef0123456789abcdef' };
+  const updates = [];
+  const admin = {
+    from(table) {
+      assert.equal(table, 'group_call_rooms');
+      let operation = 'select';
+      let values = null;
+      const query = {
+        select() { return this; }, update(patch) { operation = 'update'; values = patch; updates.push(patch); return this; },
+        eq() { return this; }, is() { return this; }, or() { return this; }, order() { return this; }, limit() { return this; }, in() { return this; },
+        then(resolve, reject) {
+          if (operation === 'select') return Promise.resolve({ data: [room], error: null }).then(resolve, reject);
+          if (Object.prototype.hasOwnProperty.call(values || {}, 'media_cleanup_claimed_at')) {
+            return Promise.resolve({ data: null, error: { code: 'PGRST204', message: "Could not find the 'media_cleanup_claimed_at' column of 'group_call_rooms' in the schema cache" } }).then(resolve, reject);
+          }
+          return Promise.resolve({ data: [{ id: room.id }], error: null }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+  };
+  let deleted = 0;
+  const result = await cleanupEndedGroupCallMedia({
+    admin, now: () => new Date('2026-11-20T10:00:00.000Z'), deleteRoom: async () => { deleted += 1; },
+  });
+  assert.deepEqual(result, { checked: 1, terminated: 1, failed: 0 });
+  assert.equal(deleted, 1);
+  const completion = updates.find((patch) => Object.prototype.hasOwnProperty.call(patch, 'media_terminated_at'));
+  assert.deepEqual(completion, { media_terminated_at: '2026-11-20T10:00:00.000Z' });
+});

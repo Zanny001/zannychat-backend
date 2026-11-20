@@ -1,6 +1,12 @@
 const PERSONAL_BUCKETS = ['avatars', 'private-avatars', 'status-media', 'live-replays'];
 const REMOVE_BATCH_SIZE = 100;
 let workerRunning = false;
+let legacyLeaseWarningLogged = false;
+
+function isMissingColumn(error, column) {
+  const message = String(error?.message || '').toLowerCase();
+  return ['42703', 'PGRST204', 'PGRST200'].includes(String(error?.code || '')) && message.includes(column.toLowerCase());
+}
 
 function retryAt(attempts) {
   const delayMs = Math.min(24 * 60 * 60 * 1000, 60_000 * (2 ** Math.min(attempts, 10)));
@@ -50,32 +56,34 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
   if (workerRunning) return { skipped: true, processed: 0, removed: 0, failed: 0 };
   workerRunning = true;
   const summary = { skipped: false, processed: 0, removed: 0, failed: 0 };
-
   try {
-    const { data: jobs, error } = await admin
-      .from('account_storage_cleanup_jobs')
-      .select('id,user_id,attempts,status')
-      .in('status', ['held', 'pending'])
+    const { data: jobs, error } = await admin.from('account_storage_cleanup_jobs')
+      .select('id,user_id,attempts,status').in('status', ['held', 'pending'])
       .lte('next_attempt_at', new Date().toISOString())
-      .order('created_at', { ascending: true })
-      .limit(Math.max(1, Math.min(50, limit)));
+      .order('created_at', { ascending: true }).limit(Math.max(1, Math.min(50, limit)));
     if (error) throw error;
-
+    let leaseSupported = true;
     for (const job of jobs || []) {
       const claimedAt = new Date().toISOString();
-      const leaseExpiredBefore = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { data: claimedRows, error: claimError } = await admin
-        .from('account_storage_cleanup_jobs')
-        .update({ claimed_at: claimedAt })
-        .eq('id', job.id)
-        .in('status', ['held', 'pending'])
-        .or('claimed_at.is.null,claimed_at.lt.' + leaseExpiredBefore)
-        .select('id,user_id,attempts,status');
-      if (claimError) throw claimError;
-      // Database row claims coordinate independent backend processes.
-      const claimedJob = claimedRows?.[0];
-      if (!claimedJob) continue;
-
+      let claimedJob = job;
+      if (leaseSupported) {
+        const leaseExpiredBefore = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { data: claimedRows, error: claimError } = await admin.from('account_storage_cleanup_jobs')
+          .update({ claimed_at: claimedAt }).eq('id', job.id).in('status', ['held', 'pending'])
+          .or('claimed_at.is.null,claimed_at.lt.' + leaseExpiredBefore)
+          .select('id,user_id,attempts,status');
+        if (claimError && isMissingColumn(claimError, 'claimed_at')) {
+          leaseSupported = false;
+          if (!legacyLeaseWarningLogged) {
+            legacyLeaseWarningLogged = true;
+            console.warn('[account-storage-cleanup] durable lease migration is pending; using process-local worker lock');
+          }
+        } else if (claimError) throw claimError;
+        else {
+          claimedJob = claimedRows?.[0];
+          if (!claimedJob) continue;
+        }
+      }
       try {
         if (claimedJob.status === 'held') {
           const { data: authUser, error: authLookupError } = await admin.auth.admin.getUserById(claimedJob.user_id);
@@ -83,42 +91,32 @@ async function runAccountStorageCleanup({ admin, limit = 10 } = {}) {
             && (authLookupError?.status === 404 || authLookupError?.code === 'user_not_found'
               || /user.*not found/i.test(String(authLookupError?.message || '')));
           if (authUser?.user || !userMissing) {
-            await admin.from('account_storage_cleanup_jobs').update({ claimed_at: null }).eq('id', claimedJob.id).eq('claimed_at', claimedAt);
+            if (leaseSupported) await admin.from('account_storage_cleanup_jobs').update({ claimed_at: null }).eq('id', claimedJob.id).eq('claimed_at', claimedAt);
             continue;
           }
-          const { error: releaseError } = await admin
-            .from('account_storage_cleanup_jobs')
+          let releaseQuery = admin.from('account_storage_cleanup_jobs')
             .update({ status: 'pending', next_attempt_at: new Date().toISOString() })
-            .eq('id', claimedJob.id)
-            .eq('status', 'held')
-            .eq('claimed_at', claimedAt);
+            .eq('id', claimedJob.id).eq('status', 'held');
+          if (leaseSupported) releaseQuery = releaseQuery.eq('claimed_at', claimedAt);
+          const { error: releaseError } = await releaseQuery;
           if (releaseError) throw releaseError;
         }
         const removed = await removeUserPersonalStorage(admin, claimedJob.user_id);
-        const { error: deleteError } = await admin
-          .from('account_storage_cleanup_jobs')
-          .delete()
-          .eq('id', claimedJob.id)
-          .eq('claimed_at', claimedAt);
+        let deleteQuery = admin.from('account_storage_cleanup_jobs').delete().eq('id', claimedJob.id);
+        if (leaseSupported) deleteQuery = deleteQuery.eq('claimed_at', claimedAt);
+        const { error: deleteError } = await deleteQuery;
         if (deleteError) throw deleteError;
         summary.processed += 1;
         summary.removed += removed;
       } catch (error) {
         const attempts = Number(claimedJob.attempts || 0) + 1;
         const message = String(error?.message || error || 'Storage cleanup failed').slice(0, 500);
-        const { error: updateError } = await admin
-          .from('account_storage_cleanup_jobs')
-          .update({
-            attempts,
-            last_error: message,
-            next_attempt_at: retryAt(attempts),
-            claimed_at: null,
-          })
-          .eq('id', claimedJob.id)
-          .eq('claimed_at', claimedAt);
-        if (updateError) {
-          console.error('[account-storage-cleanup] could not persist retry state:', updateError.message || updateError);
-        }
+        const patch = { attempts, last_error: message, next_attempt_at: retryAt(attempts) };
+        if (leaseSupported) patch.claimed_at = null;
+        let retryQuery = admin.from('account_storage_cleanup_jobs').update(patch).eq('id', claimedJob.id);
+        if (leaseSupported) retryQuery = retryQuery.eq('claimed_at', claimedAt);
+        const { error: updateError } = await retryQuery;
+        if (updateError) console.error('[account-storage-cleanup] could not persist retry state:', updateError.message || updateError);
         summary.failed += 1;
       }
     }
