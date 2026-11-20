@@ -1,6 +1,6 @@
-const DEFAULT_PRODUCTION_ORIGIN = 'https://zannychat.netlify.app';
-const LEGACY_PRODUCTION_ORIGINS = ['https://zannychat-app.netlify.app'];
 const VERCEL_PRODUCTION_ORIGIN = 'https://zannychat.vercel.app';
+const DEFAULT_PRODUCTION_ORIGIN = VERCEL_PRODUCTION_ORIGIN;
+const LEGACY_PRODUCTION_ORIGINS = ['https://zannychat.netlify.app', 'https://zannychat-app.netlify.app'];
 
 function parseAllowedOrigins(value = process.env.CORS_ORIGINS) {
   const configured = typeof value === 'string' ? value.split(',') : [];
