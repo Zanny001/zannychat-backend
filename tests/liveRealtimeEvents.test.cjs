@@ -58,3 +58,9 @@ test('LIVE comment and reaction events are emitted only after durable server-sid
   assert.match(route, /canPublishData:\s*false/);
   assert.match(route, /type:\s*'feed_changed'/);
 });
+
+
+test('hiding a LIVE comment broadcasts a server-authoritative feed invalidation', () => {
+  const hideRoute = route.slice(route.indexOf("router.post('/:streamId/comments/:commentId/hide'"));
+  assert.match(hideRoute, /moderation_status: 'hidden'[\s\S]*?publishLiveFeedChanged\(stream\)/);
+});
