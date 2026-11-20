@@ -21,14 +21,15 @@ test('guarded worker/index migration workflow excludes only the four SQL-verifie
   assert.ok(workflow.includes('20261119204054'));
   assert.ok(workflow.includes('20261119205846'));
   assert.ok(workflow.includes('20261119220130'));
+  assert.ok(workflow.includes('20261120232530'));
+  assert.ok(workflow.includes("! -name '20261120150000_live_replay_notification_claims.sql'"));
 });
 
-test('guarded production workflow still requires exactly the four new migrations and explicit confirmation', () => {
+test('guarded production workflow still requires exactly the three remaining migrations and explicit confirmation', () => {
   assert.match(workflow, /confirm_production_apply/);
   assert.match(workflow, /if: inputs\.confirm_production_apply == true/);
   assert.match(workflow, /20261120120000 20261120130000 20261120140000 20261120150000 \| sort/);
   assert.match(workflow, /20261120140000/);
-  assert.match(workflow, /20261120150000/);
   assert.match(workflow, /supabase db push --dry-run --linked/);
   assert.match(workflow, /supabase db push --linked --yes/);
   assert.match(workflow, /environment: production/);
