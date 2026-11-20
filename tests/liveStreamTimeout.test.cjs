@@ -8,6 +8,10 @@ const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261119220000_live_stream_hard_timeout.sql'),
   'utf8',
 );
+const leaseMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261120120000_durable_worker_claim_leases.sql'),
+  'utf8',
+);
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 const heartbeatMigration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261115014920_media_participant_heartbeat_leases.sql'),
@@ -20,6 +24,9 @@ test('LIVE has a four-hour server-enforced hard maximum and a ten-minute warning
   assert.match(migration, /started_at <= now\(\) - interval '4 hours'/);
   assert.match(migration, /started_at <= now\(\) - interval '3 hours 50 minutes'/);
   assert.match(migration, /timeout_warning_sent_at IS NULL/);
+  assert.match(leaseMigration, /timeout_warning_claimed_at IS NULL/);
+  assert.match(leaseMigration, /timeout_warning_claimed_at < now\(\) - interval '10 minutes'/);
+  assert.match(leaseMigration, /mark_live_stream_timeout_warning_sent/);
 });
 
 test('hard timeout ends connected creators too while preserving stale-heartbeat cleanup', () => {
@@ -33,12 +40,14 @@ test('hard timeout ends connected creators too while preserving stale-heartbeat 
 
 test('timeout warning claim and retry release are service-role-only', () => {
   assert.match(migration, /UPDATE public\.live_streams AS s/);
-  assert.match(migration, /SET timeout_warning_sent_at = now\(\)/);
+  assert.match(leaseMigration, /SET timeout_warning_claimed_at = now\(\)/);
+  assert.match(leaseMigration, /SET timeout_warning_sent_at = now\(\)/);
   assert.match(migration, /timeout_warning_sent_at IS NULL/);
-  assert.match(migration, /REVOKE ALL ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) FROM PUBLIC, anon, authenticated/);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) TO service_role/);
-  assert.match(migration, /release_live_stream_timeout_warning/);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.release_live_stream_timeout_warning\(uuid\) TO service_role/);
+  assert.match(leaseMigration, /REVOKE ALL ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(leaseMigration, /GRANT EXECUTE ON FUNCTION public\.claim_live_stream_timeout_warnings\(\) TO service_role/);
+  assert.match(leaseMigration, /release_live_stream_timeout_warning/);
+  assert.match(leaseMigration, /GRANT EXECUTE ON FUNCTION public.mark_live_stream_timeout_warning_sent\(uuid\) TO service_role/);
+  assert.match(leaseMigration, /GRANT EXECUTE ON FUNCTION public\.release_live_stream_timeout_warning\(uuid\) TO service_role/);
 });
 
 test('warning worker remains quiet until the explicitly approved migration exists', async () => {
@@ -70,6 +79,9 @@ test('warning worker releases failed pushes for retry and keeps successful claim
     },
   });
   assert.deepEqual(summary, { claimed: 2, sent: 1, failed: 1 });
+  assert.deepEqual(rpcCalls.filter((call) => call.name === 'mark_live_stream_timeout_warning_sent'), [
+    { name: 'mark_live_stream_timeout_warning_sent', args: { p_broadcast_id: 'stream-sent' } },
+  ]);
   assert.deepEqual(rpcCalls.filter((call) => call.name === 'release_live_stream_timeout_warning'), [
     { name: 'release_live_stream_timeout_warning', args: { p_broadcast_id: 'stream-failed' } },
   ]);
