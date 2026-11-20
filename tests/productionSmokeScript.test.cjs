@@ -27,3 +27,10 @@ test('production smoke defaults to the canonical Render backend service', () => 
   assert.match(source, /https:\/\/zannychat-backend-1\.onrender\.com/);
   assert.doesNotMatch(source, /https:\/\/zannychat-backend\.onrender\.com/);
 });
+
+
+test('production smoke defaults to the verified Vercel frontend domain', () => {
+  assert.match(source, /https:\/\/zannychat\.vercel\.app/);
+  assert.doesNotMatch(source, /https:\/\/zannychat-app\.netlify\.app/);
+  assert.doesNotMatch(source, /https:\/\/zannychat\.netlify\.app/);
+});
