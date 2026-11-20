@@ -160,8 +160,8 @@ async function deliverPendingReplayReadyNotifications(dependencies = {}) {
   let notified = 0;
   for (const replay of data || []) {
     try {
-      await notify(replay);
-      notified += 1;
+      const outcome = await notify(replay);
+      if (outcome?.sent) notified += 1;
     } catch (notifyError) {
       console.error('[live-replay] ready notification retry failed', {
         replayId: replay.id,
