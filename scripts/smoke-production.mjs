@@ -2,7 +2,7 @@
 // Public endpoint smoke check. Never sends credentials or mutates production data.
 // Retries transient Render cold starts / gateway errors, but preserves a hard
 // failure if the backend or database is still unavailable after the retry budget.
-const frontendUrl = (process.env.ZANNYCHAT_FRONTEND_URL || 'https://zannychat-app.netlify.app').replace(/\/$/, '');
+const frontendUrl = (process.env.ZANNYCHAT_FRONTEND_URL || 'https://zannychat.vercel.app').replace(/\/$/, '');
 const backendUrl = (process.env.ZANNYCHAT_BACKEND_URL || 'https://zannychat-backend-1.onrender.com').replace(/\/$/, '');
 const attempts = Math.max(1, Math.min(5, Number.parseInt(process.env.SMOKE_ATTEMPTS || '3', 10) || 3));
 const timeoutMs = Math.max(1000, Math.min(30000, Number.parseInt(process.env.SMOKE_TIMEOUT_MS || '12000', 10) || 12000));
