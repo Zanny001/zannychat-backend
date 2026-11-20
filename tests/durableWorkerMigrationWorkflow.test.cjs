@@ -8,7 +8,7 @@ const workflow = fs.readFileSync(
   'utf8',
 );
 
-test('guarded worker/index migration workflow excludes only the four SQL-verified LIVE ledger aliases', () => {
+test('guarded worker/index migration workflow excludes the five SQL-verified LIVE migration aliases', () => {
   for (const filename of [
     '20261119180000_live_creator_preferences.sql',
     '20261119200000_live_events.sql',
@@ -28,7 +28,7 @@ test('guarded worker/index migration workflow excludes only the four SQL-verifie
 test('guarded production workflow still requires exactly the three remaining migrations and explicit confirmation', () => {
   assert.match(workflow, /confirm_production_apply/);
   assert.match(workflow, /if: inputs\.confirm_production_apply == true/);
-  assert.match(workflow, /20261120120000 20261120130000 20261120140000 20261120150000 \| sort/);
+  assert.match(workflow, /20261120120000 20261120130000 20261120140000 \| sort/);
   assert.match(workflow, /20261120140000/);
   assert.match(workflow, /supabase db push --dry-run --linked/);
   assert.match(workflow, /supabase db push --linked --yes/);
