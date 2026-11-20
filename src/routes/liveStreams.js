@@ -1464,7 +1464,11 @@ router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error
     if (stream.creator_id !== req.user.id && await hasBlockBetween(stream.creator_id, req.user.id)) {
       return res.status(403).json({ error: 'Reactions are unavailable' });
     }
-    if (!await requireJoined(streamId, req.user.id)) return res.status(403).json({ error: 'Join this LIVE stream before reacting' });
+    // The creator is the owner of the live room and may not have a participant row.
+    // Viewers and guests must still have an active joined participant record.
+    if (stream.creator_id !== req.user.id && !await requireJoined(streamId, req.user.id)) {
+      return res.status(403).json({ error: 'Join this LIVE stream before reacting' });
+    }
     const { data: impactRows, error } = await supabaseAdmin.rpc('record_live_creator_impact', {
       p_stream_id: streamId,
       p_user_id: req.user.id,
