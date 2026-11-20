@@ -343,3 +343,9 @@ test('LIVE creator roster includes the host, participant identity, camera and mi
   assert.ok(route.includes("role: isCreator ? 'creator' : participant?.role || null"));
   assert.ok(route.includes('avatarColor: profile?.avatar_color || null'));
 });
+
+
+test('LIVE roster reports actual media connection status without granting creator moderator controls', () => {
+  assert.ok(route.includes('moderator: moderatorIds.has(userId)'));
+  assert.ok(route.includes("connectionStatus: mediaByIdentity.has(userId) ? 'connected' : 'not_connected'"));
+});
