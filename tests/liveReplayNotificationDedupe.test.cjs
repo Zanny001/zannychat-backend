@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { notifyReplayReady } = require('../src/services/liveReplayFinalizer');
 
-function createFakeAdmin() {
+function createFakeAdmin({ rowExists = true } = {}) {
   let notificationSentAt = null;
   return {
     get notificationSentAt() { return notificationSentAt; },
@@ -17,7 +17,7 @@ function createFakeAdmin() {
           assert.equal(value, 'replay-1');
           return this;
         },
-        maybeSingle: async () => ({ data: { notification_sent_at: notificationSentAt }, error: null }),
+        maybeSingle: async () => ({ data: rowExists ? { notification_sent_at: notificationSentAt } : null, error: null }),
         is: async (column, value) => {
           assert.equal(column, 'notification_sent_at');
           assert.equal(value, null);
@@ -73,5 +73,13 @@ test('a replay already marked as notified is skipped', async () => {
   await notifyReplayReady({ ...replay, notification_sent_at: '2026-11-20T00:00:00.000Z' }, {
     admin, sendPush: async () => { sends += 1; },
   });
+  assert.equal(sends, 0);
+});
+
+
+test('a replay removed during finalization is not notified', async () => {
+  const admin = createFakeAdmin({ rowExists: false });
+  let sends = 0;
+  await notifyReplayReady(replay, { admin, sendPush: async () => { sends += 1; } });
   assert.equal(sends, 0);
 });
