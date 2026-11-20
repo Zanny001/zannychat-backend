@@ -86,7 +86,7 @@ function createRoomAdminToken(config, roomName, nowSeconds = Math.floor(Date.now
 }
 
 function roomServiceUrl(liveKitUrl, method) {
-  if (!['ListParticipants', 'RemoveParticipant', 'MutePublishedTrack', 'UpdateParticipant'].includes(method)) {
+  if (!['ListParticipants', 'RemoveParticipant', 'MutePublishedTrack', 'UpdateParticipant', 'SendData'].includes(method)) {
     throw new Error('Unsupported LiveKit room service method');
   }
   const url = new URL(String(liveKitUrl || '').trim());
@@ -167,6 +167,26 @@ async function updateRoomParticipantPermissions(roomName, identity, permission, 
   }, config, fetchImpl);
 }
 
+
+async function sendRoomData(roomName, payload, config = getRoomAdminConfig(), fetchImpl) {
+  if (!/^z(?:gc|live)_[a-f0-9]{32}$/i.test(String(roomName || ''))) {
+    throw new Error('Invalid ZannyChat LiveKit room name');
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('A valid LIVE room event is required');
+  }
+  const serialized = JSON.stringify(payload);
+  if (Buffer.byteLength(serialized, 'utf8') > 512) {
+    throw new Error('LIVE room event exceeds the payload limit');
+  }
+  return requestRoomService('SendData', {
+    room: roomName,
+    data: Buffer.from(serialized, 'utf8').toString('base64'),
+    kind: 'RELIABLE',
+    topic: 'zanny.live.feed.v1',
+  }, config, fetchImpl);
+}
+
 async function validateRoomAdminCredentials(config = getRoomAdminConfig(), fetchImpl) {
   if (!config) throw new Error('LiveKit room administration is not configured');
   try {
@@ -191,5 +211,6 @@ module.exports = {
   muteRoomParticipantTrack,
   updateRoomParticipantAttributes,
   updateRoomParticipantPermissions,
+  sendRoomData,
   validateRoomAdminCredentials,
 };
