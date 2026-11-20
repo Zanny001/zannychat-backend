@@ -1,0 +1,42 @@
+name: Production smoke checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: "Optional frontend URL (defaults to the verified Vercel production domain)"
+        required: false
+        type: string
+        default: "https://zannychat.vercel.app"
+      backend_url:
+        description: "Optional backend URL (defaults to the production Render service)"
+        required: false
+        type: string
+        default: "https://zannychat-backend-1.onrender.com"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zannychat-production-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Read-only public production endpoint checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out backend repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check public frontend and backend readiness
+        env:
+          ZANNYCHAT_FRONTEND_URL: ${{ inputs.frontend_url }}
+          ZANNYCHAT_BACKEND_URL: ${{ inputs.backend_url }}
+        run: node scripts/smoke-production.mjs

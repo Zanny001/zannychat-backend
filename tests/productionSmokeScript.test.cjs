@@ -34,3 +34,13 @@ test('production smoke defaults to the verified Vercel frontend domain', () => {
   assert.doesNotMatch(source, /https:\/\/zannychat-app\.netlify\.app/);
   assert.doesNotMatch(source, /https:\/\/zannychat\.netlify\.app/);
 });
+
+
+test('manual production smoke workflow runs only the public read-only endpoint script', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'production-smoke.yml'), 'utf8');
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /https:\/\/zannychat\.vercel\.app/);
+  assert.match(workflow, /https:\/\/zannychat-backend-1\.onrender\.com/);
+  assert.match(workflow, /node scripts\/smoke-production\.mjs/);
+  assert.doesNotMatch(workflow, /SUPABASE_SERVICE_ROLE_KEY|Authorization:\s*Bearer|supabase db push|POST|PATCH|DELETE/);
+});
