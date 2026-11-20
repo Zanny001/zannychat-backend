@@ -1226,11 +1226,18 @@ router.get('/:streamId/guest-requests', async (req, res) => {
     if (error) throw error;
     const userIds = (data || []).map((row) => row.user_id);
     const { data: profiles, error: profileError } = userIds.length
-      ? await supabaseAdmin.from('profiles').select('id,name').in('id', userIds)
+      ? await supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id', userIds)
       : { data: [], error: null };
     if (profileError) throw profileError;
-    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
-    return res.json({ requests: (data || []).map((row) => ({ ...row, name: names.get(row.user_id) || 'ZannyChat user' })) });
+    const profilesById = new Map((profiles || []).map((row) => [row.id, row]));
+    return res.json({ requests: (data || []).map((row) => {
+      const profile = profilesById.get(row.user_id);
+      return {
+        ...row,
+        name: profile?.name || 'ZannyChat user',
+        avatarColor: profile?.avatar_color || null,
+      };
+    }) });
   } catch (error) {
     console.error('[live] guest request list failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load guest requests' });
@@ -1638,7 +1645,7 @@ router.get('/:streamId/participants', async (req, res) => {
     if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
     if (stream.creator_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can manage LIVE participants' });
     const { data: joined, error: joinedError } = await supabaseAdmin.from('live_stream_participants')
-      .select('user_id,role,joined_at').eq('stream_id', streamId).in('role', ['viewer','guest']).eq('status', 'joined')
+      .select('user_id,role,joined_at,status').eq('stream_id', streamId).in('role', ['viewer','guest']).eq('status', 'joined')
       .order('joined_at', { ascending: true }).limit(500);
     if (joinedError) throw joinedError;
     const { data: moderators, error: moderatorsError } = await supabaseAdmin.from('live_stream_moderators')
@@ -1646,36 +1653,48 @@ router.get('/:streamId/participants', async (req, res) => {
     if (moderatorsError) throw moderatorsError;
     const joinedById = new Map((joined || []).map((row) => [row.user_id, row]));
     const moderatorIds = new Set((moderators || []).map((row) => row.user_id));
-    const userIds = [...new Set([...joinedById.keys(), ...moderatorIds])];
+    const userIds = [...new Set([stream.creator_id, ...joinedById.keys(), ...moderatorIds])];
     const { data: profiles, error: profilesError } = userIds.length
-      ? await supabaseAdmin.from('profiles').select('id,name').in('id', userIds)
+      ? await supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id', userIds)
       : { data: [], error: null };
     if (profilesError) throw profilesError;
-    const names = new Map((profiles || []).map((row) => [row.id, row.name]));
+    const profilesById = new Map((profiles || []).map((row) => [row.id, row]));
     let mediaByIdentity = new Map();
     try {
       const room = await listRoomParticipants(stream.room_name);
       mediaByIdentity = new Map((room?.participants || []).map((participant) => {
         const audio = (participant.tracks || []).find((track) =>
           track.type === 0 || String(track.type || '').toUpperCase() === 'AUDIO');
+        const video = (participant.tracks || []).find((track) =>
+          track.type === 1 || String(track.type || '').toUpperCase() === 'VIDEO');
         return [participant.identity, {
           microphoneMuted: typeof audio?.muted === 'boolean' ? audio.muted : null,
+          cameraEnabled: typeof video?.muted === 'boolean' ? !video.muted : Boolean(video),
           spotlighted: participant.attributes?.zannychat_spotlight === 'true',
         }];
       }));
     } catch (mediaError) {
       console.error('[live] LiveKit participant media state unavailable:', mediaError?.message || mediaError);
     }
-    return res.json({ participants: userIds.map((userId) => ({
-      userId, name: names.get(userId) || 'ZannyChat user',
-      joinedAt: joinedById.get(userId)?.joined_at || null,
-      joined: joinedById.has(userId),
-      role: joinedById.get(userId)?.role || null,
-      stage: joinedById.get(userId)?.role === 'guest',
-      microphoneMuted: mediaByIdentity.get(userId)?.microphoneMuted ?? null,
-      spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false,
-      moderator: moderatorIds.has(userId),
-    })) });
+    return res.json({ participants: userIds.map((userId) => {
+      const profile = profilesById.get(userId);
+      const isCreator = userId === stream.creator_id;
+      const participant = joinedById.get(userId);
+      return {
+        userId,
+        name: profile?.name || (isCreator ? 'LIVE Creator' : 'ZannyChat user'),
+        avatarColor: profile?.avatar_color || null,
+        joinedAt: isCreator ? stream.started_at : participant?.joined_at || null,
+        joined: isCreator || joinedById.has(userId),
+        role: isCreator ? 'creator' : participant?.role || null,
+        status: isCreator || participant ? 'joined' : 'offline',
+        stage: isCreator || participant?.role === 'guest',
+        microphoneMuted: mediaByIdentity.get(userId)?.microphoneMuted ?? null,
+        cameraEnabled: mediaByIdentity.get(userId)?.cameraEnabled ?? null,
+        spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false,
+        moderator: isCreator || moderatorIds.has(userId),
+      };
+    }) });
   } catch (error) {
     console.error('[live] participants fetch failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load LIVE participants' });
