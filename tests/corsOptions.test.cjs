@@ -4,7 +4,10 @@ const { DEFAULT_PRODUCTION_ORIGIN, parseAllowedOrigins, createCorsOptions } = re
 
 test('production frontend is in the allowlist and configured origins are parsed', () => {
   const origins = parseAllowedOrigins('https://admin.example.com, https://preview.example.com ');
+  assert.equal(DEFAULT_PRODUCTION_ORIGIN, 'https://zannychat.vercel.app');
   assert.equal(origins.has(DEFAULT_PRODUCTION_ORIGIN), true);
+  assert.equal(origins.has('https://zannychat.netlify.app'), true);
+  assert.equal(origins.has('https://zannychat-app.netlify.app'), true);
   assert.equal(origins.has('https://admin.example.com'), true);
   assert.equal(origins.has('https://preview.example.com'), true);
 });
