@@ -17,13 +17,15 @@ describe('CORS production origins', () => {
     else process.env.NODE_ENV = previousNodeEnv;
   });
 
-  test('allows the temporary production Netlify site by default', () => {
-    expect(DEFAULT_PRODUCTION_ORIGIN).toBe('https://zannychat.netlify.app');
-    expect(parseAllowedOrigins()).toContain('https://zannychat.netlify.app');
+  test('allows the canonical Vercel production site by default', () => {
+    expect(DEFAULT_PRODUCTION_ORIGIN).toBe('https://zannychat.vercel.app');
+    expect(parseAllowedOrigins()).toContain('https://zannychat.vercel.app');
   });
 
-  test('continues allowing the previous production site during transition', () => {
+  test('continues allowing both previous Netlify sites as legacy origins', () => {
+    expect(LEGACY_PRODUCTION_ORIGINS).toContain('https://zannychat.netlify.app');
     expect(LEGACY_PRODUCTION_ORIGINS).toContain('https://zannychat-app.netlify.app');
+    expect(parseAllowedOrigins()).toContain('https://zannychat.netlify.app');
     expect(parseAllowedOrigins()).toContain('https://zannychat-app.netlify.app');
   });
 
