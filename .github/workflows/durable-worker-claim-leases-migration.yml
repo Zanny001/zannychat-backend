@@ -1,10 +1,10 @@
-name: Apply worker, LIVE Event index and session inventory migrations
+name: Apply worker, LIVE Event index, session inventory and replay notification migrations
 
 on:
   workflow_dispatch:
     inputs:
       confirm_production_apply:
-        description: "Confirm applying exactly migrations 20261120120000, 20261120130000 and 20261120140000 to production"
+        description: "Confirm applying exactly migrations 20261120120000, 20261120130000, 20261120140000 and 20261120150000 to production"
         required: true
         type: boolean
         default: false
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    name: Preview and apply the three reviewed worker/foreign-key/session migrations
+    name: Preview and apply the four reviewed worker/foreign-key/session/replay migrations
     if: inputs.confirm_production_apply == true
     runs-on: ubuntu-latest
     environment: production
@@ -99,7 +99,7 @@ jobs:
             gsub(/[`[:space:]]/, "", remote_version)
             if (local_version != "" && remote_version == "") print local_version
           }' | sort)"
-          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 | sort)"
+          EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 20261120140000 20261120150000 | sort)"
           if [ "$PENDING" != "$EXPECTED" ]; then
             echo "::error::Refusing production apply: expected exactly the three reviewed pending migrations."
             printf 'Expected: %s\nActual:\n%s\n' "$EXPECTED" "$PENDING"
@@ -131,7 +131,7 @@ jobs:
           }
           supabase db push --dry-run --linked
 
-      - name: Apply the three confirmed production migrations
+      - name: Apply the four confirmed production migrations
         env:
           WORKDIR: ${{ steps.workspace.outputs.workdir }}
         run: |
@@ -159,4 +159,4 @@ jobs:
             printf '%s\n' "$PENDING"
             exit 1
           }
-          echo "Worker-lease, LIVE Event index and read-only session inventory migrations applied; migration history verified."
+          echo "Worker-lease, LIVE Event index, read-only session inventory and replay notification migrations applied; migration history verified."
