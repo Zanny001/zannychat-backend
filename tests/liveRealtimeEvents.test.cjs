@@ -64,3 +64,10 @@ test('hiding a LIVE comment broadcasts a server-authoritative feed invalidation'
   const hideRoute = route.slice(route.indexOf("router.post('/:streamId/comments/:commentId/hide'"));
   assert.match(hideRoute, /moderation_status: 'hidden'[\s\S]*?publishLiveFeedChanged\(stream\)/);
 });
+
+test('LIVE room data rejects unapproved event types and extra fields', async () => {
+  const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({}) });
+  await assert.rejects(sendRoomData(room, { v: 1, type: 'guest_private_request', userId: 'private-user' }, config, fetchImpl), /Unsupported LIVE room event/);
+  await assert.rejects(sendRoomData(room, { v: 1, type: 'feed_changed', userId: 'private-user' }, config, fetchImpl), /Unsupported LIVE room event/);
+  await assert.rejects(sendRoomData(room, { v: 2, type: 'feed_changed' }, config, fetchImpl), /Unsupported LIVE room event/);
+});
