@@ -172,10 +172,14 @@ async function sendRoomData(roomName, payload, config = getRoomAdminConfig(), fe
   if (!/^z(?:gc|live)_[a-f0-9]{32}$/i.test(String(roomName || ''))) {
     throw new Error('Invalid ZannyChat LiveKit room name');
   }
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('A valid LIVE room event is required');
+  // V1 deliberately carries only an opaque feed invalidation. Viewer-specific
+  // content must always be fetched from authenticated APIs, never broadcast.
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || payload.v !== 1 || payload.type !== 'feed_changed'
+    || Object.keys(payload).some((key) => !['v', 'type'].includes(key))) {
+    throw new Error('Unsupported LIVE room event');
   }
-  const serialized = JSON.stringify(payload);
+  const serialized = JSON.stringify({ v: 1, type: 'feed_changed' });
   if (Buffer.byteLength(serialized, 'utf8') > 512) {
     throw new Error('LIVE room event exceeds the payload limit');
   }
