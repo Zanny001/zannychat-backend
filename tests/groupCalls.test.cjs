@@ -169,29 +169,40 @@ test('LiveKit room deletion uses authenticated server-side Twirp request and rej
   await assert.rejects(() => deleteLiveKitRoom('not-a-zanny-room', { config, fetchImpl: async () => ({ ok: true, status: 200 }) }), /Invalid ZannyChat LiveKit room name/);
 });
 
-test('ended group-call media cleanup records success and leaves failures retryable', async () => {
+test('ended group-call media cleanup claims each room and leaves failures retryable', async () => {
   const updates = [];
   const rooms = [
     { id: 'room-1', room_name: 'zgc_0123456789abcdef0123456789abcdef' },
     { id: 'room-2', room_name: 'zgc_fedcba9876543210fedcba9876543210' },
   ];
+  let claimIndex = 0;
   const admin = {
     from(table) {
       assert.equal(table, 'group_call_rooms');
       const query = {
         operation: 'select',
         values: null,
-        select() { this.operation = 'select'; return this; },
+        returning: false,
+        select() { if (this.operation === 'update') this.returning = true; else this.operation = 'select'; return this; },
         update(values) { this.operation = 'update'; this.values = values; return this; },
         eq() { return this; },
         is() { return this; },
+        or() { return this; },
         order() { return this; },
         limit() { return this; },
         in() { return this; },
         then(resolve, reject) {
           if (this.operation === 'select') return Promise.resolve({ data: rooms, error: null }).then(resolve, reject);
           updates.push(this.values);
-          return Promise.resolve({ data: null, error: null }).then(resolve, reject);
+          if (Object.prototype.hasOwnProperty.call(this.values, 'media_cleanup_claimed_at')
+              && this.values.media_cleanup_claimed_at !== null) {
+            const room = rooms[claimIndex++];
+            return Promise.resolve({ data: room ? [room] : [], error: null }).then(resolve, reject);
+          }
+          if (Object.prototype.hasOwnProperty.call(this.values, 'media_terminated_at')) {
+            return Promise.resolve({ data: [{ id: 'room-1' }], error: null }).then(resolve, reject);
+          }
+          return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         },
       };
       return query;
@@ -203,7 +214,12 @@ test('ended group-call media cleanup records success and leaves failures retryab
     deleteRoom: async (name) => { if (name.includes('fedcba')) throw new Error('SFU unavailable'); },
   });
   assert.deepEqual(result, { checked: 2, terminated: 1, failed: 1 });
-  assert.deepEqual(updates, [{ media_terminated_at: '2026-11-12T10:00:00.000Z' }]);
+  assert.deepEqual(updates, [
+    { media_cleanup_claimed_at: '2026-11-12T10:00:00.000Z' },
+    { media_terminated_at: '2026-11-12T10:00:00.000Z', media_cleanup_claimed_at: null },
+    { media_cleanup_claimed_at: '2026-11-12T10:00:00.000Z' },
+    { media_cleanup_claimed_at: null },
+  ]);
   assert.ok(mediaTeardownMigration.includes('ADD COLUMN IF NOT EXISTS media_terminated_at'));
   assert.ok(mediaTeardownMigration.includes("status = 'ended' AND media_terminated_at IS NULL"));
   assert.ok(route.includes('cleanupEndedGroupCallMedia'));
