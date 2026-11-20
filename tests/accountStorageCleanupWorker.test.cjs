@@ -15,7 +15,9 @@ test('account deletion queues cleanup before Auth deletion and only releases it 
   assert.ok(account.includes("status: 'held'"));
   assert.ok(account.includes(".update({ status: 'pending', next_attempt_at: new Date().toISOString() })"));
   assert.ok(job.includes(".in('status', ['held', 'pending'])"));
-  assert.ok(job.includes('admin.auth.admin.getUserById(job.user_id)'));
+  assert.ok(job.includes(".or('claimed_at.is.null,claimed_at.lt.' + leaseExpiredBefore)"));
+  assert.ok(job.includes(".eq('claimed_at', claimedAt)"));
+  assert.ok(job.includes('admin.auth.admin.getUserById(claimedJob.user_id)'));
   assert.ok(job.includes(".eq('status', 'held')"));
   assert.ok(account.includes('runAccountStorageCleanup({ admin: supabaseAdmin, limit: 1 })'));
   assert.ok(account.includes('storageCleanupPending'));
