@@ -19,6 +19,9 @@ const worker = fs.readFileSync(
 test('replay notification claims are durable, expiring and token-bound', () => {
   assert.match(migration, /notification_claimed_at timestamptz/);
   assert.match(migration, /notification_claim_token uuid/);
+  assert.match(migration, /notification_retry_after timestamptz/);
+  assert.match(migration, /notification_retry_after IS NULL OR notification_retry_after <= now\(\)/);
+  assert.match(migration, /notification_retry_after = now\(\) \+ interval '10 minutes'/);
   assert.match(migration, /notification_claimed_at < now\(\) - interval '10 minutes'/);
   assert.match(migration, /notification_claim_token = p_claim_token/);
   assert.match(migration, /notification_sent_at IS NULL/);
@@ -42,6 +45,7 @@ test('replay notification sender claims before push and completes only after del
   const complete = finalizer.indexOf("admin.rpc('complete_live_replay_ready_notification'");
   const release = finalizer.indexOf("admin.rpc('release_live_replay_ready_notification'");
   assert.ok(claim >= 0 && push > claim && complete > push && release > complete);
+  assert.match(finalizer, /Number\(delivery\.sent \|\| 0\) < 1/);
   assert.doesNotMatch(finalizer, /replayReadyNotificationsInFlight/);
 });
 
