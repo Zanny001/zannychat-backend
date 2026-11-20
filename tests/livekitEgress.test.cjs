@@ -73,6 +73,7 @@ test('LIVE replay starts a private 360p MP4 through unified StartEgress and Supa
   assert.equal(request.body.outputs.length, 1);
   assert.equal(request.body.outputs[0].file.file_type, 1);
   assert.equal(request.body.outputs[0].file.filepath, 'creator/stream/replay.mp4');
+  assert.equal(request.body.outputs[0].file.disable_manifest, true);
   assert.equal(request.body.storage.s3.bucket, 'live-replays');
   assert.equal(request.body.storage.s3.force_path_style, true);
   assert.equal(Object.hasOwn(request.body, 'outputs'), true);
