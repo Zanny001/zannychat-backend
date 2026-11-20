@@ -149,13 +149,16 @@ async function getStream(streamId) {
 async function canViewLiveReplay(stream, userId) {
   if (stream.creator_id === userId) return true;
   if (await hasBlockBetween(stream.creator_id, userId)) return false;
-  if (stream.visibility === 'public') return true;
-  if (await canModerateLive(stream, userId)) return true;
 
+  // A creator-removed participant is blocked from rejoining the room; carry
+  // that same explicit revocation into replay discovery and signed playback.
   const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
-    .select('id').eq('stream_id', stream.id).eq('user_id', userId).maybeSingle();
+    .select('id,status').eq('stream_id', stream.id).eq('user_id', userId).maybeSingle();
   if (participantError) throw participantError;
+  if (participant?.status === 'blocked') return false;
   if (participant) return true;
+  if (await canModerateLive(stream, userId)) return true;
+  if (stream.visibility === 'public') return true;
   if (stream.visibility === 'followers') {
     const { data, error } = await supabaseAdmin.from('live_creator_follows')
       .select('creator_id').eq('creator_id', stream.creator_id).eq('follower_id', userId).maybeSingle();
