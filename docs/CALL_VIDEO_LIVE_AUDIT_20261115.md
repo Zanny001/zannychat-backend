@@ -79,3 +79,36 @@ Reviewed the native and web call screens, group-call/conference admission, Supab
 - Verified all privileged call/LIVE join, leave and cleanup RPCs are executable by `service_role` only; anon and authenticated execution are denied.
 - Verified there were no currently joined LIVE/group-call participant rows at the opt-in migration point, so no active sessions were expired by rollout.
 - Supabase performance advisor no longer reports the three missing LIVE foreign-key indexes; remaining unused-index notices are retained for workload-based review.
+
+
+## LIVE follow-up — 2026-11-20
+
+This addendum supersedes earlier replay-row counts in this document where they conflict with the current read-only snapshot.
+
+### Confirmed changes
+
+- Frontend PR #210 is merged: creator-only END LIVE is explicit and confirmation-gated on native and web; viewers retain a separate LEAVE action; native/web floating guest tiles use an adaptive non-overlapping layout. Frontend CI passed on the PR head.
+- Frontend PR #208 is merged: Creator Studio now links to Events, Preferences and Rankings; all PR checks passed.
+- Backend PR #166 is merged: the creator may send LIVE reactions without a viewer/guest participant-row prerequisite, while viewers and guests still require an active joined participant. The change has no migration and backend tests/quality checks passed.
+- The authenticated production record_live_creator_impact function is the creator-aware version, uses an empty pinned search_path, grants EXECUTE to service_role, and denies it to authenticated.
+- The eight inspected LIVE core tables retain RLS and no direct anon/authenticated SELECT privileges; service_role retains SELECT.
+- live-replays remains private, MP4-only, and capped at 48,000,000 bytes.
+
+### Fresh read-only production snapshot
+
+- One LIVE stream is currently active; no end, leave, update, or cleanup action was issued during this audit.
+- The account's ended-broadcast deletion flow removed multiple ended stream rows and their associated private replay objects. The audit logs show a prior replay row was created and subsequently processed before the history deletions.
+- Current live_stream_replays row count: zero. Current storage.objects count for live-replays: zero. Therefore there is no current replay available to play; this is consistent with the deleted broadcast history and is not evidence that a new Egress recording failed.
+- Supabase edge logs show successful reads for replay rows and reaction feeds. The recent window also contains successful record_live_creator_impact RPC requests; however, those database requests do not prove that the current creator's UI request reached the route or that media was delivered.
+- The active stream snapshot contains a joined creator participant row. No current-stream reaction rows were present in the snapshot.
+
+### Remaining release gates
+
+1. Pull frontend and backend main locally and run the project test/release commands.
+2. Verify the merged frontend on a deployed build. The Vercel deployment integration reported its free daily deployment limit, so a Ready preview must not be mistaken for a production deployment.
+3. On a future controlled LIVE session, verify creator re-entry returns a server-issued creator role, the visible END LIVE action works only for the creator, and cancellation keeps the stream active.
+4. Verify creator and viewer/guest reactions separately, including creator self-reaction not awarding self-impact.
+5. Start a fresh replay on a test broadcast; verify recording → processing → ready, private object existence, signed playback for an eligible account, denial for an ineligible account, owner deletion, and seven-day expiry cleanup.
+6. Complete two-account browser and two-physical-device native tests for remote video/audio, guest approval/demotion, camera/microphone toggles, reconnect, moderation, and stream teardown.
+
+No production migration, permission change, or data mutation was performed for this addendum.
