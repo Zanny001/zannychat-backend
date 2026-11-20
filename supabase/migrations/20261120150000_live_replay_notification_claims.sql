@@ -3,7 +3,8 @@ BEGIN;
 
 ALTER TABLE public.live_stream_replays
   ADD COLUMN IF NOT EXISTS notification_claimed_at timestamptz,
-  ADD COLUMN IF NOT EXISTS notification_claim_token uuid;
+  ADD COLUMN IF NOT EXISTS notification_claim_token uuid,
+  ADD COLUMN IF NOT EXISTS notification_retry_after timestamptz;
 
 CREATE OR REPLACE FUNCTION public.claim_live_replay_ready_notification(p_replay_id uuid)
 RETURNS uuid
@@ -25,6 +26,7 @@ BEGIN
   WHERE id = p_replay_id
     AND status = 'ready'
     AND notification_sent_at IS NULL
+    AND (notification_retry_after IS NULL OR notification_retry_after <= now())
     AND (
       notification_claimed_at IS NULL
       OR notification_claimed_at < now() - interval '10 minutes'
@@ -56,6 +58,7 @@ BEGIN
   SET notification_sent_at = now(),
       notification_claimed_at = NULL,
       notification_claim_token = NULL,
+      notification_retry_after = NULL,
       updated_at = now()
   WHERE id = p_replay_id
     AND status = 'ready'
@@ -83,6 +86,7 @@ BEGIN
   UPDATE public.live_stream_replays
   SET notification_claimed_at = NULL,
       notification_claim_token = NULL,
+      notification_retry_after = now() + interval '10 minutes',
       updated_at = now()
   WHERE id = p_replay_id
     AND notification_sent_at IS NULL
