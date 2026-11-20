@@ -58,6 +58,21 @@ test('LIVE supports separate broadcast, themed video chat and audio room modes w
   assert.ok(route.includes("update({ experience_mode: experienceMode, category })"));
 });
 
+test('LIVE reaction admission matches the SQL writer joined-state guard and reports lifecycle errors accurately', () => {
+  const helperStart = route.indexOf('async function requireJoined');
+  const helperEnd = route.indexOf('\n}', helperStart) + 2;
+  const helper = route.slice(helperStart, helperEnd);
+  assert.match(helper, /\.eq\('status', 'joined'\)/);
+  assert.match(helper, /\.is\('left_at', null\)/);
+  const reactionStart = route.indexOf("router.post('/:streamId/react'");
+  const reactionEnd = route.indexOf('\n});', reactionStart) + 4;
+  const reactionRoute = route.slice(reactionStart, reactionEnd);
+  assert.match(reactionRoute, /error\?\.code === '42501'[\s\S]*status\(403\)/);
+  assert.match(reactionRoute, /error\?\.code === '22023'[\s\S]*status\(400\)/);
+  assert.match(reactionRoute, /error\?\.code === 'P0001'[\s\S]*status\(404\)/);
+  assert.match(reactionRoute, /details: error\?\.details/);
+});
+
 test('LIVE reaction feed limits to the newest events and restores chronological display order', () => {
   const start = route.indexOf(".select('id,user_id,reaction,created_at')");
   const end = route.indexOf('return res.json({ comments, reactions })', start);
