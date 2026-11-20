@@ -254,6 +254,51 @@ router.post('/invites/accept', async (req, res) => {
     return res.status(400).json({ error: 'Enter a valid group invite token' });
   }
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  // Invite acceptance is also an invitation event: enforce the recipient's
+  // saved preference and the inviter block relationship before the
+  // service-role RPC inserts membership. The RPC remains the atomic token
+  // use-count/membership boundary and rechecks expiry, revocation and limits.
+  const { data: inviteRow, error: inviteLookupError } = await supabaseAdmin
+    .from('group_invites')
+    .select('id,conversation_id,created_by,expires_at,max_uses,use_count,revoked_at')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (inviteLookupError) return res.status(500).json({ error: 'Unable to check group invite permissions' });
+  if (!inviteRow || inviteRow.revoked_at || new Date(inviteRow.expires_at).getTime() <= Date.now() || inviteRow.use_count >= inviteRow.max_uses) {
+    return res.status(410).json({ error: 'This invite is expired, revoked, or has reached its use limit.' });
+  }
+
+  const { data: existingMembership, error: existingMembershipError } = await supabaseAdmin
+    .from('conversation_participants')
+    .select('user_id')
+    .eq('conversation_id', inviteRow.conversation_id)
+    .eq('user_id', req.user.id)
+    .maybeSingle();
+  if (existingMembershipError) return res.status(500).json({ error: 'Unable to check existing group membership' });
+
+  if (!existingMembership) {
+    const [detailsResult, membershipResult, blocksResult] = await Promise.all([
+      supabaseAdmin.from('profile_details').select('user_id,group_invite_permission').eq('user_id', req.user.id),
+      supabaseAdmin.from('conversation_participants').select('conversation_id,user_id').in('user_id', [inviteRow.created_by, req.user.id]),
+      supabaseAdmin.from('blocked_users').select('blocker_id,blocked_id').or(
+        `blocker_id.eq.${inviteRow.created_by},blocked_id.eq.${inviteRow.created_by}`
+      ),
+    ]);
+    const detailsUnavailableOnOldSchema = detailsResult.error?.code === '42P01';
+    if ((detailsResult.error && !detailsUnavailableOnOldSchema) || membershipResult.error || blocksResult.error) {
+      return res.status(500).json({ error: 'Unable to check group invitation permissions' });
+    }
+    const privacy = evaluateGroupInvitePrivacy({
+      inviterId: inviteRow.created_by,
+      inviteeIds: [req.user.id],
+      profileDetails: detailsUnavailableOnOldSchema ? [] : (detailsResult.data || []),
+      membershipRows: membershipResult.data || [],
+      blockedRows: blocksResult.data || [],
+    });
+    if (!privacy.allowed) return res.status(403).json({ error: privacy.reason });
+  }
+
   const { data: conversationId, error } = await supabaseAdmin.rpc('accept_group_invite', {
     p_token_hash: tokenHash, p_user_id: req.user.id,
   });
