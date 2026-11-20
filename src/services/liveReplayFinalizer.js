@@ -43,7 +43,7 @@ async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
       .eq('id', replay.id)
       .maybeSingle();
     if (readError) throw readError;
-    if (!currentReplay || currentReplay.notification_sent_at) return;
+    if (!currentReplay || currentReplay.notification_sent_at) return { skipped: true };
 
     const delivery = await sendPush(replay.creator_id, {
       title: 'Your LIVE replay is ready',
@@ -55,6 +55,7 @@ async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
       .eq('id', replay.id)
       .is('notification_sent_at', null);
     if (error) throw error;
+    return { sent: true, legacy: true };
   } finally {
     legacyReplayNotificationsInFlight.delete(replay.id);
   }
@@ -68,7 +69,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
   const admin = dependencies.admin || supabaseAdmin;
   const sendPush = dependencies.sendPush || sendPushToUser;
   const now = dependencies.now || (() => new Date());
-  if (!replay?.id || replay.notification_sent_at) return;
+  if (!replay?.id || replay.notification_sent_at) return { skipped: true };
 
   const { data: claimToken, error: claimError } = await admin.rpc('claim_live_replay_ready_notification', {
     p_replay_id: replay.id,
@@ -83,7 +84,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
     }
     throw claimError;
   }
-  if (!claimToken) return;
+  if (!claimToken) return { skipped: true };
 
   try {
     await sendPush(replay.creator_id, {
@@ -101,6 +102,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
     });
     if (completeError) throw completeError;
     if (!completed) throw new Error('LIVE replay notification claim was lost before completion');
+    return { sent: true };
   } catch (error) {
     await releaseReplayNotificationClaim(admin, replay.id, claimToken);
     throw error;
