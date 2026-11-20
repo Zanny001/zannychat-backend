@@ -111,10 +111,10 @@ test('guest removal demotes the guest to a subscribed viewer without removing th
     return { ok: true, json: async () => ({ identity: 'guest-3' }) };
   };
   await updateRoomParticipantPermissions('room-5', 'guest-3', {
-    canPublish: false, canSubscribe: true, canPublishData: true,
+    canPublish: false, canSubscribe: true, canPublishData: false,
   }, config, fetchImpl);
   assert.ok(captured.url.endsWith('/UpdateParticipant'));
-  assert.deepEqual(captured.body.permission, { canPublish: false, canSubscribe: true, canPublishData: true });
+  assert.deepEqual(captured.body.permission, { canPublish: false, canSubscribe: true, canPublishData: false });
 });
 
 test('creator guest removal preserves audience membership when LiveKit demotion succeeds', () => {
@@ -158,4 +158,12 @@ test('guest publisher capacity is enforced atomically inside the locked join RPC
   assert.ok(migration.includes('AND user_id <> p_user_id'));
   assert.ok(migration.includes('IF v_stage_joined >= 5 THEN'));
   assert.ok(route.includes("/LIVE stage is full/i"));
+});
+
+
+test('demoted LIVE viewers cannot publish client room data packets', () => {
+  assert.match(route, /canPublishData:\s*false/);
+  assert.doesNotMatch(route, /canPublishData:\s*true/);
+  assert.match(route, /publishLiveFeedChanged\(stream\)/);
+  assert.match(route, /sendRoomData\(stream\.room_name, \{ v: 1, type: 'feed_changed' \}\)/);
 });
