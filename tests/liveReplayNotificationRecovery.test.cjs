@@ -29,7 +29,7 @@ test('pending replay-ready notification recovery scans only ready rows without a
   const notified = [];
   const result = await deliverPendingReplayReadyNotifications({
     admin,
-    notify: async (row) => { notified.push(row.id); },
+    notify: async (row) => { notified.push(row.id); return { sent: true }; },
   });
   assert.deepEqual(notified, ['replay-1', 'replay-2']);
   assert.deepEqual(result, { scanned: 2, notified: 2 });
@@ -49,6 +49,7 @@ test('one failed replay-ready notification does not block retrying later rows', 
     notify: async (row) => {
       attempted.push(row.id);
       if (row.id === 'replay-1') throw new Error('temporary push failure');
+      return { sent: true };
     },
   });
   assert.deepEqual(attempted, ['replay-1', 'replay-2']);
