@@ -11,19 +11,63 @@ function getFileResults(info) {
   return info?.fileResults || info?.file_results || [];
 }
 
+const legacyReplayNotificationsInFlight = new Set();
+let legacyClaimWarningLogged = false;
+
 function isComplete(status) {
   return status === 'EGRESS_COMPLETE' || status === 3;
+}
+
+async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
+  if (legacyReplayNotificationsInFlight.has(replay.id)) return;
+  legacyReplayNotificationsInFlight.add(replay.id);
+  try {
+    const { data: currentReplay, error: readError } = await admin
+      .from('live_stream_replays')
+      .select('notification_sent_at')
+      .eq('id', replay.id)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!currentReplay || currentReplay.notification_sent_at) return;
+
+    await sendPush(replay.creator_id, {
+      title: 'Your LIVE replay is ready',
+      body: 'Your private replay is ready to watch for the next seven days.',
+      data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
+    });
+    const { error } = await admin.from('live_stream_replays')
+      .update({ notification_sent_at: now().toISOString() })
+      .eq('id', replay.id)
+      .is('notification_sent_at', null);
+    if (error) throw error;
+  } finally {
+    legacyReplayNotificationsInFlight.delete(replay.id);
+  }
+}
+
+function isMissingReplayNotificationClaimRpc(error) {
+  return error?.code === 'PGRST202' || error?.code === '42883';
 }
 
 async function notifyReplayReady(replay, dependencies = {}) {
   const admin = dependencies.admin || supabaseAdmin;
   const sendPush = dependencies.sendPush || sendPushToUser;
+  const now = dependencies.now || (() => new Date());
   if (!replay?.id || replay.notification_sent_at) return;
 
   const { data: claimToken, error: claimError } = await admin.rpc('claim_live_replay_ready_notification', {
     p_replay_id: replay.id,
   });
-  if (claimError) throw claimError;
+  if (claimError) {
+    if (isMissingReplayNotificationClaimRpc(claimError)) {
+      if (!legacyClaimWarningLogged) {
+        legacyClaimWarningLogged = true;
+        console.warn('[live-replay] durable notification claim migration is pending; using legacy per-process dedupe');
+      }
+      return notifyReplayReadyLegacy(replay, admin, sendPush, now);
+    }
+    throw claimError;
+  }
   if (!claimToken) return;
 
   try {
