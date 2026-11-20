@@ -328,3 +328,18 @@ test('LIVE best-effort RPC cleanup awaits Supabase thenables without calling a m
   assert.match(route, /try\s*\{\s*await supabaseAdmin\.rpc\('end_live_stream'/);
   assert.doesNotMatch(route, /supabaseAdmin\.rpc\([^\n]*\)\.catch\(/);
 });
+
+
+test('LIVE guest requests expose display names and avatar colors for creator approval UI', () => {
+  assert.ok(route.includes(".select('id,name,avatar_color').in('id', userIds)"));
+  assert.ok(route.includes('avatarColor: profile?.avatar_color || null'));
+});
+
+test('LIVE creator roster includes the host, participant identity, camera and microphone state', () => {
+  assert.ok(route.includes('const userIds = [...new Set([stream.creator_id, ...joinedById.keys(), ...moderatorIds])]'));
+  assert.ok(route.includes(".select('id,name,avatar_color').in('id', userIds)"));
+  assert.ok(route.includes("String(track.type || '').toUpperCase() === 'VIDEO'"));
+  assert.ok(route.includes('cameraEnabled: typeof video?.muted === \'boolean\' ? !video.muted : Boolean(video)'));
+  assert.ok(route.includes("role: isCreator ? 'creator' : participant?.role || null"));
+  assert.ok(route.includes('avatarColor: profile?.avatar_color || null'));
+});
