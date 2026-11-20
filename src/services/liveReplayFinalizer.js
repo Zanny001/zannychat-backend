@@ -155,4 +155,4 @@ async function finalizeReplay(event) {
   return { failed: true };
 }
 
-module.exports = { finalizeReplay, getEgressInfo, getFileResults, isComplete };
+module.exports = { finalizeReplay, getEgressInfo, getFileResults, isComplete, notifyReplayReady };
