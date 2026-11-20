@@ -145,7 +145,8 @@ test('guest microphone controls target only the published audio track and expose
   assert.ok(route.includes("track.type === 0 || String(track.type || '').toUpperCase() === 'AUDIO'"));
   assert.ok(route.includes('muteRoomParticipantTrack(stream.room_name, userId, audioTrack.sid, muted)'));
   assert.ok(route.includes('microphoneMuted'));
-  assert.ok(route.includes('stage: joinedById.get(userId)?.role === \'guest\''));
+  assert.ok(route.includes("stage: isCreator || participant?.role === 'guest'"));
+  assert.ok(route.includes('cameraEnabled: typeof video?.muted === \'boolean\' ? !video.muted : Boolean(video)'));
 });
 
 test('guest publisher capacity is enforced atomically inside the locked join RPC', () => {
