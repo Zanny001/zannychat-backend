@@ -1,7 +1,7 @@
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { getLiveKitEgressConfig, getLiveReplayConfig, isLiveReplayEnabled, validateReplayCredentials, stopEgress, listEgress, MAX_REPLAY_SECONDS } = require('../services/livekitEgress');
 const { validateRoomAdminCredentials } = require('../services/livekitRoomAdmin');
-const { finalizeReplay } = require('../services/liveReplayFinalizer');
+const { finalizeReplay, notifyReplayReady } = require('../services/liveReplayFinalizer');
 const { setLiveReplayStopTimer, clearLiveReplayStop } = require('../services/liveReplayStopScheduler');
 
 const RECOVERY_SCAN_MS = 60 * 1000;
@@ -142,6 +142,34 @@ async function reconcileCompletedLiveReplays() {
     }
   }
   return { scanned: (data || []).length, reconciled };
+}
+
+
+async function deliverPendingReplayReadyNotifications(dependencies = {}) {
+  const admin = dependencies.admin || supabaseAdmin;
+  const notify = dependencies.notify || notifyReplayReady;
+  if (!admin) return { scanned: 0, notified: 0 };
+  const { data, error } = await admin.from('live_stream_replays')
+    .select('id,creator_id,stream_id,notification_sent_at')
+    .eq('status', 'ready')
+    .is('notification_sent_at', null)
+    .order('updated_at', { ascending: true })
+    .limit(25);
+  if (error) throw error;
+
+  let notified = 0;
+  for (const replay of data || []) {
+    try {
+      await notify(replay);
+      notified += 1;
+    } catch (notifyError) {
+      console.error('[live-replay] ready notification retry failed', {
+        replayId: replay.id,
+        message: notifyError.message,
+      });
+    }
+  }
+  return { scanned: (data || []).length, notified };
 }
 
 async function stopExpiredLiveReplays(now = Date.now()) {
@@ -285,18 +313,22 @@ function startLiveReplayWorker() {
   }
   safeRun('startup expiry recovery', () => stopExpiredLiveReplays());
   safeRun('startup completed Egress reconciliation', () => reconcileCompletedLiveReplays());
+  safeRun('startup pending replay-ready notifications', () => deliverPendingReplayReadyNotifications());
   safeRun('startup retention cleanup', () => cleanupExpiredLiveReplays());
   const recoveryTimer = setInterval(() => safeRun('recovery scan', () => stopExpiredLiveReplays()), RECOVERY_SCAN_MS);
   const reconciliationTimer = setInterval(() => safeRun('completed Egress reconciliation', () => reconcileCompletedLiveReplays()), RECOVERY_SCAN_MS);
+  const notificationTimer = setInterval(() => safeRun('pending replay-ready notifications', () => deliverPendingReplayReadyNotifications()), RECOVERY_SCAN_MS);
   const cleanupTimer = setInterval(() => safeRun('retention cleanup', () => cleanupExpiredLiveReplays()), CLEANUP_SCAN_MS);
   recoveryTimer.unref?.();
   reconciliationTimer.unref?.();
+  notificationTimer.unref?.();
   cleanupTimer.unref?.();
 }
 
 module.exports = {
   stopExpiredLiveReplays,
   reconcileCompletedLiveReplays,
+  deliverPendingReplayReadyNotifications,
   cleanupExpiredLiveReplays,
   startLiveReplayWorker,
   scheduleLiveReplayStop,
