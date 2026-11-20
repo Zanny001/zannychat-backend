@@ -43,7 +43,9 @@ test('replay listing and playback preserve stream visibility, blocks, and creato
   assert.match(liveRoutes, /canViewLiveReplay\(replay\.stream, req\.user\.id\)/);
   assert.match(liveRoutes, /router\.get\('\/:streamId\/replays'/);
   assert.match(liveRoutes, /router\.get\('\/replays\/:replayId\/playback'/);
-  assert.match(liveRoutes, /createSignedUrl\(replay\.file_path, 360\)/);
+  assert.match(liveRoutes, /createSignedUrl\(replay\.file_path, MAX_REPLAY_SECONDS \+ 600\)/);
+  assert.match(liveRoutes, /expiresInSeconds: MAX_REPLAY_SECONDS \+ 600/);
+  assert.doesNotMatch(liveRoutes, /createSignedUrl\(replay\.file_path, 360\)/);
   assert.doesNotMatch(liveRoutes, /getPublicUrl\(replay\.file_path/);
 });
 
