@@ -49,12 +49,20 @@ jobs:
           WORKDIR="$(mktemp -d "${RUNNER_TEMP}/zannychat-worker-leases.XXXXXX")"
           mkdir -p "$WORKDIR/supabase/migrations"
 
-          # Retain all timestamped source migrations except creator-preferences:
-          # production records that migration under a different ledger version
-          # (20261119184056). Excluding its mismatched source filename prevents
-          # a false pending migration or any attempt to replay its SQL.
+          # Retain timestamped sources except four LIVE migrations whose production
+          # ledger versions differ from their filenames. A read-only comparison
+          # confirmed each stored SQL statement exactly matches its source:
+          # 20261119180000 -> ledger 20261119184056 (creator preferences)
+          # 20261119200000 -> ledger 20261119204054 (LIVE events)
+          # 20261119210000 -> ledger 20261119205846 (reminder claim fix)
+          # 20261119220000 -> ledger 20261119220130 (LIVE hard timeout)
+          # Excluding these source filenames prevents false pending entries
+          # and, critically, prevents any attempt to replay their SQL.
           find supabase/migrations -maxdepth 1 -type f -name '20*.sql' \
             ! -name '20261119180000_live_creator_preferences.sql' \
+            ! -name '20261119200000_live_events.sql' \
+            ! -name '20261119210000_fix_live_event_reminder_claim_ambiguity.sql' \
+            ! -name '20261119220000_live_stream_hard_timeout.sql' \
             -exec cp {} "$WORKDIR/supabase/migrations/" \;
 
           # Retain the legacy source files that the production ledger records.
