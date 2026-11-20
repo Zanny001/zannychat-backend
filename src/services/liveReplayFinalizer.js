@@ -39,11 +39,13 @@ async function notifyReplayReady(replay, dependencies = {}) {
     if (completeError) throw completeError;
     if (!completed) throw new Error('LIVE replay notification claim was lost before completion');
   } catch (error) {
-    const { error: releaseError } = await admin.rpc('release_live_replay_ready_notification', {
-      p_replay_id: replay.id,
-      p_claim_token: claimToken,
-    });
-    if (releaseError) {
+    try {
+      const { error: releaseError } = await admin.rpc('release_live_replay_ready_notification', {
+        p_replay_id: replay.id,
+        p_claim_token: claimToken,
+      });
+      if (releaseError) throw releaseError;
+    } catch (releaseError) {
       console.error('[live-replay] notification claim release failed', {
         replayId: replay.id,
         message: releaseError.message,
