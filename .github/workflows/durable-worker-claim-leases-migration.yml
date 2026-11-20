@@ -93,7 +93,7 @@ jobs:
           }' | sort)"
           EXPECTED="$(printf '%s\n' 20261120120000 20261120130000 | sort)"
           if [ "$PENDING" != "$EXPECTED" ]; then
-            echo "::error::Refusing production apply: expected exactly one pending migration."
+            echo "::error::Refusing production apply: expected exactly the two reviewed pending migrations."
             printf 'Expected: %s\nActual:\n%s\n' "$EXPECTED" "$PENDING"
             exit 1
           fi
