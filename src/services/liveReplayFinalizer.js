@@ -50,6 +50,16 @@ async function notifyReplayReadyLegacy(replay, admin, sendPush, now) {
       body: 'Your private replay is ready to watch for the next seven days.',
       data: { type: 'live_replay_ready', replayId: replay.id, streamId: replay.stream_id },
     });
+    if (delivery && typeof delivery === 'object' && Number(delivery.sent || 0) < 1) {
+      // Until durable claims are installed, leave zero-ticket deliveries
+      // unmarked so the periodic worker can retry after a device registers.
+      return {
+        pending: true,
+        legacy: true,
+        noTokens: Boolean(delivery.noTokens),
+        failed: Number(delivery.failed || 0),
+      };
+    }
     const { error } = await admin.from('live_stream_replays')
       .update({ notification_sent_at: now().toISOString() })
       .eq('id', replay.id)
