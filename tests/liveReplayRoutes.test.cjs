@@ -24,9 +24,15 @@ test('only the live creator can start and stop a replay, and only during an acti
   assert.match(liveRoutes, /stopEgress/);
 });
 
-test('replay listing and playback preserve stream visibility and bidirectional blocks', () => {
+test('replay listing and playback preserve stream visibility, blocks, and creator removal revocation', () => {
   assert.match(liveRoutes, /async function canViewLiveReplay/);
   assert.match(liveRoutes, /hasBlockBetween\(stream\.creator_id, userId\)/);
+  const accessStart = liveRoutes.indexOf('async function canViewLiveReplay');
+  const accessEnd = liveRoutes.indexOf('async function stopActiveLiveReplayForStream', accessStart);
+  const accessGuard = liveRoutes.slice(accessStart, accessEnd);
+  assert.match(accessGuard, /\.select\('id,status'\)/);
+  assert.match(accessGuard, /participant\?\.status === 'blocked'/);
+  assert.ok(accessGuard.indexOf("participant?.status === 'blocked'") < accessGuard.indexOf("stream.visibility === 'public'"), 'creator removal must revoke replay access before public/visibility shortcuts');
   assert.match(liveRoutes, /stream\.visibility === 'public'/);
   assert.match(liveRoutes, /stream\.visibility === 'followers'/);
   assert.match(liveRoutes, /live_creator_follows/);
