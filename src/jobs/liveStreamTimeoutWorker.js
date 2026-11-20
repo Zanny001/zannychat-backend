@@ -35,10 +35,20 @@ async function runLiveStreamTimeoutWarnings({ admin = supabaseAdmin, send = send
       console.warn('[live-timeout] creator warning push failed:', sendError?.message || 'provider error');
     }
 
-    // The claim is only final after a successful provider delivery. Release
-    // failed claims so the next 30-second tick can retry within the warning
-    // window; never clear a warning after the stream has already ended.
-    if (!delivered) {
+    // A claim is only final after provider acceptance. Successful deliveries
+    // are committed separately; an interrupted worker's claim expires after
+    // ten minutes and can be recovered by another process.
+    if (delivered) {
+      const { error: markError } = await admin.rpc('mark_live_stream_timeout_warning_sent', {
+        p_broadcast_id: warning.broadcast_id,
+      });
+      if (markError) {
+        console.error('[live-timeout] failed to persist delivered warning:', {
+          streamId: warning.broadcast_id,
+          message: markError.message || 'database error',
+        });
+      }
+    } else {
       const { error: releaseError } = await admin.rpc('release_live_stream_timeout_warning', {
         p_broadcast_id: warning.broadcast_id,
       });
