@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createLiveKitToken, getLiveKitConfig } = require('../services/livekitToken');
-const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions, deleteLiveKitRoom } = require('../services/livekitRoomAdmin');
+const { listRoomParticipants, removeRoomParticipant, muteRoomParticipantTrack, updateRoomParticipantAttributes, updateRoomParticipantPermissions, deleteLiveKitRoom, sendRoomData } = require('../services/livekitRoomAdmin');
 const { sendPushToUser } = require('../config/pushClient');
 const {
   getLiveReplayConfig,
@@ -136,6 +136,16 @@ async function getProfileNames(userIds) {
     console.error('[live] comment display name lookup failed:', error?.message || error);
     return new Map();
   }
+}
+
+
+function publishLiveFeedChanged(stream) {
+  if (!stream?.room_name) return;
+  // The packet is only an invalidation signal. Clients re-fetch through the
+  // authenticated API, which applies per-viewer block and moderation filters.
+  void sendRoomData(stream.room_name, { v: 1, type: 'feed_changed' }).catch((error) => {
+    console.error('[live] room feed notification failed:', error?.message || error);
+  });
 }
 
 async function getStream(streamId) {
@@ -1362,6 +1372,7 @@ router.post('/:streamId/comment', makeLimiter({ windowMs: 10 * 1000, max: 5, err
       stream_id: streamId, user_id: req.user.id, body,
     }).select('id,stream_id,user_id,body,moderation_status,created_at').single();
     if (error) throw error;
+    publishLiveFeedChanged(stream);
     const names = await getProfileNames([req.user.id]);
     const { user_id: _userId, ...comment } = data;
     return res.status(201).json({
@@ -1460,6 +1471,7 @@ router.post('/:streamId/react', makeLimiter({ windowMs: 10 * 1000, max: 8, error
     });
     if (error) throw error;
     const impact = Array.isArray(impactRows) ? impactRows[0] : null;
+    publishLiveFeedChanged(stream);
     return res.status(201).json({ accepted: true, impact });
   } catch (error) {
     console.error('[live] reaction failed:', error?.message || error);
