@@ -118,3 +118,32 @@ test('failed push delivery releases its claim so a later worker can retry', asyn
   assert.equal(sends, 1);
   assert.ok(state.notificationSentAt);
 });
+
+
+test('legacy per-process notification path remains available until the durable claim migration is applied', async () => {
+  let notificationSentAt = null;
+  const admin = {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'function not found in schema cache' } }),
+    from(table) {
+      assert.equal(table, 'live_stream_replays');
+      const query = { patch: null };
+      query.select = () => query;
+      query.update = (patch) => { query.patch = patch; return query; };
+      query.eq = (column, value) => { assert.equal(column, 'id'); assert.equal(value, 'replay-1'); return query; };
+      query.maybeSingle = async () => ({ data: { notification_sent_at: notificationSentAt }, error: null });
+      query.is = async (column, value) => {
+        assert.equal(column, 'notification_sent_at');
+        assert.equal(value, null);
+        if (notificationSentAt === null) notificationSentAt = query.patch.notification_sent_at;
+        return { error: null };
+      };
+      return query;
+    },
+  };
+  let sends = 0;
+  const sendPush = async () => { sends += 1; };
+  await notifyReplayReady(replay, { admin, sendPush });
+  await notifyReplayReady(replay, { admin, sendPush });
+  assert.equal(sends, 1);
+  assert.ok(notificationSentAt);
+});
