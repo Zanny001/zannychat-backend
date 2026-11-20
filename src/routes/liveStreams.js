@@ -1692,7 +1692,8 @@ router.get('/:streamId/participants', async (req, res) => {
         microphoneMuted: mediaByIdentity.get(userId)?.microphoneMuted ?? null,
         cameraEnabled: mediaByIdentity.get(userId)?.cameraEnabled ?? null,
         spotlighted: mediaByIdentity.get(userId)?.spotlighted ?? false,
-        moderator: isCreator || moderatorIds.has(userId),
+        moderator: moderatorIds.has(userId),
+        connectionStatus: mediaByIdentity.has(userId) ? 'connected' : 'not_connected',
       };
     }) });
   } catch (error) {
