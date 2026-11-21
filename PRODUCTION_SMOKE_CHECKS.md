@@ -48,7 +48,7 @@ Run only against a dedicated staging stream with two authenticated test accounts
 3b. Verify no second active stream row or duplicate Egress session is created.
 4. After the creator-reentry migration `20261121043000_live_creator_reentry_bypasses_viewer_cap` is explicitly approved and applied in the target environment, verify that creator re-entry is not rejected when the audience has reached its configured viewer limit. Viewer and guest admission limits must remain enforced.
 5. While Account A is connected, use the visible creator header `REC` action (or its accessible `Start LIVE replay recording` label) and confirm the recording consent prompt. Verify the replay enters `recording`, the replay row is persisted, and stopping it (or reaching the five-minute cap) moves it through processing to `ready`; verify a private storage object and authorized signed playback. Replay recording is an explicit creator action, not automatic.
-6. End the broadcast as Account A. Verify the end request returns `ended: true`, Account B is disconnected, and the replay/Egress and LiveKit room cleanup complete.
+6. Confirm the creator header exposes a readable `END LIVE` action with accessible label `End LIVE broadcast` (not an icon-only placeholder). End the broadcast as Account A. Verify the end request returns `ended: true`, Account B is disconnected, and the replay/Egress and LiveKit room cleanup complete.
 7. Repeat the creator end request to simulate a lost first HTTP response. The retry should return HTTP 200 with `ended: true` and `alreadyEnded: true`, retry Egress/room cleanup, and must not send a second end notification.
 8. Verify new viewer joins are rejected after end and the creator profile no longer lists the stream as live.
 
