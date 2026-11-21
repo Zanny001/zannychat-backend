@@ -5,6 +5,7 @@ const { createCorsOptions } = require('./config/corsOptions');
 const { requestObservability } = require('./middleware/requestObservability');
 
 const healthRouter = require('./routes/health');
+const clientDiagnosticsRouter = require('./routes/clientDiagnostics');
 const conversationsRouter = require('./routes/conversations');
 const aiRouter = require('./routes/ai');
 const internalRouter = require('./routes/internal');
@@ -224,6 +225,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/health', healthRouter);
+app.use('/diagnostics', clientDiagnosticsRouter);
 app.use('/conversations', conversationsRouter);
 app.use('/ai', aiRouter);
 app.use('/link-preview', linkPreviewRouter);
