@@ -46,9 +46,10 @@ Run only against a dedicated staging stream with two authenticated test accounts
 3. Simulate a creator-side network interruption without choosing End LIVE. Restore connectivity and reopen the creator stream from LIVE Hub. The creator profile must identify the same active stream, the join endpoint must return a complete connection, and the creator must regain publish permissions.
 3a. While that stream is still active, attempt to start LIVE again from Preflight. The client must recognize the specific active-stream 409, fetch the authenticated creator profile and rejoin the same stream ID; verify no second active stream row or duplicate Egress session is created.
 4. After the creator-reentry migration `20261121043000_live_creator_reentry_bypasses_viewer_cap` is explicitly approved and applied in the target environment, verify that creator re-entry is not rejected when the audience has reached its configured viewer limit. Viewer and guest admission limits must remain enforced.
-5. End the broadcast as Account A. Verify the end request returns `ended: true`, Account B is disconnected, and the replay/Egress and LiveKit room cleanup complete.
-6. Repeat the creator end request to simulate a lost first HTTP response. The retry should return HTTP 200 with `ended: true` and `alreadyEnded: true`, retry Egress/room cleanup, and must not send a second end notification.
-7. Verify new viewer joins are rejected after end and the creator profile no longer lists the stream as live.
+5. While Account A is connected, open the LIVE actions menu, choose `Start replay`, and confirm the recording consent prompt. Verify the replay enters `recording`, the replay row is persisted, and stopping it (or reaching the five-minute cap) moves it through processing to `ready`; verify a private storage object and authorized signed playback. Replay recording is an explicit creator action, not automatic.
+6. End the broadcast as Account A. Verify the end request returns `ended: true`, Account B is disconnected, and the replay/Egress and LiveKit room cleanup complete.
+7. Repeat the creator end request to simulate a lost first HTTP response. The retry should return HTTP 200 with `ended: true` and `alreadyEnded: true`, retry Egress/room cleanup, and must not send a second end notification.
+8. Verify new viewer joins are rejected after end and the creator profile no longer lists the stream as live.
 
 Evidence requirements:
 - Record the staging environment, UTC timestamps, account roles (A/B), HTTP status and response fields, and LiveKit room state.
