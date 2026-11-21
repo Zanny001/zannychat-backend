@@ -9,6 +9,7 @@ const ALLOWED_ROUTES = new Set([
   'App', 'Main', 'Chats', 'Chat', 'Call', 'GroupCall', 'IncomingCall', 'OutgoingCall',
   'LIVE', 'LiveHub', 'LivePreflight', 'LiveStream', 'LiveReplay', 'LiveCreatorStudio',
   'LiveGuestQueue', 'LiveModeration', 'LiveReports', 'LiveAnalytics', 'LiveSettings',
+  'LiveCreatorProfile', 'LiveReplayLibrary', 'LivePostStreamSummary', 'LiveLeaderboard', 'LiveEvents',
   'Profile', 'Settings', 'SharedMedia', 'Updates', 'Channels',
 ]);
 
