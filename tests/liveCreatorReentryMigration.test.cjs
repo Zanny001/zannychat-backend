@@ -19,3 +19,12 @@ test('creator can reclaim an active LIVE room even when the audience is at capac
   assert.match(migration, /public\.blocked_users/);
   assert.match(migration, /v_stage_joined >= 5/);
 });
+
+
+test('creator capacity exemption preserves creator-removal blocks and heartbeat lease semantics', () => {
+  assert.match(migration, /IF v_existing_status = 'blocked' THEN[\\s\\S]*?Creator removed this participant from the LIVE stream/);
+  assert.match(migration, /last_seen_at\\)\\s+VALUES \\(p_stream_id, p_user_id, v_role, 'joined', now\\(\\), NULL, NULL\\)/);
+  assert.match(migration, /WHERE current_participant\\.status <> 'blocked'/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\\.join_live_stream\\(uuid, uuid\\) FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\\.join_live_stream\\(uuid, uuid\\) TO service_role/);
+});
