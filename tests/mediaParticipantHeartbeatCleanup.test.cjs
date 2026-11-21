@@ -90,12 +90,20 @@ test('replay egress stops promptly when a LIVE stream ends before the five-minut
 });
 
 
-test('LIVE end authorization is checked before stopping Egress or deleting the room', () => {
+test('LIVE end authorization is checked before normal and retry Egress/room cleanup', () => {
   const endStart = liveRoute.indexOf("router.post('/:streamId/end'");
   const endRoute = liveRoute.slice(endStart);
+  const creatorGuard = endRoute.indexOf('stream.creator_id !== req.user.id');
+  const rpc = endRoute.indexOf("rpc('end_live_stream'");
+  const normalReplayCleanup = endRoute.indexOf('stopActiveLiveReplayForStream(streamId)', rpc);
+  const normalRoomCleanup = endRoute.indexOf('deleteLiveKitRoom(stream.room_name)', rpc);
   assert.ok(endStart >= 0);
-  assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('stopActiveLiveReplayForStream(streamId)'));
-  assert.ok(endRoute.indexOf("rpc('end_live_stream'") < endRoute.indexOf('deleteLiveKitRoom(stream.room_name)'));
+  assert.ok(creatorGuard >= 0 && rpc > creatorGuard);
+  assert.ok(normalReplayCleanup > rpc);
+  assert.ok(normalRoomCleanup > normalReplayCleanup);
+  // Retry cleanup can happen before a second RPC, but only after creator ownership is verified.
+  assert.ok(endRoute.indexOf('stopActiveLiveReplayForStream(streamId)') > creatorGuard);
+  assert.ok(endRoute.indexOf('deleteLiveKitRoom(stream.room_name)') > creatorGuard);
 });
 
 
