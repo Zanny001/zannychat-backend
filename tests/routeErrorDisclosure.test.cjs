@@ -32,7 +32,7 @@ test('client render diagnostics require authentication, are rate limited, and re
   assert.match(source, /ALLOWED_SECTORS/);
   assert.match(source, /ALLOWED_ROUTES/);
   assert.match(source, /safeDiagnosticText/);
-  assert.match(source, /Bearer\\s+/);
+  assert.match(source, /Bearer\s+/);
   assert.match(source, /\[email\]/);
   assert.match(source, /\[id\]/);
   assert.match(source, /console\.error\('\[client-diagnostic\]'/);
