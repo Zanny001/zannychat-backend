@@ -1848,6 +1848,25 @@ router.post('/:streamId/end', async (req, res) => {
   try {
     const stream = await getStream(streamId);
     if (!stream) return res.status(404).json({ error: 'LIVE stream not found' });
+    if (stream.creator_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the creator can end this LIVE stream' });
+    }
+    // An earlier end request may have committed while its HTTP response was
+    // lost. Treat a creator retry as success and retry idempotent SFU/egress
+    // cleanup rather than trapping the creator in a stale LIVE room.
+    if (stream.status === 'ended') {
+      await stopActiveLiveReplayForStream(streamId).catch((replayError) => {
+        console.error('[live-replay] retry stop on ended stream failed', { streamId, message: replayError.message });
+      });
+      if (stream.room_name) {
+        await deleteLiveKitRoom(stream.room_name).catch((roomError) => {
+          console.error('[live] retry room cleanup after end failed:', roomError?.message || roomError);
+        });
+      }
+      return res.json({ ended: true, alreadyEnded: true });
+    }
+    if (stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+
     // Capture the active audience before the atomic end operation marks every
     // participant as left, so guests and viewers can be notified afterwards.
     let participantIds = [];
@@ -1868,7 +1887,23 @@ router.post('/:streamId/end', async (req, res) => {
       if (error.code === '42501') return res.status(403).json({ error: 'Only the creator can end this LIVE stream' });
       throw error;
     }
-    if (!ended) return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (!ended) {
+      // Close the small race where another creator retry ended the row after
+      // getStream() but before this request reached the atomic RPC.
+      const currentStream = await getStream(streamId);
+      if (currentStream?.status === 'ended' && currentStream.creator_id === req.user.id) {
+        await stopActiveLiveReplayForStream(streamId).catch((replayError) => {
+          console.error('[live-replay] raced end cleanup failed', { streamId, message: replayError.message });
+        });
+        if (currentStream.room_name) {
+          await deleteLiveKitRoom(currentStream.room_name).catch((roomError) => {
+            console.error('[live] raced room cleanup failed:', roomError?.message || roomError);
+          });
+        }
+        return res.json({ ended: true, alreadyEnded: true });
+      }
+      return res.status(404).json({ error: 'LIVE stream has ended' });
+    }
     // Push delivery is best-effort and must not delay broadcast teardown.
     void notifyLiveUsers(participantIds.filter((id) => id !== stream.creator_id), {
       title: 'LIVE has ended',
