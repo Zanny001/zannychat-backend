@@ -23,3 +23,19 @@ test('internal notification and webhook verification errors are generic to calle
   assert.doesNotMatch(route('internal.js'), /res\.status\(500\)\.json\(\{\s*error:\s*err\.message/);
   assert.doesNotMatch(route('webhooks.js'), /signature verification failed:\s*\$\{err\.message\}/i);
 });
+
+
+test('client render diagnostics require authentication, are rate limited, and redact sensitive values', () => {
+  const source = route('clientDiagnostics.js');
+  const index = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+  assert.match(source, /router\.use\(requireAuth, makeLimiter/);
+  assert.match(source, /ALLOWED_SECTORS/);
+  assert.match(source, /ALLOWED_ROUTES/);
+  assert.match(source, /safeDiagnosticText/);
+  assert.match(source, /Bearer\s+/);
+  assert.match(source, /\[email\]/);
+  assert.match(source, /\[id\]/);
+  assert.match(source, /console\.error\('\[client-diagnostic\]'/);
+  assert.match(index, /app\.use\('\/diagnostics', clientDiagnosticsRouter\)/);
+  assert.doesNotMatch(source, /req\.user\.id/);
+});
