@@ -138,3 +138,9 @@ test('an Egress start without a persisted id is matched by its exact replay outp
   assert.match(worker, /isTerminalEgressStatus\(found\.status\)/);
   assert.match(worker, /await finalizeReplay\(\{ event: 'egress_ended', egressInfo: found \}\)/);
 });
+
+
+test('invalid replay outputs receive a short retention expiry so cleanup can remove failed rows', () => {
+  assert.match(finalizer, /error_code: 'EGRESS_OUTPUT_INVALID',[\s\S]*expires_at: expiresAt/);
+  assert.match(finalizer, /failedAt\.getTime\(\) \+ 10 \* 60 \* 1000/);
+});

@@ -207,9 +207,16 @@ async function finalizeReplay(event) {
     const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove([replay.file_path]);
     if (removeError) console.error('[live-replay] rejected file cleanup failed', { replayId: replay.id });
   }
+  const failedAt = new Date();
+  const expiresAt = new Date(failedAt.getTime() + 10 * 60 * 1000).toISOString();
   const { error: updateError } = await supabaseAdmin
     .from('live_stream_replays')
-    .update({ status: 'failed', error_code: 'EGRESS_OUTPUT_INVALID', completed_at: new Date().toISOString() })
+    .update({
+      status: 'failed',
+      error_code: 'EGRESS_OUTPUT_INVALID',
+      completed_at: failedAt.toISOString(),
+      expires_at: expiresAt,
+    })
     .eq('id', replay.id)
     .in('status', ['starting', 'recording', 'processing']);
   if (updateError) throw updateError;
