@@ -35,7 +35,7 @@ function googlePlayConfigured() {
 
 router.get('/packages', async (req, res) => {
   const provider = String(req.query.provider || 'paystack');
-  if (!['paystack', 'google_play'].includes(provider)) {
+  if (!['paystack', 'google_play', 'apple_iap'].includes(provider)) {
     return res.status(400).json({ error: 'Unsupported LIVE purchase provider' });
   }
   try {
@@ -44,7 +44,8 @@ router.get('/packages', async (req, res) => {
       .eq('provider', provider).eq('currency', 'NGN').eq('is_active', true)
       .order('sort_order', { ascending: true });
     if (error) throw error;
-    const providerReady = provider === 'paystack' ? paystackConfigured() : googlePlayConfigured();
+    const providerReady = provider === 'paystack' ? paystackConfigured()
+      : provider === 'google_play' ? googlePlayConfigured() : appleBillingConfigured();
     return res.json({
       packages: data || [],
       provider,
