@@ -211,7 +211,9 @@ CREATE OR REPLACE FUNCTION public.record_live_apple_refund_reversal(
   p_event_key text,
   p_provider_transaction_id text,
   p_provider_resource_id text,
-  p_signed_date bigint
+  p_signed_date bigint,
+  p_notification_uuid text,
+  p_notification_type text
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -227,7 +229,9 @@ BEGIN
   IF p_event_key IS NULL OR length(p_event_key) NOT BETWEEN 8 AND 200
      OR p_provider_transaction_id IS NULL OR p_provider_transaction_id !~ '^apple:[0-9a-f]{64}$'
      OR p_provider_resource_id IS NULL OR length(p_provider_resource_id) NOT BETWEEN 3 AND 200
-     OR p_signed_date IS NULL OR p_signed_date <= 0 THEN
+     OR p_signed_date IS NULL OR p_signed_date <= 0
+     OR p_notification_uuid IS NULL OR length(p_notification_uuid) NOT BETWEEN 8 AND 128
+     OR p_notification_type IS NULL OR length(p_notification_type) NOT BETWEEN 1 AND 80 THEN
     RAISE EXCEPTION 'invalid Apple refund reversal event' USING ERRCODE = '22023';
   END IF;
 
