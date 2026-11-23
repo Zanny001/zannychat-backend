@@ -351,8 +351,7 @@ CREATE OR REPLACE FUNCTION public.send_live_gift(
   p_recipient_id uuid,
   p_gift_id text,
   p_quantity integer,
-  p_idempotency_key text,
-  p_battle_id uuid DEFAULT NULL
+  p_idempotency_key text
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -367,6 +366,7 @@ DECLARE
   v_points bigint;
   v_transaction_id uuid;
   v_battle public.live_pk_battles%ROWTYPE;
+  v_effective_battle_id uuid;
 BEGIN
   IF p_sender_id IS NULL OR p_stream_id IS NULL OR p_recipient_id IS NULL
      OR p_sender_id = p_recipient_id OR p_quantity IS NULL OR p_quantity NOT BETWEEN 1 AND 20
@@ -378,8 +378,7 @@ BEGIN
     WHERE sender_id = p_sender_id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
     IF v_existing.stream_id <> p_stream_id OR v_existing.recipient_id <> p_recipient_id
-       OR v_existing.gift_id <> p_gift_id OR v_existing.quantity <> p_quantity
-       OR v_existing.battle_id IS DISTINCT FROM p_battle_id THEN
+       OR v_existing.gift_id <> p_gift_id OR v_existing.quantity <> p_quantity THEN
       RAISE EXCEPTION 'idempotency key reused with different gift details' USING ERRCODE = '23505';
     END IF;
     SELECT balance_sparks INTO v_balance FROM public.live_gift_wallets WHERE user_id = p_sender_id;
@@ -407,6 +406,18 @@ BEGIN
   v_total := v_gift.spark_cost::bigint * p_quantity;
   v_points := v_gift.score_points::bigint * p_quantity;
 
+  -- Battle attribution is derived from locked server state, never from a client-supplied battle id.
+  SELECT * INTO v_battle FROM public.live_pk_battles
+    WHERE stream_id = p_stream_id AND status = 'live'
+      AND now() >= started_at AND now() < ends_at
+      AND p_recipient_id IN (creator_a_id, creator_b_id)
+    FOR UPDATE;
+  IF FOUND THEN
+    v_effective_battle_id := v_battle.id;
+  ELSE
+    v_effective_battle_id := NULL;
+  END IF;
+
   INSERT INTO public.live_gift_wallets (user_id, balance_sparks)
     VALUES (p_sender_id, 0) ON CONFLICT (user_id) DO NOTHING;
   SELECT balance_sparks INTO v_balance FROM public.live_gift_wallets
@@ -420,7 +431,7 @@ BEGIN
   INSERT INTO public.live_gift_transactions
     (sender_id, recipient_id, stream_id, gift_id, quantity, total_sparks, score_points, battle_id, idempotency_key)
   VALUES
-    (p_sender_id, p_recipient_id, p_stream_id, p_gift_id, p_quantity, v_total, v_points, p_battle_id, p_idempotency_key)
+    (p_sender_id, p_recipient_id, p_stream_id, p_gift_id, p_quantity, v_total, v_points, v_effective_battle_id, p_idempotency_key)
   RETURNING id INTO v_transaction_id;
 
   INSERT INTO public.live_gift_ledger
@@ -429,18 +440,11 @@ BEGIN
     (p_sender_id, 'spend', v_total, v_balance, 'gift', v_transaction_id,
       'gift:' || v_transaction_id::text);
 
-  IF p_battle_id IS NOT NULL THEN
-    SELECT * INTO v_battle FROM public.live_pk_battles
-      WHERE id = p_battle_id AND stream_id = p_stream_id AND status = 'live'
-        AND now() >= started_at AND now() < ends_at
-      FOR UPDATE;
-    IF NOT FOUND OR p_recipient_id NOT IN (v_battle.creator_a_id, v_battle.creator_b_id) THEN
-      RAISE EXCEPTION 'PK battle is not active for this recipient' USING ERRCODE = 'P0001';
-    END IF;
+  IF v_effective_battle_id IS NOT NULL THEN
     IF p_recipient_id = v_battle.creator_a_id THEN
-      UPDATE public.live_pk_battles SET score_a = score_a + v_points, updated_at = now() WHERE id = p_battle_id;
+      UPDATE public.live_pk_battles SET score_a = score_a + v_points, updated_at = now() WHERE id = v_effective_battle_id;
     ELSE
-      UPDATE public.live_pk_battles SET score_b = score_b + v_points, updated_at = now() WHERE id = p_battle_id;
+      UPDATE public.live_pk_battles SET score_b = score_b + v_points, updated_at = now() WHERE id = v_effective_battle_id;
     END IF;
   END IF;
 
@@ -450,9 +454,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.grant_live_sparks(uuid, bigint, text, uuid, text, text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.send_live_gift(uuid, uuid, uuid, text, integer, text, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.send_live_gift(uuid, uuid, uuid, text, integer, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.grant_live_sparks(uuid, bigint, text, uuid, text, text) TO service_role;
-GRANT EXECUTE ON FUNCTION public.send_live_gift(uuid, uuid, uuid, text, integer, text, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.send_live_gift(uuid, uuid, uuid, text, integer, text) TO service_role;
 
 COMMENT ON TABLE public.live_gift_wallets IS
   'Server-managed promotional Sparks only; not money, not purchasable, and not redeemable for cash.';
