@@ -382,3 +382,15 @@ test('Direct LIVE guest invitations require recipient consent before stage publi
   assert.match(decisionRoute, /hasBlockBetween\(stream\.creator_id, req\.user\.id\)/);
   assert.match(decisionRoute, /Guest participation is disabled/);
 });
+
+
+test('LIVE guest join validates requested audio/video mode and limits audio-only publish sources', () => {
+  const joinStart = route.indexOf("router.post('/:streamId/join'");
+  const joinEnd = route.indexOf("\n});", joinStart) + 4;
+  const joinRoute = route.slice(joinStart, joinEnd);
+  assert.match(joinRoute, /requestedMediaMode !== undefined && !\['audio', 'video'\]\.includes\(requestedMediaMode\)/);
+  assert.match(joinRoute, /const guestMediaMode = stream\.experience_mode === 'audio_room'[\s\S]*requestedMediaMode \|\| 'video'/);
+  assert.match(joinRoute, /role === 'guest' && guestMediaMode === 'audio'/);
+  assert.match(joinRoute, /token, role, canPublish, canModerate, mediaMode/);
+  assert.match(route, /canPublishSources: \['microphone'\]/);
+});
