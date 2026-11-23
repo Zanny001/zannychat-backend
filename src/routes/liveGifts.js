@@ -51,11 +51,10 @@ router.get('/history', async (req, res) => {
 });
 
 router.post('/send', makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Please wait before sending another LIVE gift.' }), async (req, res) => {
-  const { streamId, recipientId, giftId, quantity = 1, idempotencyKey, battleId = null } = req.body || {};
+  const { streamId, recipientId, giftId, quantity = 1, idempotencyKey } = req.body || {};
   if (!validUuid(streamId) || !validUuid(recipientId) || !/^[a-z][a-z0-9_]{1,39}$/.test(String(giftId || ''))
       || !Number.isInteger(quantity) || quantity < 1 || quantity > 20
-      || typeof idempotencyKey !== 'string' || idempotencyKey.length < 8 || idempotencyKey.length > 128
-      || (battleId !== null && !validUuid(battleId))) {
+      || typeof idempotencyKey !== 'string' || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
     return res.status(400).json({ error: 'Invalid LIVE gift request' });
   }
   try {
@@ -66,7 +65,6 @@ router.post('/send', makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Please 
       p_gift_id: giftId,
       p_quantity: quantity,
       p_idempotency_key: idempotencyKey,
-      p_battle_id: battleId,
     });
     if (error) {
       if (error.code === '42501') return res.status(403).json({ error: 'Join this LIVE before sending a gift' });
