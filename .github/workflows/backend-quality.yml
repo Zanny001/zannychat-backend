@@ -64,6 +64,7 @@ jobs:
       - name: Run AI and profile privacy tests
         run: |
           yarn run test:ai-input-validation
+          yarn run test:ai-client-timeout
           yarn run test:profile-privacy
           yarn run test:contact-directory-privacy
 
@@ -81,6 +82,9 @@ jobs:
         run: |
           yarn run test:live-streams
           yarn run test:live-replay
+
+      - name: Run LIVE monetization and payment integrity tests
+        run: yarn run test:live-monetization
 
       - name: Run migration and history integrity tests
         run: |
