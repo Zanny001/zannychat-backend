@@ -91,6 +91,8 @@ test('PK challenges require explicit guest consent before the host can start', (
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.decline_live_pk_battle/);
   assert.match(migration, /v_battle\.status <> 'accepted'/);
   assert.match(migration, /status = 'pending' AND created_at < now\(\) - interval '2 minutes'/);
+  assert.match(migration, /status = 'live' AND ends_at <= now\(\)/);
+  assert.match(migration, /v_battle.created_at < now\(\) - interval '10 minutes'/);
   assert.match(battles, /router\.post\('/:battleId\/accept'/);
   assert.match(battles, /router\.post\('/:battleId\/decline'/);
   assert.match(battles, /live_pk_challenge/);
@@ -98,6 +100,11 @@ test('PK challenges require explicit guest consent before the host can start', (
 });
 
 test('LIVE captions never fabricate text and require explicit opt-in provider-backed translation', () => {
+  assert.match(captions, /from 'live_streams'/);
+  assert.match(captions, /stream.status !== 'live'/);
+  assert.match(battles, /participant\?\.role === 'guest'/);
+  assert.match(battles, /participant\?\.role === 'creator'/);
+
   assert.match(captions, /LIVE_TRANSLATION_ENABLED !== 'true'/);
   assert.match(captions, /isAiConfigured\(\)/);
   assert.match(captions, /await askClaude\(/);
