@@ -50,6 +50,71 @@ router.get('/history', async (req, res) => {
   }
 });
 
+
+router.get('/stream/:streamId/recent', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validUuid(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const { data: stream, error: streamError } = await supabaseAdmin.from('live_streams')
+      .select('id,creator_id,status').eq('id', streamId).maybeSingle();
+    if (streamError) throw streamError;
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+
+    let isJoined = stream.creator_id === req.user.id;
+    if (!isJoined) {
+      const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
+        .select('user_id').eq('stream_id', streamId).eq('user_id', req.user.id)
+        .eq('status', 'joined').is('left_at', null).maybeSingle();
+      if (participantError) throw participantError;
+      isJoined = Boolean(participant);
+    }
+    if (!isJoined) return res.status(403).json({ error: 'Join this LIVE to view its gift activity' });
+
+    const { data: transactions, error: transactionsError } = await supabaseAdmin.from('live_gift_transactions')
+      .select('id,sender_id,recipient_id,gift_id,quantity,score_points,battle_id,created_at')
+      .eq('stream_id', streamId).order('created_at', { ascending: false }).limit(20);
+    if (transactionsError) throw transactionsError;
+
+    const userIds = [...new Set((transactions || []).flatMap((item) => [item.sender_id, item.recipient_id]).filter(Boolean))];
+    const giftIds = [...new Set((transactions || []).map((item) => item.gift_id).filter(Boolean))];
+    const [{ data: profiles, error: profilesError }, { data: gifts, error: giftsError }] = await Promise.all([
+      userIds.length
+        ? supabaseAdmin.from('profiles').select('id,name,avatar_color').in('id', userIds)
+        : Promise.resolve({ data: [], error: null }),
+      giftIds.length
+        ? supabaseAdmin.from('live_gift_catalog').select('gift_id,display_name,emoji').in('gift_id', giftIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (profilesError) throw profilesError;
+    if (giftsError) throw giftsError;
+
+    const profilesById = new Map((profiles || []).map((item) => [item.id, item]));
+    const giftsById = new Map((gifts || []).map((item) => [item.gift_id, item]));
+    const events = (transactions || []).map((item) => {
+      const sender = profilesById.get(item.sender_id);
+      const recipient = profilesById.get(item.recipient_id);
+      const gift = giftsById.get(item.gift_id);
+      return {
+        id: item.id,
+        senderName: sender?.name || 'ZannyChat member',
+        senderAvatarColor: sender?.avatar_color || null,
+        recipientName: recipient?.name || 'LIVE participant',
+        recipientAvatarColor: recipient?.avatar_color || null,
+        giftName: gift?.display_name || item.gift_id,
+        emoji: gift?.emoji || '🎁',
+        quantity: item.quantity,
+        scorePoints: Number(item.score_points || 0),
+        battleId: item.battle_id || null,
+        createdAt: item.created_at,
+      };
+    });
+    return res.json({ events });
+  } catch (error) {
+    console.error('[live-gifts] stage activity lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'LIVE gift activity is temporarily unavailable' });
+  }
+});
+
 router.post('/send', makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Please wait before sending another LIVE gift.' }), async (req, res) => {
   const { streamId, recipientId, giftId, quantity = 1, idempotencyKey } = req.body || {};
   if (!validUuid(streamId) || !validUuid(recipientId) || !/^[a-z][a-z0-9_]{1,39}$/.test(String(giftId || ''))
