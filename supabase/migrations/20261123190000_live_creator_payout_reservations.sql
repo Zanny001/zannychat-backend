@@ -41,6 +41,11 @@ BEGIN
 
   PERFORM pg_advisory_xact_lock(hashtextextended(p_creator_id::text || ':live-payout', 0));
 
+  UPDATE public.live_creator_earnings_ledger
+    SET status = 'available'
+    WHERE creator_id = p_creator_id AND entry_type = 'earning'
+      AND status = 'pending' AND available_at IS NOT NULL AND available_at <= now();
+
   SELECT * INTO v_profile FROM public.live_creator_payout_profiles
     WHERE creator_id = p_creator_id FOR UPDATE;
   IF NOT FOUND OR v_profile.verification_status <> 'verified' OR v_profile.payout_hold THEN
