@@ -467,7 +467,6 @@ router.post('/apple/verify', async (req, res) => {
           user_id: req.user.id,
           provider: 'apple_iap',
           provider_reference: reference,
-          provider_transaction_id: transactionKey,
           package_id: productId,
           sparks: pack.sparks,
           amount_minor: amountMinor,
