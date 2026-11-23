@@ -187,3 +187,16 @@ test('LIVE economy foreign keys have supporting indexes for production joins and
     'ON public.live_pk_battles (winner_id)',
   ]) assert.ok(liveEconomyIndexesMigration.includes(statement), 'Missing index contract: ' + statement);
 });
+
+
+test('committed LIVE gifts publish an opaque room feed invalidation once', () => {
+  const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
+  const roomAdmin = fs.readFileSync(path.join(__dirname, '../src/services/livekitRoomAdmin.js'), 'utf8');
+  assert.ok(route.includes("require('../services/livekitRoomAdmin')"));
+  assert.ok(route.includes("rpc('send_live_gift'"));
+  assert.ok(route.includes("if (!data?.replayed)"));
+  assert.ok(route.includes(".select('room_name')"));
+  assert.ok(route.includes("sendRoomData(stream.room_name, { v: 1, type: 'feed_changed' })"));
+  assert.ok(roomAdmin.includes("topic: 'zanny.live.feed.v1'"));
+  assert.ok(roomAdmin.includes("type: 'feed_changed'"));
+});
