@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123110000_live_gifts_pk_battles.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123105600_live_gifts_pk_battles.sql'), 'utf8');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
@@ -128,7 +128,7 @@ test('LIVE captions never fabricate text and require explicit opt-in provider-ba
 
 
 const accountDeletionMigration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123130000_live_gift_account_deletion_privacy.sql'),
+  path.join(__dirname, '../supabase/migrations/20261123105602_live_gift_account_deletion_privacy.sql'),
   'utf8',
 );
 const accountRoute = fs.readFileSync(path.join(__dirname, '../src/routes/account.js'), 'utf8');
@@ -149,7 +149,7 @@ test('LIVE gift audit history is anonymized safely instead of blocking Auth acco
 
 
 const privilegeHardeningMigration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123140000_lock_live_economy_service_role_readonly.sql'),
+  path.join(__dirname, '../supabase/migrations/20261123105735_lock_live_economy_service_role_readonly.sql'),
   'utf8',
 );
 
@@ -171,7 +171,7 @@ test('LIVE gift activity is visible only to joined stage participants and contai
 
 
 const liveEconomyIndexesMigration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123150000_live_economy_foreign_key_indexes.sql'),
+  path.join(__dirname, '../supabase/migrations/20261123110901_live_economy_foreign_key_indexes.sql'),
   'utf8',
 );
 
