@@ -166,8 +166,14 @@ const liveEconomyIndexesMigration = fs.readFileSync(
 );
 
 test('LIVE economy foreign keys have supporting indexes for production joins and deletes', () => {
-  assert.match(liveEconomyIndexesMigration, /live_gift_transactions_gift_id_idx[\\s\\S]*ON public\\.live_gift_transactions \\(gift_id\\)/);
-  assert.match(liveEconomyIndexesMigration, /live_pk_battles_created_by_idx[\\s\\S]*ON public\\.live_pk_battles \\(created_by\\)/);
-  assert.match(liveEconomyIndexesMigration, /live_pk_battles_creator_b_idx[\\s\\S]*ON public\\.live_pk_battles \\(creator_b_id\\)/);
-  assert.match(liveEconomyIndexesMigration, /live_pk_battles_winner_id_idx[\\s\\S]*ON public\\.live_pk_battles \\(winner_id\\)/);
+  for (const statement of [
+    'CREATE INDEX IF NOT EXISTS live_gift_transactions_gift_id_idx',
+    'ON public.live_gift_transactions (gift_id)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_created_by_idx',
+    'ON public.live_pk_battles (created_by)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_creator_b_idx',
+    'ON public.live_pk_battles (creator_b_id)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_winner_id_idx',
+    'ON public.live_pk_battles (winner_id)',
+  ]) assert.ok(liveEconomyIndexesMigration.includes(statement), 'Missing index contract: ' + statement);
 });
