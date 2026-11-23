@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   reconcilePendingCreatorPayouts,
   mapPaystackTransferStatus,
+  transferMatchesPayout,
   DEFAULT_RECONCILIATION_AGE_MS,
   MAX_RECONCILIATION_BATCH,
 } = require('../src/services/livePayoutReconciliation');
@@ -127,4 +128,23 @@ test('reconciliation stays disabled without Paystack credentials', async () => {
   const { supabase } = fakeSupabase([]);
   const summary = await reconcilePendingCreatorPayouts({ supabase, secret: '' });
   assert.deepEqual(summary, { skipped: true, reason: 'paystack_not_configured' });
+});
+
+test('verified transfer matching requires the exact reserved reference, integer amount and currency', () => {
+  const payout = { provider_reference: 'zanny-payout-123', amount_minor: 250000, currency: 'NGN' };
+  assert.equal(transferMatchesPayout({
+    reference: 'zanny-payout-123', amount: 250000, currency: 'NGN',
+  }, payout), true);
+  assert.equal(transferMatchesPayout({
+    reference: 'another-reference', amount: 250000, currency: 'NGN',
+  }, payout), false);
+  assert.equal(transferMatchesPayout({
+    reference: 'zanny-payout-123', amount: 249999, currency: 'NGN',
+  }, payout), false);
+  assert.equal(transferMatchesPayout({
+    reference: 'zanny-payout-123', amount: 250000, currency: 'USD',
+  }, payout), false);
+  assert.equal(transferMatchesPayout({
+    reference: 'zanny-payout-123', amount: 250000.5, currency: 'NGN',
+  }, payout), false);
 });
