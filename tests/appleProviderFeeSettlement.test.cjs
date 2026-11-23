@@ -35,3 +35,13 @@ test('only a service-role reconciliation can release Apple creator earnings afte
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.reconcile_live_apple_provider_fee[\s\S]*TO service_role/);
   assert.doesNotMatch(route, /reconcile_live_apple_provider_fee/);
 });
+
+test('the reward-rule foreign key is covered by a partial index', () => {
+  const indexMigration = fs.readFileSync(
+    path.join(__dirname, '../supabase/migrations/20261123164000_live_gift_reward_rule_fk_index.sql'),
+    'utf8',
+  );
+  assert.match(indexMigration, /CREATE INDEX IF NOT EXISTS live_gift_transactions_reward_rule_id_idx/);
+  assert.match(indexMigration, /ON public\.live_gift_transactions\(reward_rule_id\)/);
+  assert.match(indexMigration, /WHERE reward_rule_id IS NOT NULL/);
+});
