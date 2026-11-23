@@ -33,6 +33,7 @@ const paystackCreatorPayoutWebhookRouter = require('./routes/paystackCreatorPayo
 const paystackLiveWebhookRouter = require('./routes/paystackLiveWebhook');
 const paystackLiveRiskWebhookRouter = require('./routes/paystackLiveRiskWebhook');
 const googlePlayWebhookRouter = require('./routes/googlePlayWebhook');
+const appleStoreNotificationsRouter = require('./routes/appleStoreNotifications');
 const liveEventsRouter = require('./routes/liveEvents');
 
 // Retry transient call-push failures while the API process is awake. The
@@ -243,6 +244,7 @@ app.use('/webhooks/paystack',
 
 app.use(express.json({ limit: '100kb', strict: true }));
 app.use('/webhooks/google-play', googlePlayWebhookRouter);
+app.use('/webhooks/apple/app-store-server', appleStoreNotificationsRouter);
 
 // Root discovery endpoint: useful for platform smoke checks and avoids an
 // ambiguous 404 when operators open the service URL directly. No secrets or

@@ -70,9 +70,10 @@
     "test:chat-media-upload-limit": "node --test tests/chatMediaUploadSizeLimitMigration.test.cjs tests/chatMediaSafeMimeTypesMigration.test.cjs tests/chatMediaExtensionGuardCorrection.test.cjs",
     "test:account-storage-cleanup": "node --test tests/accountStorageCleanupQueueMigration.test.cjs tests/accountStorageCleanupWorker.test.cjs tests/accountDeletionEndedSessionGuard.test.cjs",
     "test:contact-directory-rpc-ambiguity": "node --test tests/contactDirectoryRpcAmbiguityMigration.test.cjs",
-    "test:live-monetization": "node --test tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs tests/liveSparkLotConsumption.test.cjs tests/liveCreatorRewardAccrual.test.cjs tests/liveCreatorEarnings.test.cjs tests/liveCreatorPayouts.test.cjs tests/livePayoutReconciliation.test.cjs tests/liveMonetizationIndexes.test.cjs tests/paystackWebhookSignature.test.cjs tests/paystackLiveRiskWebhook.test.cjs tests/livePurchaseRiskMigration.test.cjs tests/googlePlayBilling.test.cjs tests/liveNativePurchaseRoute.test.cjs tests/livePurchaseProviderFeeMigration.test.cjs tests/googlePubSubOidc.test.cjs tests/googlePlayVoidedPurchases.test.cjs tests/googlePlayVoidedWebhook.test.cjs",
+    "test:live-monetization": "node --test tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs tests/liveSparkLotConsumption.test.cjs tests/liveCreatorRewardAccrual.test.cjs tests/liveCreatorEarnings.test.cjs tests/liveCreatorPayouts.test.cjs tests/livePayoutReconciliation.test.cjs tests/liveMonetizationIndexes.test.cjs tests/paystackWebhookSignature.test.cjs tests/paystackLiveRiskWebhook.test.cjs tests/livePurchaseRiskMigration.test.cjs tests/googlePlayBilling.test.cjs tests/liveNativePurchaseRoute.test.cjs tests/livePurchaseProviderFeeMigration.test.cjs tests/googlePubSubOidc.test.cjs tests/googlePlayVoidedPurchases.test.cjs tests/googlePlayVoidedWebhook.test.cjs tests/appleStoreBilling.test.cjs",
     "test:ai-client-timeout": "node --test tests/aiClientTimeout.test.cjs",
-    "jobs:reconciliation": "node src/jobs/reconciliation.js"
+    "jobs:reconciliation": "node src/jobs/reconciliation.js",
+    "test:apple-storekit": "node --test tests/appleStoreBilling.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -80,7 +81,8 @@
     "dotenv": "^16.4.5",
     "expo-server-sdk": "^3.10.0",
     "express": "^4.19.2",
-    "express-rate-limit": "^8.2.1"
+    "express-rate-limit": "^8.2.1",
+    "@apple/app-store-server-library": "3.1.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",

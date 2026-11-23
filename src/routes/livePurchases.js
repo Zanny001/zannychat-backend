@@ -5,6 +5,7 @@ const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createGooglePlayBillingClient, sha256Hex } = require('../services/googlePlayBilling');
 const { ensureLivePurchaseReceipt } = require('../services/livePurchaseReceiptService');
+const { createAppleStoreVerifier, appleBillingConfigured, minorUnitsFromApplePrice } = require('../services/appleStoreBilling');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'LIVE purchase requests are rate-limited.' }));
@@ -15,6 +16,10 @@ function validPackageId(value) {
 
 function validGooglePlayProductId(value) {
   return typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,149}$/.test(value);
+}
+
+function validAppleProductId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,149}$/.test(value);
 }
 
 function paystackConfigured() {
@@ -30,7 +35,7 @@ function googlePlayConfigured() {
 
 router.get('/packages', async (req, res) => {
   const provider = String(req.query.provider || 'paystack');
-  if (!['paystack', 'google_play'].includes(provider)) {
+  if (!['paystack', 'google_play', 'apple_iap'].includes(provider)) {
     return res.status(400).json({ error: 'Unsupported LIVE purchase provider' });
   }
   try {
@@ -39,7 +44,8 @@ router.get('/packages', async (req, res) => {
       .eq('provider', provider).eq('currency', 'NGN').eq('is_active', true)
       .order('sort_order', { ascending: true });
     if (error) throw error;
-    const providerReady = provider === 'paystack' ? paystackConfigured() : googlePlayConfigured();
+    const providerReady = provider === 'paystack' ? paystackConfigured()
+      : provider === 'google_play' ? googlePlayConfigured() : appleBillingConfigured();
     return res.json({
       packages: data || [],
       provider,
@@ -349,6 +355,181 @@ router.post('/native/verify', async (req, res) => {
       return res.status(403).json({ error: error.message, code: error.code });
     }
     return res.status(503).json({ error: 'Google Play could not verify this purchase yet. No client-side purchase result is treated as payment.' });
+  }
+});
+
+
+function validUuid(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function getAppleAccountToken(userId) {
+  const { data: existing, error: readError } = await supabaseAdmin
+    .from('live_apple_account_bindings')
+    .select('app_account_token')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (existing?.app_account_token) return existing.app_account_token;
+
+  const token = crypto.randomUUID();
+  const { error: insertError } = await supabaseAdmin.from('live_apple_account_bindings')
+    .insert({ user_id: userId, app_account_token: token });
+  if (insertError && insertError.code !== '23505') throw insertError;
+  const { data: binding, error: bindingError } = await supabaseAdmin
+    .from('live_apple_account_bindings')
+    .select('app_account_token')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (bindingError || !binding?.app_account_token) throw bindingError || new Error('Apple account binding could not be created');
+  return binding.app_account_token;
+}
+
+router.get('/apple/account-binding', async (req, res) => {
+  if (!appleBillingConfigured()) {
+    return res.status(503).json({ error: 'Apple in-app purchases are not configured yet', code: 'APPLE_IAP_NOT_CONFIGURED' });
+  }
+  try {
+    const appAccountToken = await getAppleAccountToken(req.user.id);
+    return res.json({ appAccountToken });
+  } catch (error) {
+    console.error('[live-purchases] Apple account binding failed:', error?.message || error);
+    return res.status(503).json({ error: 'Apple account binding is temporarily unavailable' });
+  }
+});
+
+router.post('/apple/verify', async (req, res) => {
+  const { signedTransaction } = req.body || {};
+  if (typeof signedTransaction !== 'string' || signedTransaction.length < 100
+      || signedTransaction.length > 20000 || signedTransaction.split('.').length !== 3) {
+    return res.status(400).json({ error: 'A valid signed Apple transaction is required' });
+  }
+  if (!appleBillingConfigured()) {
+    return res.status(503).json({ error: 'Apple in-app purchases are not configured yet', code: 'APPLE_IAP_NOT_CONFIGURED' });
+  }
+
+  try {
+    const verifier = createAppleStoreVerifier({ allowSandbox: true });
+    const verifiedResult = await verifier.verifyTransaction(signedTransaction);
+    const transaction = verifiedResult.transaction;
+    if (!transaction || transaction.bundleId !== process.env.APPLE_APP_BUNDLE_ID
+        || transaction.type !== 'Consumable'
+        || !validUuid(transaction.appAccountToken)
+        || typeof transaction.transactionId !== 'string'
+        || !/^[0-9]{1,32}$/.test(transaction.transactionId)
+        || Number(transaction.quantity || 1) !== 1
+        || transaction.revocationDate != null) {
+      return res.status(403).json({ error: 'Apple transaction does not represent an eligible Sparks purchase', code: 'APPLE_TRANSACTION_NOT_ELIGIBLE' });
+    }
+
+    const appAccountToken = await getAppleAccountToken(req.user.id);
+    if (transaction.appAccountToken.toLowerCase() !== appAccountToken.toLowerCase()) {
+      return res.status(403).json({ error: 'Apple transaction belongs to a different ZannyChat account', code: 'APPLE_ACCOUNT_MISMATCH' });
+    }
+    const sandboxAllowed = verifiedResult.environment === 'Sandbox'
+      && process.env.NODE_ENV !== 'production'
+      && process.env.APPLE_IAP_ALLOW_SANDBOX === 'true';
+    if (verifiedResult.environment !== 'Production' && !sandboxAllowed) {
+      return res.status(403).json({ error: 'Sandbox transactions cannot credit production Sparks', code: 'APPLE_TEST_PURCHASE_NOT_ALLOWED' });
+    }
+
+    const productId = String(transaction.productId || '');
+    if (!validAppleProductId(productId)) {
+      return res.status(400).json({ error: 'Apple transaction product identifier is invalid' });
+    }
+    const { data: pack, error: packageError } = await supabaseAdmin.from('live_spark_packages')
+      .select('package_id,sparks,amount_minor,currency')
+      .eq('provider', 'apple_iap').eq('currency', 'NGN')
+      .eq('package_id', productId).eq('is_active', true).maybeSingle();
+    if (packageError) throw packageError;
+    if (!pack || !Number.isSafeInteger(Number(pack.sparks)) || Number(pack.sparks) <= 0) {
+      return res.status(404).json({ error: 'This Apple Sparks product is not available' });
+    }
+
+    const amountMinor = minorUnitsFromApplePrice(transaction.price, transaction.currency);
+    if (amountMinor !== Number(pack.amount_minor)) {
+      return res.status(409).json({ error: 'Apple transaction price does not match the configured Sparks package', code: 'APPLE_PRODUCT_PRICE_MISMATCH' });
+    }
+    const purchaseDate = Number(transaction.purchaseDate);
+    if (!Number.isSafeInteger(purchaseDate) || purchaseDate <= 0
+        || purchaseDate > Date.now() + 5 * 60 * 1000) {
+      return res.status(403).json({ error: 'Apple transaction purchase date is invalid', code: 'APPLE_TRANSACTION_DATE_INVALID' });
+    }
+
+    const transactionKey = 'apple:' + sha256Hex(String(transaction.transactionId));
+    const { data: existing, error: existingError } = await supabaseAdmin.from('live_spark_purchases')
+      .select('id,user_id,package_id,provider_reference,status,amount_minor,currency')
+      .eq('provider', 'apple_iap').eq('provider_transaction_id', transactionKey).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing && (existing.user_id !== req.user.id || existing.package_id !== productId
+        || Number(existing.amount_minor) !== amountMinor || existing.currency !== 'NGN')) {
+      return res.status(409).json({ error: 'This Apple transaction is already associated with a different Sparks order' });
+    }
+
+    let purchase = existing;
+    if (!purchase) {
+      const reference = 'ZC_APPLE_' + crypto.randomUUID().replace(/-/g, '');
+      const { data, error } = await supabaseAdmin.from('live_spark_purchases')
+        .insert({
+          user_id: req.user.id,
+          provider: 'apple_iap',
+          provider_reference: reference,
+          package_id: productId,
+          sparks: pack.sparks,
+          amount_minor: amountMinor,
+          currency: 'NGN',
+          provider_product_id: productId,
+          provider_environment: verifiedResult.environment,
+          provider_storefront: transaction.storefront || null,
+          provider_transaction_date: new Date(purchaseDate).toISOString(),
+          status: 'pending',
+        })
+        .select('id,provider_reference,status')
+        .single();
+      if (error) {
+        if (error.code === '23505') {
+          return res.status(409).json({ error: 'This Apple transaction is already being processed. Retry purchase verification shortly.' });
+        }
+        throw error;
+      }
+      purchase = data;
+    }
+    if (purchase.status !== 'pending' && purchase.status !== 'paid') {
+      return res.status(409).json({ error: 'This Apple Sparks order is not eligible for fulfilment' });
+    }
+
+    const { data: fulfilment, error: fulfilmentError } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
+      p_provider_reference: purchase.provider_reference,
+      p_provider_transaction_id: transactionKey,
+      p_amount_minor: amountMinor,
+      p_currency: 'NGN',
+    });
+    if (fulfilmentError) throw fulfilmentError;
+    if (fulfilment?.rejected) {
+      return res.status(409).json({ error: 'The Apple purchase could not be assigned to this account' });
+    }
+
+    await ensureLivePurchaseReceipt(purchase.provider_reference, {
+      reference: purchase.provider_reference,
+      status: 'success',
+      amount: amountMinor,
+      currency: 'NGN',
+      paid_at: new Date(purchaseDate).toISOString(),
+      channel: 'Apple App Store',
+    });
+    return res.status(200).json({
+      verified: true,
+      credited: true,
+      transactionFinalized: false,
+      storeAcknowledgementRequired: true,
+      purchaseId: fulfilment?.purchaseId || purchase.id,
+      sparks: Number(pack.sparks),
+      replayed: Boolean(fulfilment?.replayed),
+    });
+  } catch (error) {
+    console.error('[live-purchases] Apple verification failed:', error?.code || 'provider_error');
+    return res.status(503).json({ error: 'Apple could not verify this purchase yet. No client-side purchase result is treated as payment.' });
   }
 });
 
