@@ -34,13 +34,43 @@ router.get('/packages', async (_req, res) => {
   }
 });
 
+router.get('/history', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('live_spark_purchases')
+      .select('id,package_id,sparks,amount_minor,currency,status,verified_at,created_at')
+      .eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    return res.json({ purchases: data || [] });
+  } catch (error) {
+    console.error('[live-purchases] purchase history lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'Purchase history is temporarily unavailable' });
+  }
+});
+
+router.get('/:purchaseId', async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.purchaseId)) {
+    return res.status(400).json({ error: 'Invalid purchase id' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.from('live_spark_purchases')
+      .select('id,package_id,sparks,amount_minor,currency,status,verified_at,created_at')
+      .eq('id', req.params.purchaseId).eq('user_id', req.user.id).maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Purchase not found' });
+    return res.json({ purchase: data });
+  } catch (error) {
+    console.error('[live-purchases] purchase status lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'Purchase status is temporarily unavailable' });
+  }
+});
+
 router.post('/initialize', async (req, res) => {
   const { packageId } = req.body || {};
   if (!validPackageId(packageId)) return res.status(400).json({ error: 'Select a valid Sparks package' });
   if (!paystackConfigured()) {
     return res.status(503).json({ error: 'LIVE purchases are not configured yet', code: 'PAYMENTS_NOT_CONFIGURED' });
   }
-  if (!req.user?.email) return res.status(400).json({ error: 'A verified account email is required for checkout' });
+  if (!req.user?.email || !req.user?.email_confirmed_at) return res.status(403).json({ error: 'Verify your account email before purchasing Sparks' });
 
   try {
     const { data: pack, error: packageError } = await supabaseAdmin.from('live_spark_packages')
@@ -66,9 +96,15 @@ router.post('/initialize', async (req, res) => {
       .single();
     if (insertError) throw insertError;
 
+    const amountMinor = Number(purchase.amount_minor);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+      await supabaseAdmin.from('live_spark_purchases').update({ status: 'failed', updated_at: new Date().toISOString() })
+        .eq('id', purchase.id).eq('status', 'pending');
+      return res.status(409).json({ error: 'This purchase amount cannot be processed safely' });
+    }
     const payload = {
       email: req.user.email,
-      amount: Number(purchase.amount_minor),
+      amount: amountMinor,
       currency: purchase.currency,
       reference: purchase.provider_reference,
       metadata: { purchase_id: purchase.id, product: 'zannychat_live_sparks' },
