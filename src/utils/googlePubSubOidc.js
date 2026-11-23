@@ -11,7 +11,11 @@ function decodeJwtPart(value) {
 async function getGoogleSigningKeys({ fetchImpl = fetch, now = () => Date.now() } = {}) {
   if (cachedKeys && cachedKeysExpiresAt > now()) return cachedKeys;
   const response = await fetchImpl(GOOGLE_CERTS_URL, { signal: AbortSignal.timeout(5000) });
-  if (!response.ok) throw new Error('Google Pub/Sub signing keys are unavailable');
+  if (!response.ok) {
+    const error = new Error('Google Pub/Sub signing keys are temporarily unavailable');
+    error.code = 'GOOGLE_CERTS_UNAVAILABLE';
+    throw error;
+  }
   const payload = await response.json();
   if (!Array.isArray(payload?.keys) || payload.keys.length === 0) {
     throw new Error('Google Pub/Sub signing key response is invalid');
