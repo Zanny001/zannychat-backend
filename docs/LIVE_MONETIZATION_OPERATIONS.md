@@ -177,3 +177,21 @@ No production payment, Spark grant, gift send, creator earning or bank transfer 
 ## 9. Operational and legal review
 
 Before launch, obtain appropriate Nigerian legal/accounting review for creator agreements, tax reporting/withholding, consumer refunds, dispute handling, age/content safeguards, privacy and record retention. Do not collect BVN, NIN or identity documents directly until a lawful purpose, provider, retention period, access policy and deletion process have been approved.
+
+## 7. Pending payout recovery and manual reconciliation
+
+The Paystack webhook remains the primary payout state path. If a transfer webhook is delayed, missed, or the backend was temporarily unavailable, operators can run a bounded one-shot verification pass:
+
+```bash
+yarn run jobs:reconciliation
+```
+
+The job:
+- Reads at most 100 payout records older than five minutes whose states are still `requested` or `processing`.
+- Verifies each reference directly with Paystack's server API using the secret key.
+- Requires the verified reference, exact amount and NGN currency to match the reserved payout before any update.
+- Maps only verified provider states: success → paid, failed → failed, reversed → reversed, pending/OTP → processing.
+- Uses a conditional update that cannot overwrite a payout already finalized by a webhook.
+- Leaves unknown provider states untouched and records only aggregate counts; it never logs bank account details or payment secrets.
+
+This is an operator-run recovery command, not a deployed scheduler. Do not claim automatic periodic reconciliation until a scheduler is configured and monitored. The command requires the existing Render `PAYSTACK_SECRET_KEY` and Supabase service-role environment variables; never pass either secret as a command-line argument.
