@@ -17,8 +17,8 @@ test('LIVE Sparks are non-cash promotional credits with a server-only ledger', (
 });
 
 test('wallet and PK writes stay behind server RPCs and audit rows are immutable', () => {
-  assert.match(migration, /GRANT SELECT ON public\\.live_gift_catalog, public\\.live_gift_wallets/);
-  assert.doesNotMatch(migration, /GRANT ALL ON public\\.live_gift_catalog/);
+  assert.match(migration, /GRANT SELECT ON public\.live_gift_catalog, public\.live_gift_wallets/);
+  assert.doesNotMatch(migration, /GRANT ALL ON public\.live_gift_catalog/);
   assert.match(migration, /CREATE TRIGGER live_gift_ledger_append_only/);
   assert.match(migration, /CREATE TRIGGER live_gift_transactions_append_only/);
   assert.match(migration, /LIVE gift audit records are append-only/);
