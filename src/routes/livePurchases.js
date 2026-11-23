@@ -129,10 +129,10 @@ router.post('/initialize', async (req, res) => {
         throw new Error('Paystack did not initialize the purchase');
       }
     } catch (providerError) {
-      await supabaseAdmin.from('live_spark_purchases').update({ status: 'failed', updated_at: new Date().toISOString() })
-        .eq('id', purchase.id).eq('status', 'pending');
+      // Keep the order pending when the network outcome is uncertain. A delayed
+      // signed provider event can still be independently verified and reconciled.
       console.error('[live-purchases] checkout initialization failed:', providerError?.message || providerError);
-      return res.status(502).json({ error: 'Could not initialize payment. No Sparks were charged.' });
+      return res.status(502).json({ error: 'Checkout could not be confirmed. Do not retry if your bank shows a debit; contact support with your purchase reference.' });
     }
 
     return res.status(201).json({
