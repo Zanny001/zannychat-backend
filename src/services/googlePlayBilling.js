@@ -160,6 +160,10 @@ function createGooglePlayBillingClient({
       throw new Error('Google Play order does not match a completed single Sparks purchase for Nigeria');
     }
     const amountMinor = moneyToMinor(order.total, 'NGN');
+    const lineItemAmountMinor = moneyToMinor(order.lineItems[0].total, 'NGN');
+    if (lineItemAmountMinor !== amountMinor) {
+      throw new Error('Google Play order total does not match its Sparks product line item');
+    }
     const developerRevenueMinor = moneyToMinor(order.developerRevenueInBuyerCurrency, 'NGN');
     if (developerRevenueMinor > amountMinor) {
       throw new Error('Google Play developer proceeds exceed the verified order total');
