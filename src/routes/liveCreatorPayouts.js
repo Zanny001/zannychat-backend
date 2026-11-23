@@ -189,11 +189,13 @@ router.post('/request', async (req, res) => {
           reference,
         }),
       });
-      const { error: updateError } = await supabaseAdmin.from('live_creator_payouts')
+      const { data: updatedPayout, error: updateError } = await supabaseAdmin.from('live_creator_payouts')
         .update({ status: 'processing', provider_transfer_code: transfer.transfer_code, updated_at: new Date().toISOString() })
-        .eq('id', payout.id).eq('status', 'requested');
+        .eq('id', payout.id).eq('status', 'requested').select('id,status').maybeSingle();
       if (updateError) throw updateError;
-      return res.status(202).json({ payout: { id: payout.id, amountMinor, currency: 'NGN', status: 'processing', reference } });
+      const current = updatedPayout || (await supabaseAdmin.from('live_creator_payouts')
+        .select('id,status').eq('id', payout.id).maybeSingle()).data;
+      return res.status(202).json({ payout: { id: payout.id, amountMinor, currency: 'NGN', status: current?.status || 'requested', reference } });
     } catch (providerError) {
       if (providerError?.providerRejected) {
         await supabaseAdmin.from('live_creator_payouts')
