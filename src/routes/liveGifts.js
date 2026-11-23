@@ -40,8 +40,13 @@ router.get('/wallet', async (req, res) => {
       else totals.legacySparks += amount;
       return totals;
     }, { purchasedSparks: 0, promotionalSparks: 0, legacySparks: 0 });
+    const balanceSparks = Number(data?.balance_sparks || 0);
+    const lotBalance = sourceBalances.purchasedSparks + sourceBalances.promotionalSparks + sourceBalances.legacySparks;
+    if (!Number.isSafeInteger(balanceSparks) || lotBalance !== balanceSparks) {
+      throw new Error('LIVE Sparks aggregate and source ledgers do not reconcile');
+    }
     return res.json({
-      balanceSparks: Number(data?.balance_sparks || 0),
+      balanceSparks,
       ...sourceBalances,
       updatedAt: data?.updated_at || null,
       currency: 'Sparks',
