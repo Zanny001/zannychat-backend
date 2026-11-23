@@ -118,11 +118,14 @@ async function notifyReplayReady(replay, dependencies = {}) {
     throw error;
   }
 }
-async function finalizeReplay(event) {
+async function finalizeReplay(event, dependencies = {}) {
+  const admin = dependencies.admin || supabaseAdmin;
+  const clearStop = dependencies.clearStop || clearLiveReplayStop;
+  const now = dependencies.now || (() => new Date());
   const info = getEgressInfo(event);
   const egressId = info?.egressId || info?.egress_id;
   if (!egressId) return { ignored: true };
-  const { data: matchedReplay, error } = await supabaseAdmin
+  const { data: matchedReplay, error } = await admin
     .from('live_stream_replays')
     .select('id, file_path, status, duration_seconds, room_name, creator_id, stream_id, notification_sent_at')
     .eq('egress_id', egressId)
@@ -130,7 +133,7 @@ async function finalizeReplay(event) {
   if (error) throw error;
   let replay = matchedReplay;
   if (!replay && (info?.roomName || info?.room_name)) {
-    const { data: recovered, error: recoveryError } = await supabaseAdmin.from('live_stream_replays')
+    const { data: recovered, error: recoveryError } = await admin.from('live_stream_replays')
       .select('id, file_path, status, duration_seconds, room_name, creator_id, stream_id, notification_sent_at')
       .eq('room_name', info.roomName || info.room_name)
       .in('status', ['starting', 'recording', 'processing'])
@@ -138,26 +141,26 @@ async function finalizeReplay(event) {
     if (recoveryError) throw recoveryError;
     if (recovered) {
       replay = recovered;
-      const { error: recoveryUpdateError } = await supabaseAdmin.from('live_stream_replays')
+      const { error: recoveryUpdateError } = await admin.from('live_stream_replays')
         .update({ egress_id: egressId, status: 'processing' })
         .eq('id', replay.id);
       if (recoveryUpdateError) throw recoveryUpdateError;
     }
   }
   if (!replay) return { ignored: true };
-  clearLiveReplayStop(replay.id);
+  clearStop(replay.id);
   if (replay.status === 'ready') {
-    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+    const { error: quotaError } = await admin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id,
       p_actual_seconds: replay.duration_seconds || 0,
       p_success: true,
     });
     if (quotaError) throw quotaError;
-    await notifyReplayReady(replay);
+    await notifyReplayReady(replay, { ...dependencies, admin, now });
     return { alreadyReady: true };
   }
   if (replay.status === 'failed') {
-    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+    const { error: quotaError } = await admin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id,
       p_actual_seconds: 0,
       p_success: false,
@@ -178,9 +181,9 @@ async function finalizeReplay(event) {
     durationSeconds > 0 && durationSeconds <= MAX_REPLAY_OUTPUT_SECONDS;
 
   if (valid) {
-    const completedAt = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: updateError } = await supabaseAdmin
+    const completedAt = now().toISOString();
+    const expiresAt = new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { error: updateError } = await admin
       .from('live_stream_replays')
       .update({
         status: 'ready',
@@ -193,23 +196,23 @@ async function finalizeReplay(event) {
       .eq('id', replay.id)
       .in('status', ['starting', 'recording', 'processing']);
     if (updateError) throw updateError;
-    const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+    const { error: quotaError } = await admin.rpc('finalize_live_replay_quota', {
       p_replay_id: replay.id,
       p_actual_seconds: durationSeconds,
       p_success: true,
     });
     if (quotaError) throw quotaError;
-    await notifyReplayReady({ ...replay, notification_sent_at: null });
+    await notifyReplayReady({ ...replay, notification_sent_at: null }, { ...dependencies, admin, now });
     return { ready: true };
   }
 
   if (replay.file_path) {
-    const { error: removeError } = await supabaseAdmin.storage.from('live-replays').remove([replay.file_path]);
+    const { error: removeError } = await admin.storage.from('live-replays').remove([replay.file_path]);
     if (removeError) console.error('[live-replay] rejected file cleanup failed', { replayId: replay.id });
   }
   const failedAt = new Date();
   const expiresAt = new Date(failedAt.getTime() + 10 * 60 * 1000).toISOString();
-  const { error: updateError } = await supabaseAdmin
+  const { error: updateError } = await admin
     .from('live_stream_replays')
     .update({
       status: 'failed',
@@ -220,7 +223,7 @@ async function finalizeReplay(event) {
     .eq('id', replay.id)
     .in('status', ['starting', 'recording', 'processing']);
   if (updateError) throw updateError;
-  const { error: quotaError } = await supabaseAdmin.rpc('finalize_live_replay_quota', {
+  const { error: quotaError } = await admin.rpc('finalize_live_replay_quota', {
     p_replay_id: replay.id,
     p_actual_seconds: 0,
     p_success: false,
