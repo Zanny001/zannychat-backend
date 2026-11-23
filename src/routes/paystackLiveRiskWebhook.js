@@ -15,7 +15,7 @@ const REFUND_EVENT_BY_STATUS = {
 async function fetchPaystackData(url, secret, fetchImpl = fetch) {
   const response = await fetchImpl(url, {
     headers: { Authorization: 'Bearer ' + secret },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(8000),
   });
   const payload = await response.json();
   if (!response.ok || payload?.status !== true) {
@@ -52,7 +52,7 @@ async function verifyRefundResource(eventData, secret, fetchImpl = fetch) {
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Verified refund amount is invalid');
   return {
     eventType: REFUND_EVENT_BY_STATUS[refund.status],
-    resourceId: String(refund.id || eventData.id || refundReference),
+    resourceId: 'refund:' + String(refund.id || eventData.id || refundReference),
     providerReference: String(transaction.reference),
     providerStatus: String(refund.status),
     amountMinor: amount,
@@ -81,7 +81,7 @@ async function verifyDisputeResource(eventData, secret, fetchImpl = fetch) {
   }
   return {
     eventType: resolved ? 'charge.dispute.resolve' : eventData.event,
-    resourceId: disputeId,
+    resourceId: 'dispute:' + disputeId,
     providerReference: String(dispute.transaction.reference),
     providerStatus: String(dispute.status),
     amountMinor: dispute.refund_amount == null ? null : Number(dispute.refund_amount),
