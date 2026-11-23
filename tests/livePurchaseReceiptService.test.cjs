@@ -33,3 +33,13 @@ test('purchase webhook creates a receipt only after successful server-side fulfi
   assert.match(purchases, /createSignedUrl\(receipt\.storage_path, 60\)/);
   assert.match(purchases, /receiptAvailable: Boolean\(receipt\)/);
 });
+
+test('receipt repository is private and server-role-only', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123132215_live_purchase_receipts_20261123132500.sql'), 'utf8');
+  assert.match(migration, /live_spark_purchase_receipts/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON public\.live_spark_purchase_receipts FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT ALL ON public\.live_spark_purchase_receipts TO service_role/);
+  assert.match(migration, /'live-purchase-receipts', 'live-purchase-receipts', false/);
+  assert.match(migration, /application\/pdf/);
+});
