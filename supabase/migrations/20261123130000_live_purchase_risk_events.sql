@@ -231,7 +231,9 @@ BEGIN
     v_event_status := CASE WHEN p_event_type = 'refund.failed' THEN 'failed' ELSE 'resolved' END;
     UPDATE public.live_purchase_risk_events
       SET status = v_event_status, updated_at = now()
-      WHERE id = v_event_id;
+      WHERE purchase_id = v_purchase.id
+        AND provider_resource_id = p_provider_resource_id
+        AND status = 'open';
 
     SELECT count(*) INTO v_open_events
     FROM public.live_purchase_risk_events
