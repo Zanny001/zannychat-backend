@@ -28,7 +28,7 @@ test('gift spending consumes promotional credits before paid credits atomically'
 });
 
 test('pre-existing balances are preserved as non-redeemable legacy lots', () => {
-  assert.match(migration, /SELECT w.user_id, 'legacy', w.balance_sparks - COALESCE(SUM(l.remaining_sparks), 0)/);
-  assert.match(migration, /WHERE balance_sparks > 0/);
-  assert.match(migration, /NOT EXISTS \(SELECT 1 FROM public\.live_spark_lots/);
+  assert.ok(migration.includes("SELECT w.user_id, 'legacy', w.balance_sparks - COALESCE(SUM(l.remaining_sparks), 0)"));
+  assert.ok(migration.includes('GROUP BY w.user_id, w.balance_sparks'));
+  assert.ok(migration.includes('HAVING w.balance_sparks > COALESCE(SUM(l.remaining_sparks), 0)'));
 });
