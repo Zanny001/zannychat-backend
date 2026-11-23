@@ -28,7 +28,10 @@ router.post('/', async (req, res) => {
   try {
     await verifyGooglePubSubOidcToken(match[1], { audience, serviceAccountEmail });
   } catch (error) {
-    console.warn('[google-play-webhook] OIDC authentication rejected:', error?.message || error);
+    console.warn('[google-play-webhook] OIDC authentication failed:', error?.code || 'invalid_token');
+    if (error?.code === 'GOOGLE_CERTS_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Google Pub/Sub identity verification is temporarily unavailable' });
+    }
     return res.status(401).json({ error: 'Invalid Google Pub/Sub identity token' });
   }
 
