@@ -40,7 +40,9 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
   }
 
   try {
-    const verified = await verifyPaystackTransaction(String(event.data.reference));
+    const eventReference = String(event.data.reference);
+    const verified = await verifyPaystackTransaction(eventReference);
+    if (String(verified.reference) !== eventReference) throw new Error('Verified payment reference mismatch');
     const { data, error } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
       p_provider_reference: String(verified.reference),
       p_provider_transaction_id: String(verified.id),
@@ -54,7 +56,7 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
       }
       throw error;
     }
-    return res.status(200).json({ received: true, fulfilled: true, replayed: Boolean(data?.replayed) });
+    return res.status(200).json({ received: true, fulfilled: !data?.rejected, rejected: Boolean(data?.rejected), replayed: Boolean(data?.replayed) });
   } catch (error) {
     console.error('[live-purchases] webhook fulfilment failed:', error?.message || error);
     return res.status(503).json({ error: 'Payment fulfilment will be retried' });
