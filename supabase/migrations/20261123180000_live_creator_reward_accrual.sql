@@ -236,6 +236,10 @@ BEGIN
   IF p_creator_id IS NULL THEN
     RAISE EXCEPTION 'creator id is required' USING ERRCODE = '22023';
   END IF;
+  UPDATE public.live_creator_earnings_ledger
+    SET status = 'available'
+    WHERE creator_id = p_creator_id AND entry_type = 'earning'
+      AND status = 'pending' AND available_at IS NOT NULL AND available_at <= now();
   SELECT
     COALESCE(SUM(net_minor) FILTER (WHERE entry_type = 'earning' AND status = 'pending'), 0),
     COALESCE(SUM(net_minor) FILTER (WHERE entry_type = 'earning' AND status = 'available'), 0),
