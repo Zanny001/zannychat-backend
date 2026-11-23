@@ -65,13 +65,16 @@ router.post('/', async (req, res) => {
       }
       transactionKey = 'apple:' + sha256Hex(transaction.transactionId);
       if (notificationType === 'REFUND_REVERSED') {
-        if (transaction.revocationDate != null || transaction.revocationPercentage != null) {
+        if (transaction.revocationPercentage != null) {
           throw new Error('Apple refund reversal still contains a revoked transaction');
         }
         const { data: reversalResult, error: reversalError } = await supabaseAdmin.rpc('record_live_apple_refund_reversal', {
           p_event_key: 'apple-reversal:' + notificationUuid,
           p_provider_transaction_id: transactionKey,
           p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
+          p_signed_date: Number(notification.signedDate),
+          p_notification_uuid: notificationUuid,
+          p_notification_type: notificationType,
         });
         if (reversalError) throw reversalError;
         processingResult = reversalResult || { received: true };
@@ -89,6 +92,9 @@ router.post('/', async (req, res) => {
           p_currency: transaction.currency,
           p_refund_type: refundType,
           p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
+          p_signed_date: Number(notification.signedDate),
+          p_notification_uuid: notificationUuid,
+          p_notification_type: notificationType,
         });
         if (refundError) throw refundError;
         processingResult = refundResult || { received: true };
