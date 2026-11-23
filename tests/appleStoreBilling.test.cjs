@@ -44,6 +44,7 @@ test('Apple purchase verification trusts Apple signed JWS and server catalogue o
 
 test('Apple fulfilment is atomic, idempotent and production rejects sandbox transactions', () => {
   assert.match(route, /verifiedResult\.environment !== 'Production'/);
+  assert.match(route, /process\.env\.NODE_ENV !== 'production'[\s\S]*APPLE_IAP_ALLOW_SANDBOX === 'true'/);
   assert.match(route, /rpc\('fulfill_live_spark_purchase'/);
   assert.match(route, /transactionKey = 'apple:' \+ sha256Hex/);
   assert.match(route, /ensureLivePurchaseReceipt/);
