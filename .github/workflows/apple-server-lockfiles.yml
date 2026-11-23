@@ -1,0 +1,39 @@
+name: Prepare Apple server dependency lockfiles
+
+on:
+  push:
+    branches:
+      - feat/apple-storekit-sparks-server-20261123
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Apple billing branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Activate Yarn classic
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+      - name: Resolve Apple library and update Yarn lock
+        run: yarn install --non-interactive
+      - name: Update npm lockfile for deployment compatibility
+        run: npm install --package-lock-only --ignore-scripts --no-audit
+      - name: Commit refreshed lockfiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yarn.lock package-lock.json
+          if git diff --cached --quiet; then
+            echo "Dependency lockfiles are already current."
+            exit 0
+          fi
+          git commit -m "chore: lock Apple App Store server library"
+          git push
