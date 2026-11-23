@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { createGooglePlayBillingClient, sha256Hex } = require('../services/googlePlayBilling');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'LIVE purchase requests are rate-limited.' }));
@@ -17,18 +18,29 @@ function paystackConfigured() {
     && Boolean(process.env.PAYSTACK_SECRET_KEY);
 }
 
-router.get('/packages', async (_req, res) => {
+function googlePlayConfigured() {
+  return process.env.LIVE_GOOGLE_PLAY_BILLING_ENABLED === 'true'
+    && Boolean(process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON);
+}
+
+router.get('/packages', async (req, res) => {
+  const provider = String(req.query.provider || 'paystack');
+  if (!['paystack', 'google_play'].includes(provider)) {
+    return res.status(400).json({ error: 'Unsupported LIVE purchase provider' });
+  }
   try {
     const { data, error } = await supabaseAdmin.from('live_spark_packages')
       .select('package_id,sparks,amount_minor,currency,sort_order')
-      .eq('provider', 'paystack').eq('currency', 'NGN').eq('is_active', true)
+      .eq('provider', provider).eq('currency', 'NGN').eq('is_active', true)
       .order('sort_order', { ascending: true });
     if (error) throw error;
+    const providerReady = provider === 'paystack' ? paystackConfigured() : googlePlayConfigured();
     return res.json({
       packages: data || [],
-      provider: 'paystack',
+      provider,
       currency: 'NGN',
-      purchasable: paystackConfigured() && Boolean(data?.length),
+      purchasable: providerReady && Boolean(data?.length),
+      reason: providerReady ? (data?.length ? null : 'NO_ACTIVE_PACKAGES') : 'PROVIDER_NOT_CONFIGURED',
     });
   } catch (error) {
     console.error('[live-purchases] package catalogue lookup failed:', error?.message || error);
@@ -190,6 +202,116 @@ router.post('/initialize', async (req, res) => {
   } catch (error) {
     console.error('[live-purchases] purchase initialization failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not create a LIVE purchase' });
+  }
+});
+
+router.post('/native/verify', async (req, res) => {
+  const { packageId, purchaseToken } = req.body || {};
+  if (!validPackageId(packageId) || typeof purchaseToken !== 'string'
+      || purchaseToken.length < 16 || purchaseToken.length > 4096) {
+    return res.status(400).json({ error: 'A valid Sparks product and store purchase token are required' });
+  }
+  if (!googlePlayConfigured()) {
+    return res.status(503).json({ error: 'Google Play billing is not configured yet', code: 'STORE_BILLING_NOT_CONFIGURED' });
+  }
+
+  const packageName = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.zannychat.app';
+  const transactionKey = 'gplay:' + sha256Hex(purchaseToken);
+  try {
+    const { data: pack, error: packageError } = await supabaseAdmin.from('live_spark_packages')
+      .select('package_id,sparks,amount_minor,currency')
+      .eq('provider', 'google_play').eq('currency', 'NGN')
+      .eq('package_id', packageId).eq('is_active', true).maybeSingle();
+    if (packageError) throw packageError;
+    if (!pack || !Number.isSafeInteger(Number(pack.sparks)) || Number(pack.sparks) <= 0
+        || !Number.isSafeInteger(Number(pack.amount_minor)) || Number(pack.amount_minor) <= 0) {
+      return res.status(404).json({ error: 'This Google Play Sparks product is not available' });
+    }
+
+    const billing = createGooglePlayBillingClient();
+    const verified = await billing.verifyProductPurchase({
+      packageName,
+      productId: pack.package_id,
+      purchaseToken,
+      obfuscatedAccountId: sha256Hex(req.user.id),
+    });
+    if (![0, 1].includes(verified.consumptionState)) {
+      return res.status(503).json({ error: 'Google Play purchase consumption state could not be confirmed' });
+    }
+
+    const { data: existing, error: existingError } = await supabaseAdmin.from('live_spark_purchases')
+      .select('id,user_id,package_id,provider_reference,status')
+      .eq('provider', 'google_play').eq('provider_transaction_id', transactionKey).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing && (existing.user_id !== req.user.id || existing.package_id !== pack.package_id)) {
+      return res.status(409).json({ error: 'This store purchase is already associated with another ZannyChat order' });
+    }
+    if (verified.consumptionState === 1 && (!existing || existing.status !== 'paid')) {
+      return res.status(409).json({ error: 'This Google Play purchase was already consumed and cannot be safely credited' });
+    }
+
+    let purchase = existing;
+    if (!purchase) {
+      const reference = 'ZC_GPLAY_' + crypto.randomUUID().replace(/-/g, '');
+      const { data, error } = await supabaseAdmin.from('live_spark_purchases')
+        .insert({
+          user_id: req.user.id,
+          provider: 'google_play',
+          provider_reference: reference,
+          package_id: pack.package_id,
+          sparks: pack.sparks,
+          amount_minor: pack.amount_minor,
+          currency: pack.currency,
+          status: 'pending',
+        })
+        .select('id,user_id,package_id,provider_reference,status')
+        .single();
+      if (error) throw error;
+      purchase = data;
+    }
+
+    const { data: fulfilment, error: fulfilmentError } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
+      p_provider_reference: purchase.provider_reference,
+      p_provider_transaction_id: transactionKey,
+      p_amount_minor: Number(pack.amount_minor),
+      p_currency: pack.currency,
+    });
+    if (fulfilmentError) throw fulfilmentError;
+    if (fulfilment?.rejected) {
+      return res.status(409).json({ error: 'The store purchase could not be assigned to this account' });
+    }
+
+    if (verified.consumptionState !== 1) {
+      try {
+        await billing.consumeProductPurchase({ packageName, productId: pack.package_id, purchaseToken });
+      } catch (consumeError) {
+        console.error('[live-purchases] verified Sparks purchase awaits Google Play consumption:', consumeError?.message || consumeError);
+        return res.status(503).json({
+          error: 'Your Sparks were credited, but Google Play has not confirmed transaction completion. Refresh wallet status and retry verification.',
+          code: 'STORE_TRANSACTION_FINALIZATION_PENDING',
+          credited: true,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      verified: true,
+      credited: true,
+      transactionFinalized: true,
+      purchaseId: fulfilment?.purchaseId || purchase.id,
+      sparks: Number(pack.sparks),
+      replayed: Boolean(fulfilment?.replayed),
+    });
+  } catch (error) {
+    console.error('[live-purchases] Google Play verification failed:', error?.message || error);
+    if (error?.code === 'PURCHASE_NOT_COMPLETED') {
+      return res.status(409).json({ error: error.message, code: error.code });
+    }
+    if (error?.code === 'PURCHASE_ACCOUNT_MISMATCH' || error?.code === 'PURCHASE_REGION_UNSUPPORTED'
+        || error?.code === 'TEST_PURCHASE_NOT_ALLOWED') {
+      return res.status(403).json({ error: error.message, code: error.code });
+    }
+    return res.status(503).json({ error: 'Google Play could not verify this purchase yet. No client-side purchase result is treated as payment.' });
   }
 });
 
