@@ -89,3 +89,14 @@ test('risk webhook is signature-gated and delegates all state changes to the ser
   assert.match(route, /rpc\('record_live_purchase_risk_event'/);
   assert.match(index, /\/webhooks\/paystack\/live-risk/);
 });
+
+test('refund verification rejects a provider response that does not match the requested refund reference', async () => {
+  const fetchImpl = async () => response([{
+    id: 999, reference: 'different-ref', status: 'processed',
+    amount: 1000, currency: 'NGN', transaction: { reference: 'other-purchase' },
+  }]);
+  await assert.rejects(
+    verifyRefundResource({ reference: 'expected-ref' }, 'sk_test', fetchImpl),
+    /record is missing or invalid/,
+  );
+});
