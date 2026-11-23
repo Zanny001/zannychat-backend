@@ -47,3 +47,27 @@ test('LIVE gift API derives sender from authentication and exposes no client bal
   assert.match(route, /p_battle_id: battleId/);
   assert.match(index, /app\.use\('\/live\/gifts', liveGiftsRouter\)/);
 });
+
+const battles = fs.readFileSync(path.join(__dirname, '../src/routes/liveBattles.js'), 'utf8');
+const captions = fs.readFileSync(path.join(__dirname, '../src/routes/liveCaptions.js'), 'utf8');
+
+test('PK battle routes require authentication and expose creator-controlled lifecycle actions', () => {
+  assert.match(battles, /router\.use\(requireAuth/);
+  assert.match(battles, /p_creator_a_id: req\.user\.id/);
+  assert.match(battles, /p_creator_id: req\.user\.id/);
+  assert.match(battles, /router\.post\('\/\'/);
+  assert.match(battles, /router\.post\('\/:battleId\/start'/);
+  assert.match(battles, /router\.post\('\/:battleId\/finish'/);
+  assert.match(battles, /Join this LIVE to view its PK battle/);
+  assert.match(index, /app\.use\('\/live\/battles', liveBattlesRouter\)/);
+});
+
+test('LIVE captions never fabricate text and require explicit opt-in provider-backed translation', () => {
+  assert.match(captions, /LIVE_TRANSLATION_ENABLED !== 'true'/);
+  assert.match(captions, /isAiConfigured\(\)/);
+  assert.match(captions, /await askClaude\(/);
+  assert.match(captions, /status: false|transcription: false/);
+  assert.match(captions, /transcriptStored: false/);
+  assert.match(captions, /\.eq\('status', 'joined'\)/);
+  assert.match(index, /app\.use\('\/live\/captions', liveCaptionsRouter\)/);
+});
