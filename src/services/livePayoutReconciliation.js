@@ -12,6 +12,17 @@ function mapPaystackTransferStatus(value) {
   return TRANSFER_STATUS_MAP[String(value || '').toLowerCase()] || null;
 }
 
+function transferMatchesPayout(transfer, payout) {
+  if (!transfer || !payout) return false;
+  const verifiedAmount = Number(transfer.amount);
+  const expectedAmount = Number(payout.amount_minor);
+  return String(transfer.reference || '') === String(payout.provider_reference || '')
+    && Number.isSafeInteger(verifiedAmount)
+    && Number.isSafeInteger(expectedAmount)
+    && verifiedAmount === expectedAmount
+    && String(transfer.currency || '').toUpperCase() === String(payout.currency || '').toUpperCase();
+}
+
 async function reconcilePendingCreatorPayouts({
   supabase,
   fetchImpl = fetch,
@@ -50,10 +61,7 @@ async function reconcilePendingCreatorPayouts({
       }
 
       const transfer = payload.data;
-      const reference = String(transfer.reference || '');
-      if (reference !== String(payout.provider_reference)
-          || Number(transfer.amount) !== Number(payout.amount_minor)
-          || String(transfer.currency || '').toUpperCase() !== String(payout.currency || '').toUpperCase()) {
+      if (!transferMatchesPayout(transfer, payout)) {
         throw new Error('Verified Paystack transfer does not match the reserved payout');
       }
 
@@ -100,6 +108,7 @@ async function reconcilePendingCreatorPayouts({
 module.exports = {
   reconcilePendingCreatorPayouts,
   mapPaystackTransferStatus,
+  transferMatchesPayout,
   DEFAULT_RECONCILIATION_AGE_MS,
   MAX_RECONCILIATION_BATCH,
 };
