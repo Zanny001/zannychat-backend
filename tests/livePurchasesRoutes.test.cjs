@@ -17,7 +17,7 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
   assert.match(purchases, /\.eq\('provider', 'paystack'\)[\s\S]*\.eq\('currency', 'NGN'\)[\s\S]*\.eq\('is_active', true\)/);
   assert.match(purchases, /user_id: req\.user\.id/);
   assert.match(purchases, /email: req\.user\.email/);
-  assert.match(purchases, /amount: Number\(purchase\.amount_minor\)/);
+  assert.match(purchases, /amount: amountMinor\(purchase\.amount_minor\)/);
   assert.match(purchases, /reference: purchase\.provider_reference/);
   assert.doesNotMatch(purchases, /amount:\s*req\.body/);
   assert.doesNotMatch(purchases, /sparks:\s*req\.body/);
