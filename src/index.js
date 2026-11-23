@@ -227,6 +227,17 @@ app.use('/webhooks/livekit', liveKitEgressWebhookRouter);
 app.use('/webhooks/paystack/live', paystackLiveWebhookRouter);
 app.use('/webhooks/paystack/live-risk', paystackLiveRiskWebhookRouter);
 app.use('/webhooks/paystack/live-payouts', paystackCreatorPayoutWebhookRouter);
+/*
+ * Paystack exposes one webhook URL per integration. Keep the specific legacy
+ * paths above for compatibility, and provide one dispatcher URL for all
+ * purchase, refund/dispute and creator-payout events.
+ */
+app.use('/webhooks/paystack',
+  paystackLiveWebhookRouter,
+  paystackLiveRiskWebhookRouter,
+  paystackCreatorPayoutWebhookRouter,
+  (req, res) => res.status(200).json({ received: true, ignored: true }),
+);
 
 app.use(express.json({ limit: '100kb', strict: true }));
 
