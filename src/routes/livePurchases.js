@@ -266,7 +266,8 @@ router.post('/native/verify', async (req, res) => {
     if (purchase?.status === 'paid'
         && (Number(purchase.amount_minor) !== verified.amountMinor
           || Number(purchase.provider_fee_minor) !== verified.providerFeeMinor
-          || purchase.currency !== verified.currency)) {
+          || purchase.currency !== verified.currency
+          || purchase.provider_order_id !== verified.orderId)) {
       return res.status(409).json({ error: 'The verified Google Play order differs from the previously fulfilled purchase' });
     }
     if (!purchase) {
@@ -281,7 +282,6 @@ router.post('/native/verify', async (req, res) => {
           sparks: pack.sparks,
           amount_minor: verified.amountMinor,
           provider_fee_minor: verified.providerFeeMinor,
-          provider_order_id: verified.orderId,
           currency: verified.currency,
           status: 'pending',
         })
@@ -294,6 +294,7 @@ router.post('/native/verify', async (req, res) => {
         .update({
           amount_minor: verified.amountMinor,
           provider_fee_minor: verified.providerFeeMinor,
+          provider_order_id: verified.orderId,
           currency: verified.currency,
           updated_at: new Date().toISOString(),
         })
