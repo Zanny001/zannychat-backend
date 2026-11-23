@@ -125,3 +125,24 @@ test('LIVE captions never fabricate text and require explicit opt-in provider-ba
   assert.match(captions, /\.eq\('status', 'joined'\)/);
   assert.ok(index.includes("app.use('/live/captions', liveCaptionsRouter)"));
 });
+
+
+const accountDeletionMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261123130000_live_gift_account_deletion_privacy.sql'),
+  'utf8',
+);
+const accountRoute = fs.readFileSync(path.join(__dirname, '../src/routes/account.js'), 'utf8');
+
+test('LIVE gift audit history is anonymized safely instead of blocking Auth account deletion', () => {
+  assert.match(accountRoute, /supabaseAdmin\.auth\.admin\.deleteUser\(req\.user\.id\)/);
+  assert.match(accountDeletionMigration, /live_gift_ledger_user_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_gift_transactions_sender_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_gift_transactions_recipient_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_gift_transactions_stream_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_gift_transactions_battle_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_pk_battles_creator_a_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /live_pk_battles_creator_b_id_fkey[\s\S]*ON DELETE SET NULL/);
+  assert.match(accountDeletionMigration, /Auth deletion may redact only the personal identifier/);
+  assert.match(accountDeletionMigration, /FK-driven anonymisation may null only references/);
+  assert.match(accountDeletionMigration, /RAISE EXCEPTION 'LIVE gift audit records are append-only'/);
+});
