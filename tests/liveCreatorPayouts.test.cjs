@@ -45,8 +45,8 @@ test('payout requests reserve only available earnings under a per-creator databa
 
 test('transfer webhooks authenticate raw bytes and independently verify provider transfer state', () => {
   assert.match(webhook, /express\.raw\(\{ type: 'application\/json'/);
-  assert.match(webhook, /createHmac\('sha512'/);
-  assert.match(webhook, /timingSafeEqual/);
+  assert.match(webhook, /validPaystackWebhookSignature/);
+  assert.match(webhook, /PAYSTACK_WEBHOOK_SECRET/);
   assert.match(webhook, /\/transfer\/verify\//);
   assert.match(webhook, /transfer\.success/);
   assert.match(webhook, /transfer\.failed/);
