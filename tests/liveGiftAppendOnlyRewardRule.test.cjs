@@ -17,7 +17,7 @@ test('creator reward rule is snapshotted in the original append-only gift transa
 });
 
 test('the migration preserves append-only audit enforcement and refuses unexpected source rewrites', () => {
-  assert.match(migration, /LIVE gift audit records are append-only/);
+  assert.match(migration, /append-only audit trigger/);
   assert.match(migration, /send_live_gift definition differs from the audited source/);
   assert.match(migration, /send_live_gift still attempts to mutate the append-only gift audit row/);
   assert.match(migration, /did not persist reward_rule_id in its initial insert/);
