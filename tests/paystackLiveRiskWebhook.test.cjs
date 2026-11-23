@@ -26,7 +26,7 @@ test('refund verification resolves the original transaction reference and provid
   };
   const verified = await verifyRefundResource({ id: 991, reference: 'refund-ref-991' }, 'sk_test', fetchImpl);
   assert.equal(verified.eventType, 'refund.processed');
-  assert.equal(verified.resourceId, '991');
+  assert.equal(verified.resourceId, 'refund:991');
   assert.equal(verified.providerReference, 'zanny-purchase-ref');
   assert.equal(verified.amountMinor, 250000);
   assert.equal(verified.currency, 'NGN');
@@ -61,6 +61,7 @@ test('dispute verification uses Paystack state and resolution rather than trusti
   });
   const verified = await verifyDisputeResource({ id: 456, event: 'charge.dispute.create' }, 'sk_test', fetchImpl);
   assert.equal(verified.eventType, 'charge.dispute.resolve');
+  assert.equal(verified.resourceId, 'dispute:456');
   assert.equal(verified.providerReference, 'zanny-purchase-ref-3');
   assert.equal(verified.resolution, 'declined');
 });
