@@ -209,6 +209,10 @@ router.post('/initialize', async (req, res) => {
   }
 });
 
+router.get('/native/account-binding', (req, res) => {
+  return res.json({ obfuscatedAccountId: sha256Hex(req.user.id) });
+});
+
 router.post('/native/verify', async (req, res) => {
   const { packageId, purchaseToken } = req.body || {};
   if (!validGooglePlayProductId(packageId) || typeof purchaseToken !== 'string'
@@ -310,23 +314,11 @@ router.post('/native/verify', async (req, res) => {
       return res.status(409).json({ error: 'The store purchase could not be assigned to this account' });
     }
 
-    if (verified.consumptionState !== 1) {
-      try {
-        await billing.consumeProductPurchase({ packageName, productId: pack.package_id, purchaseToken });
-      } catch (consumeError) {
-        console.error('[live-purchases] verified Sparks purchase awaits Google Play consumption:', consumeError?.code || 'provider_error');
-        return res.status(503).json({
-          error: 'Your Sparks were credited, but Google Play has not confirmed transaction completion. Refresh wallet status and retry verification.',
-          code: 'STORE_TRANSACTION_FINALIZATION_PENDING',
-          credited: true,
-        });
-      }
-    }
-
     return res.status(200).json({
       verified: true,
       credited: true,
-      transactionFinalized: true,
+      transactionFinalized: false,
+      storeAcknowledgementRequired: true,
       purchaseId: fulfilment?.purchaseId || purchase.id,
       sparks: Number(pack.sparks),
       replayed: Boolean(fulfilment?.replayed),
