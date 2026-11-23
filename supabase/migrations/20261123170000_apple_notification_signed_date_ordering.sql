@@ -203,7 +203,7 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint,text,text)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint)
+GRANT EXECUTE ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint,text,text)
   TO service_role;
 DROP FUNCTION IF EXISTS public.record_live_apple_refund(text,text,bigint,text,text,text);
 
@@ -357,7 +357,7 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint,text,text)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint)
+GRANT EXECUTE ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint,text,text)
   TO service_role;
 DROP FUNCTION IF EXISTS public.record_live_apple_refund_reversal(text,text,text);
 
