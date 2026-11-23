@@ -85,7 +85,7 @@ Paystack's published Nigerian transfer fees and statutory levies can change. Nev
 
 ## 6. Required provider webhooks
 
-Paystack provides one webhook URL setting per integration. Configure this single endpoint in the Paystack dashboard:
+Paystack's standard integration settings use one webhook URL. Its multi-endpoint API is currently a pilot, so the unified dispatcher is the compatible default. Configure this single endpoint in the Paystack dashboard:
 
 - **Unified Paystack webhook:** `POST /webhooks/paystack`
 
