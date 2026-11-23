@@ -13,6 +13,7 @@ test('one Paystack integration endpoint dispatches purchases, refunds/disputes a
   const dispatcher = index.indexOf("app.use('/webhooks/paystack',");
   const jsonParser = index.indexOf("app.use(express.json");
   assert.ok(dispatcher > 0 && dispatcher < jsonParser);
+  assert.ok(index.indexOf('express.raw({ type: \'application/json\'') < index.indexOf('paystackLiveWebhookRouter', dispatcher));
   const chain = index.slice(dispatcher, jsonParser);
   assert.ok(chain.indexOf('paystackLiveWebhookRouter') < chain.indexOf('paystackLiveRiskWebhookRouter'));
   assert.ok(chain.indexOf('paystackLiveRiskWebhookRouter') < chain.indexOf('paystackCreatorPayoutWebhookRouter'));
