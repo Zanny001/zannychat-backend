@@ -13,6 +13,29 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+function moneyToMinor(money, expectedCurrency = 'NGN') {
+  if (!money || money.currencyCode !== expectedCurrency) {
+    throw new Error('Google Play order currency does not match the configured Sparks package');
+  }
+  let units;
+  let nanos;
+  try {
+    units = BigInt(money.units || '0');
+    nanos = BigInt(money.nanos || 0);
+  } catch (_) {
+    throw new Error('Google Play order amount is invalid');
+  }
+  if (units < 0n || nanos < 0n || nanos >= 1000000000n || nanos % 10000000n !== 0n) {
+    throw new Error('Google Play order amount cannot be represented in minor currency units');
+  }
+  const minor = units * 100n + nanos / 10000000n;
+  const value = Number(minor);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error('Google Play order amount is outside the supported range');
+  }
+  return value;
+}
+
 function parseServiceAccount(value) {
   let account;
   try {
@@ -119,14 +142,40 @@ function createGooglePlayBillingClient({
       error.code = 'TEST_PURCHASE_NOT_ALLOWED';
       throw error;
     }
+    if (purchase?.quantity !== undefined && Number(purchase.quantity) !== 1) {
+      throw new Error('Only single-quantity Sparks purchases are supported');
+    }
+    if (typeof purchase.orderId !== 'string' || !purchase.orderId) {
+      throw new Error('Google Play did not provide a verifiable order identifier');
+    }
+
+    const orderUrl = GOOGLE_API_BASE + '/applications/' + encodeURIComponent(packageName)
+      + '/orders/' + encodeURIComponent(purchase.orderId);
+    const order = await googleRequest(orderUrl);
+    if (order?.state !== 'PROCESSED' || order?.purchaseToken !== purchaseToken
+        || order?.buyerAddress?.buyerCountry !== 'NG'
+        || !Array.isArray(order?.lineItems) || order.lineItems.length !== 1
+        || order.lineItems[0]?.productId !== productId
+        || Number(order.lineItems[0]?.oneTimePurchaseDetails?.quantity || 1) !== 1) {
+      throw new Error('Google Play order does not match a completed single Sparks purchase for Nigeria');
+    }
+    const amountMinor = moneyToMinor(order.total, 'NGN');
+    const developerRevenueMinor = moneyToMinor(order.developerRevenueInBuyerCurrency, 'NGN');
+    if (developerRevenueMinor > amountMinor) {
+      throw new Error('Google Play developer proceeds exceed the verified order total');
+    }
+    const providerFeeMinor = amountMinor - developerRevenueMinor;
     return {
       productId,
       purchaseToken,
       purchaseTimeMillis: String(purchase.purchaseTimeMillis || ''),
-      orderId: typeof purchase.orderId === 'string' ? purchase.orderId : null,
+      orderId: purchase.orderId,
       consumptionState: Number(purchase.consumptionState),
       acknowledgementState: Number(purchase.acknowledgementState),
       regionCode: purchase.regionCode,
+      amountMinor,
+      providerFeeMinor,
+      currency: 'NGN',
     };
   }
 
