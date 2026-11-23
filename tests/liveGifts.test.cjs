@@ -57,7 +57,7 @@ test('PK battle routes require authentication and expose creator-controlled life
   assert.match(battles, /p_creator_id: req\.user\.id/);
   assert.match(battles, /router\.post\('\/\'/);
   assert.match(battles, /router\.post\('\/:battleId\/start'/);
-  assert.match(battles, /router\.post\('\/:battleId\/finish'/);
+  assert.match(battles, /router\.post\('\/:battleId\/finish'/);\n  assert.match(battles, /router\.get\('\/stream\/:streamId\/current'/);\n  assert.match(battles, /\.in\('status', \['pending', 'live'\]\)/);
   assert.match(battles, /Join this LIVE to view its PK battle/);
   assert.match(index, /app\.use\('\/live\/battles', liveBattlesRouter\)/);
 });
