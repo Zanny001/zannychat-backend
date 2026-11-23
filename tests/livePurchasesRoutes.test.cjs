@@ -25,7 +25,8 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
   assert.match(purchases, /PAYMENTS_NOT_CONFIGURED/);
   assert.match(purchases, /LIVE_PURCHASES_ENABLED === 'true'/);
   assert.match(purchases, /LIVE_PURCHASES_RISK_WEBHOOKS_READY === 'true'/);
-  assert.match(purchases, /purchasable: paystackConfigured\(\) && Boolean\(data\?\.length\)/);
+  assert.match(purchases, /const providerReady = provider === 'paystack' \? paystackConfigured\(\) : googlePlayConfigured\(\)/);
+  assert.match(purchases, /purchasable: providerReady && Boolean\(data\?\.length\)/);
 });
 
 test('Paystack webhook authenticates raw bytes and independently verifies the transaction', () => {
