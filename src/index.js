@@ -233,6 +233,7 @@ app.use('/webhooks/paystack/live-payouts', paystackCreatorPayoutWebhookRouter);
  * purchase, refund/dispute and creator-payout events.
  */
 app.use('/webhooks/paystack',
+  express.raw({ type: 'application/json', limit: '100kb' }),
   paystackLiveWebhookRouter,
   paystackLiveRiskWebhookRouter,
   paystackCreatorPayoutWebhookRouter,
