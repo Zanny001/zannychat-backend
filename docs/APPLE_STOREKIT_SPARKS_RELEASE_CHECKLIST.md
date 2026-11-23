@@ -43,6 +43,7 @@ Use version 2 only. The backend verifies the outer `signedPayload` and nested `s
 - [ ] A private PDF receipt is generated and accessible only to its owner through a short-lived signed URL.
 - [ ] Production REFUND and REVOKE notifications are verified, deduplicated and reconciled.
 - [ ] Partial refunds and creator payout exposure enter the risk hold/manual review path.
+- [ ] REFUND_REVERSED restores only revoked unspent Sparks; uncredited purchases return to pending verification.
 - [ ] App Store Server Notifications V2 test notification is received and acknowledged.
 - [ ] App Store Connect financial reports are used for actual proceeds and fee reconciliation; signed transaction price is only a package-price check.
 - [ ] Apple-funded creator earnings remain withheld while `provider_fee_status='pending'`; an authorized service-role reconciliation records the actual provider fee and releases eligible gift earnings using the reward rule captured at gift time.
