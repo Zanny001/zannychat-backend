@@ -31,6 +31,7 @@ const liveCreatorEarningsRouter = require('./routes/liveCreatorEarnings');
 const liveCreatorPayoutsRouter = require('./routes/liveCreatorPayouts');
 const paystackCreatorPayoutWebhookRouter = require('./routes/paystackCreatorPayoutWebhook');
 const paystackLiveWebhookRouter = require('./routes/paystackLiveWebhook');
+const paystackLiveRiskWebhookRouter = require('./routes/paystackLiveRiskWebhook');
 const liveEventsRouter = require('./routes/liveEvents');
 
 // Retry transient call-push failures while the API process is awake. The
@@ -224,6 +225,7 @@ app.use(cors(createCorsOptions()));
 app.use('/webhooks/livekit', liveKitEgressWebhookRouter);
 // Payment providers sign the exact request bytes. Keep this raw-body route before JSON parsing.
 app.use('/webhooks/paystack/live', paystackLiveWebhookRouter);
+app.use('/webhooks/paystack/live-risk', paystackLiveRiskWebhookRouter);
 app.use('/webhooks/paystack/live-payouts', paystackCreatorPayoutWebhookRouter);
 
 app.use(express.json({ limit: '100kb', strict: true }));
