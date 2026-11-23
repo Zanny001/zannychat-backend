@@ -202,13 +202,13 @@ BEGIN
         WHERE l.purchase_id = v_purchase.id
       );
 
-  v_event_status := CASE WHEN v_paid_earnings THEN 'open' ELSE 'resolved' END;
+  v_event_status := CASE WHEN v_creator_has_payouts THEN 'open' ELSE 'resolved' END;
   UPDATE public.live_purchase_risk_events
     SET status = v_event_status, updated_at = now() WHERE id = v_event_id;
 
   RETURN jsonb_build_object('revoked', true, 'purchaseId', v_purchase.id,
     'status', 'refunded', 'revokedSparks', v_adjust,
-    'manualReviewRequired', v_paid_earnings);
+    'manualReviewRequired', v_creator_has_payouts);
 END;
 $function$;
 
@@ -218,6 +218,6 @@ GRANT EXECUTE ON FUNCTION public.record_live_google_play_voided_purchase(text,te
   TO service_role;
 
 COMMENT ON FUNCTION public.record_live_google_play_voided_purchase(text,text,text,bigint,text,text,text) IS
-  'Service-role-only, idempotent Google Play void/refund reconciliation. Fully voided purchases revoke unspent Sparks; partial refunds and already-paid creator earnings require operator review.';
+  'Service-role-only, idempotent Google Play void/refund reconciliation. Fully voided purchases revoke unspent Sparks; partial refunds and creators with requested, processing or completed payouts require operator review.';
 
 COMMIT;
