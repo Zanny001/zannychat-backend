@@ -42,10 +42,50 @@ router.get('/history', async (req, res) => {
       .select('id,package_id,sparks,amount_minor,currency,status,verified_at,created_at')
       .eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(50);
     if (error) throw error;
-    return res.json({ purchases: data || [] });
+    const purchases = data || [];
+    const purchaseIds = purchases.map((purchase) => purchase.id);
+    let receiptsByPurchase = new Map();
+    if (purchaseIds.length) {
+      const { data: receipts, error: receiptError } = await supabaseAdmin.from('live_spark_purchase_receipts')
+        .select('purchase_id,receipt_number').in('purchase_id', purchaseIds);
+      if (receiptError) throw receiptError;
+      receiptsByPurchase = new Map((receipts || []).map((receipt) => [receipt.purchase_id, receipt]));
+    }
+    return res.json({
+      purchases: purchases.map((purchase) => {
+        const receipt = receiptsByPurchase.get(purchase.id);
+        return { ...purchase, receiptAvailable: Boolean(receipt), receiptNumber: receipt?.receipt_number || null };
+      }),
+    });
   } catch (error) {
     console.error('[live-purchases] purchase history lookup failed:', error?.message || error);
     return res.status(503).json({ error: 'Purchase history is temporarily unavailable' });
+  }
+});
+
+router.get('/:purchaseId/receipt', async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.purchaseId)) {
+    return res.status(400).json({ error: 'Invalid purchase id' });
+  }
+  try {
+    const { data: purchase, error: purchaseError } = await supabaseAdmin.from('live_spark_purchases')
+      .select('id,status').eq('id', req.params.purchaseId).eq('user_id', req.user.id).maybeSingle();
+    if (purchaseError) throw purchaseError;
+    if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
+    if (purchase.status !== 'paid') return res.status(409).json({ error: 'A receipt is available only for a verified paid purchase' });
+
+    const { data: receipt, error: receiptError } = await supabaseAdmin.from('live_spark_purchase_receipts')
+      .select('receipt_number,storage_path').eq('purchase_id', purchase.id).maybeSingle();
+    if (receiptError) throw receiptError;
+    if (!receipt) return res.status(404).json({ error: 'Receipt is still being prepared. Refresh and try again shortly.' });
+
+    const { data: signed, error: signedError } = await supabaseAdmin.storage
+      .from('live-purchase-receipts').createSignedUrl(receipt.storage_path, 60);
+    if (signedError || !signed?.signedUrl) throw signedError || new Error('Receipt download URL could not be created');
+    return res.json({ receiptNumber: receipt.receipt_number, downloadUrl: signed.signedUrl, expiresInSeconds: 60 });
+  } catch (error) {
+    console.error('[live-purchases] receipt download link failed:', error?.message || error);
+    return res.status(503).json({ error: 'Receipt download is temporarily unavailable' });
   }
 });
 
