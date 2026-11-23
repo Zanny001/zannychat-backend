@@ -18,6 +18,10 @@ function validGooglePlayProductId(value) {
   return typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,149}$/.test(value);
 }
 
+function validAppleProductId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,149}$/.test(value);
+}
+
 function paystackConfigured() {
   return process.env.LIVE_PURCHASES_ENABLED === 'true'
     && process.env.LIVE_PURCHASES_RISK_WEBHOOKS_READY === 'true'
@@ -427,7 +431,7 @@ router.post('/apple/verify', async (req, res) => {
     }
 
     const productId = String(transaction.productId || '');
-    if (!validGooglePlayProductId(productId)) {
+    if (!validAppleProductId(productId)) {
       return res.status(400).json({ error: 'Apple transaction product identifier is invalid' });
     }
     const { data: pack, error: packageError } = await supabaseAdmin.from('live_spark_packages')
