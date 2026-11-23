@@ -23,6 +23,7 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
   assert.doesNotMatch(purchases, /sparks:\s*req\.body/);
   assert.match(purchases, /PAYMENTS_NOT_CONFIGURED/);
   assert.match(purchases, /LIVE_PURCHASES_ENABLED === 'true'/);
+  assert.match(purchases, /LIVE_PURCHASES_RISK_WEBHOOKS_READY === 'true'/);
   assert.match(purchases, /purchasable: paystackConfigured\(\) && Boolean\(data\?\.length\)/);
 });
 

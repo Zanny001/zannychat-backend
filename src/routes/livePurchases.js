@@ -12,7 +12,9 @@ function validPackageId(value) {
 }
 
 function paystackConfigured() {
-  return process.env.LIVE_PURCHASES_ENABLED === 'true' && Boolean(process.env.PAYSTACK_SECRET_KEY);
+  return process.env.LIVE_PURCHASES_ENABLED === 'true'
+    && process.env.LIVE_PURCHASES_RISK_WEBHOOKS_READY === 'true'
+    && Boolean(process.env.PAYSTACK_SECRET_KEY);
 }
 
 router.get('/packages', async (_req, res) => {
