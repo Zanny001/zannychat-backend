@@ -1010,7 +1010,11 @@ router.post('/', async (req, res) => {
 
 router.post('/:streamId/join', async (req, res) => {
   const streamId = req.params.streamId;
+  const requestedMediaMode = req.body?.mediaMode;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  if (requestedMediaMode !== undefined && !['audio', 'video'].includes(requestedMediaMode)) {
+    return res.status(400).json({ error: 'LIVE guest media mode must be audio or video' });
+  }
   const config = getLiveKitConfig();
   if (!config) return res.status(503).json({ error: 'LIVE streaming is not enabled on this server yet' });
   try {
@@ -1051,11 +1055,23 @@ router.post('/:streamId/join', async (req, res) => {
       }
     }
     const canPublish = role === 'creator' || role === 'guest';
-    const token = issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room');
+    const guestMediaMode = stream.experience_mode === 'audio_room'
+      ? 'audio'
+      : (requestedMediaMode || 'video');
+    const mediaMode = role === 'guest'
+      ? guestMediaMode
+      : stream.experience_mode === 'audio_room' ? 'audio' : role === 'creator' ? 'video' : 'viewer';
+    const token = issueToken(
+      req.user,
+      stream.room_name,
+      config,
+      canPublish,
+      stream.experience_mode === 'audio_room' || (role === 'guest' && guestMediaMode === 'audio'),
+    );
     const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
-      token, role, canPublish, canModerate,
+      token, role, canPublish, canModerate, mediaMode,
     });
   } catch (error) {
     console.error('[live] join failed:', error?.message || error);
