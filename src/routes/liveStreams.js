@@ -206,18 +206,20 @@ async function stopActiveLiveReplayForStream(streamId) {
     // Give the signed completion webhook time to reconcile a just-finished Egress.
     return;
   }
-  await supabaseAdmin.from('live_stream_replays')
+  const { error: persistEgressError } = await supabaseAdmin.from('live_stream_replays')
     .update({ egress_id: egressId, status: 'recording' })
     .eq('id', replay.id);
+  if (persistEgressError) throw persistEgressError;
   try {
     await stopEgress(egressId, egressConfig);
   } catch (error) {
     if (!error.message.includes('HTTP 404')) throw error;
   }
-  await supabaseAdmin.from('live_stream_replays')
+  const { error: persistProcessingError } = await supabaseAdmin.from('live_stream_replays')
     .update({ status: 'processing' })
     .eq('id', replay.id)
     .in('status', ['starting', 'recording']);
+  if (persistProcessingError) throw persistProcessingError;
   clearLiveReplayStop(replay.id);
 }
 
@@ -469,7 +471,9 @@ router.post('/:streamId/replays/:replayId/stop', async (req, res) => {
     } catch (error) {
       if (!error.message.includes('HTTP 404')) throw error;
     }
-    await supabaseAdmin.from('live_stream_replays').update({ status: 'processing' }).eq('id', replay.id);
+    const { error: persistProcessingError } = await supabaseAdmin.from('live_stream_replays')
+      .update({ status: 'processing' }).eq('id', replay.id);
+    if (persistProcessingError) throw persistProcessingError;
     clearLiveReplayStop(replay.id);
     return res.status(202).json({ replay: { id: replay.id, status: 'processing' } });
   } catch (error) {
