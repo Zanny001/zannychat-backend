@@ -30,8 +30,10 @@ router.post('/', async (req, res) => {
     const notification = verifiedResult.notification;
     const notificationUuid = notification?.notificationUUID;
     const notificationType = notification?.notificationType;
+    const notificationSignedDate = Number(notification?.signedDate);
     if (typeof notificationUuid !== 'string' || notificationUuid.length < 8
-        || notificationUuid.length > 128 || typeof notificationType !== 'string') {
+        || notificationUuid.length > 128 || typeof notificationType !== 'string'
+        || !Number.isSafeInteger(notificationSignedDate) || notificationSignedDate <= 0) {
       return res.status(400).json({ error: 'Verified Apple notification is missing its event identity' });
     }
 
@@ -72,7 +74,7 @@ router.post('/', async (req, res) => {
           p_event_key: 'apple-reversal:' + notificationUuid,
           p_provider_transaction_id: transactionKey,
           p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
-          p_signed_date: Number(notification.signedDate),
+          p_signed_date: notificationSignedDate,
           p_notification_uuid: notificationUuid,
           p_notification_type: notificationType,
         });
@@ -109,6 +111,7 @@ router.post('/', async (req, res) => {
         environment: verifiedResult.environment,
         transaction_key: transactionKey,
         payload_sha256: payloadSha256,
+        signed_date: Number(notification.signedDate),
         processing_result: processingResult,
       });
     if (insertError && insertError.code !== '23505') throw insertError;
