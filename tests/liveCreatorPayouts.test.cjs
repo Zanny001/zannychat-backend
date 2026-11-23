@@ -50,3 +50,8 @@ test('transfer webhooks authenticate raw bytes and independently verify provider
   assert.match(index, /app\.use\('\/webhooks\/paystack\/live-payouts', paystackCreatorPayoutWebhookRouter\)/);
   assert.match(index, /app\.use\('\/live\/creator-payouts', liveCreatorPayoutsRouter\)/);
 });
+
+test('withdrawal reservation first releases earnings whose clearance period has elapsed', () => {
+  assert.match(migration, /SET status = 'available'/);
+  assert.match(migration, /status = 'pending' AND available_at IS NOT NULL AND available_at <= now\(\)/);
+});
