@@ -184,9 +184,13 @@ router.get('/:battleId', async (req, res) => {
         p_battle_id: battle.id, p_creator_id: null,
       });
       if (result.error && result.error.code !== 'P0001') throw result.error;
-      if (result.data) settled = result.data;
+      const refreshed = await supabaseAdmin.from('live_pk_battles')
+        .select('id,stream_id,creator_a_id,creator_b_id,status,score_a,score_b,duration_seconds,started_at,ends_at,winner_id,created_at')
+        .eq('id', battle.id).maybeSingle();
+      if (refreshed.error) throw refreshed.error;
+      if (refreshed.data) settled = refreshed.data;
     }
-    return res.json({ battle: settled, scoring: 'gift_points_only', canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' });
+    return res.json({ battle: { ...settled, canAccept: participant?.role === 'guest' && req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: participant?.role === 'creator' && req.user.id === settled.creator_a_id && settled.status === 'accepted' }, scoring: 'gift_points_only' });
   } catch (error) {
     console.error('[live-battles] read failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load PK battle' });
