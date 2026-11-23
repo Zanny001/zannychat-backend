@@ -1,5 +1,4 @@
 const express = require('express');
-const crypto = require('node:crypto');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { validPaystackWebhookSignature } = require('../utils/paystackWebhookSignature.cjs');
 
