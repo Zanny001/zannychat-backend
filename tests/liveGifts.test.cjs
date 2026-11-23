@@ -168,3 +168,22 @@ test('LIVE gift activity is visible only to joined stage participants and contai
   assert.match(route, /senderName:[\s\S]*recipientName:[\s\S]*scorePoints:/);
   assert.doesNotMatch(route.slice(route.indexOf("router.get('/stream/:streamId/recent'"), route.indexOf("router.post('/send'")), /\.insert\(|\.update\(|\.delete\(/);
 });
+
+
+const liveEconomyIndexesMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261123150000_live_economy_foreign_key_indexes.sql'),
+  'utf8',
+);
+
+test('LIVE economy foreign keys have supporting indexes for production joins and deletes', () => {
+  for (const statement of [
+    'CREATE INDEX IF NOT EXISTS live_gift_transactions_gift_id_idx',
+    'ON public.live_gift_transactions (gift_id)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_created_by_idx',
+    'ON public.live_pk_battles (created_by)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_creator_b_idx',
+    'ON public.live_pk_battles (creator_b_id)',
+    'CREATE INDEX IF NOT EXISTS live_pk_battles_winner_id_idx',
+    'ON public.live_pk_battles (winner_id)',
+  ]) assert.ok(liveEconomyIndexesMigration.includes(statement), 'Missing index contract: ' + statement);
+});
