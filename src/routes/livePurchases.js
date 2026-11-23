@@ -410,7 +410,7 @@ router.post('/apple/verify', async (req, res) => {
   }
 
   try {
-    const verifier = createAppleStoreVerifier();
+    const verifier = createAppleStoreVerifier({ allowSandbox: true });
     const verifiedResult = await verifier.verifyTransaction(signedTransaction);
     const transaction = verifiedResult.transaction;
     if (!transaction || transaction.bundleId !== process.env.APPLE_APP_BUNDLE_ID
