@@ -26,6 +26,8 @@ const liveStreamsRouter = require('./routes/liveStreams');
 const liveGiftsRouter = require('./routes/liveGifts');
 const liveBattlesRouter = require('./routes/liveBattles');
 const liveCaptionsRouter = require('./routes/liveCaptions');
+const livePurchasesRouter = require('./routes/livePurchases');
+const paystackLiveWebhookRouter = require('./routes/paystackLiveWebhook');
 const liveEventsRouter = require('./routes/liveEvents');
 
 // Retry transient call-push failures while the API process is awake. The
@@ -217,6 +219,8 @@ app.use(cors(createCorsOptions()));
 // so application JSON should never need large request bodies.
 // LiveKit signs the raw webhook bytes; mount before express.json consumes the body.
 app.use('/webhooks/livekit', liveKitEgressWebhookRouter);
+// Payment providers sign the exact request bytes. Keep this raw-body route before JSON parsing.
+app.use('/webhooks/paystack/live', paystackLiveWebhookRouter);
 
 app.use(express.json({ limit: '100kb', strict: true }));
 
@@ -244,6 +248,7 @@ app.use('/live', liveStreamsRouter);
 app.use('/live/gifts', liveGiftsRouter);
 app.use('/live/battles', liveBattlesRouter);
 app.use('/live/captions', liveCaptionsRouter);
+app.use('/live/purchases', livePurchasesRouter);
 app.use('/live', liveHistoryRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
