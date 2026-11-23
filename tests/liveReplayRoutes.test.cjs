@@ -144,3 +144,19 @@ test('invalid replay outputs receive a short retention expiry so cleanup can rem
   assert.match(finalizer, /error_code: 'EGRESS_OUTPUT_INVALID',[\s\S]*expires_at: expiresAt/);
   assert.match(finalizer, /failedAt\.getTime\(\) \+ 10 \* 60 \* 1000/);
 });
+
+test('replay stop and stream-end cleanup surface database state persistence failures', () => {
+  const helperStart = liveRoutes.indexOf('async function stopActiveLiveReplayForStream');
+  const helperEnd = liveRoutes.indexOf('async function requireJoined', helperStart);
+  const helper = liveRoutes.slice(helperStart, helperEnd);
+  assert.match(helper, /persistEgressError/);
+  assert.match(helper, /if \(persistEgressError\) throw persistEgressError/);
+  assert.match(helper, /persistProcessingError/);
+  assert.match(helper, /if \(persistProcessingError\) throw persistProcessingError/);
+
+  const stopStart = liveRoutes.indexOf("router.post('/:streamId/replays/:replayId/stop'");
+  const stopEnd = liveRoutes.indexOf("router.get('/replays'", stopStart);
+  const stopRoute = liveRoutes.slice(stopStart, stopEnd);
+  assert.match(stopRoute, /persistProcessingError/);
+  assert.match(stopRoute, /if \(persistProcessingError\) throw persistProcessingError/);
+});
