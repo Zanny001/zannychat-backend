@@ -21,7 +21,7 @@ function validTimestampedSignature(rawBody, header, webhookSecret, nowSeconds = 
   if (timestamps.length !== 1 || signatures.length < 1) return false;
 
   const timestampText = timestamps[0].slice(2);
-  if (!/^\\d{1,12}$/.test(timestampText)) return false;
+  if (!/^\d{1,12}$/.test(timestampText)) return false;
   const timestamp = Number(timestampText);
   if (!Number.isSafeInteger(timestamp) || Math.abs(nowSeconds - timestamp) > 300) return false;
 
