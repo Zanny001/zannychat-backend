@@ -45,6 +45,7 @@ Use version 2 only. The backend verifies the outer `signedPayload` and nested `s
 - [ ] Partial refunds and creator payout exposure enter the risk hold/manual review path.
 - [ ] App Store Server Notifications V2 test notification is received and acknowledged.
 - [ ] App Store Connect financial reports are used for actual proceeds and fee reconciliation; signed transaction price is only a package-price check.
+- [ ] Apple-funded creator earnings remain withheld while `provider_fee_status='pending'`; an authorized service-role reconciliation records the actual provider fee and releases eligible gift earnings using the reward rule captured at gift time.
 
 ## Activation gate
 
@@ -54,4 +55,4 @@ Only after the acceptance matrix passes should an operator:
 2. Insert or activate the approved `apple_iap` rows in `live_spark_packages` using the exact App Store product IDs, NGN amounts and Sparks quantities.
 3. Re-run production smoke checks and verify that the wallet catalogue reports `purchasable=true`.
 
-No product is activated by this code change. Purchases remain unavailable by default.
+Apple provider fees are not assumed from the buyer-paid price. Creator earnings funded by Apple purchases remain withheld until the actual App Store fee is reconciled through the service-role-only `reconcile_live_apple_provider_fee` function. No product is activated by this code change. Purchases remain unavailable by default.

@@ -480,6 +480,7 @@ router.post('/apple/verify', async (req, res) => {
           amount_minor: amountMinor,
           currency: 'NGN',
           provider_product_id: productId,
+          provider_fee_status: 'pending',
           provider_environment: verifiedResult.environment,
           provider_storefront: transaction.storefront || null,
           provider_transaction_date: new Date(purchaseDate).toISOString(),
