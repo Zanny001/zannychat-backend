@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS public.live_pk_battles (
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   creator_a_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   creator_b_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
-  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'live', 'ended', 'cancelled')),
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'live', 'ended', 'cancelled')),
   score_a bigint NOT NULL DEFAULT 0 CHECK (score_a >= 0),
   score_b bigint NOT NULL DEFAULT 0 CHECK (score_b >= 0),
   duration_seconds integer NOT NULL DEFAULT 300 CHECK (duration_seconds BETWEEN 60 AND 900),
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.live_pk_battles (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS live_pk_one_open_battle_per_stream_idx
-  ON public.live_pk_battles (stream_id) WHERE status IN ('pending', 'live');
+  ON public.live_pk_battles (stream_id) WHERE status IN ('pending', 'accepted', 'live');
 CREATE INDEX IF NOT EXISTS live_pk_battles_creator_history_idx
   ON public.live_pk_battles (creator_a_id, created_at DESC);
 
@@ -141,6 +141,9 @@ BEGIN
     WHERE stream_id = p_stream_id AND user_id = p_creator_b_id
       AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
   IF NOT FOUND THEN RAISE EXCEPTION 'opponent must join this LIVE as a guest first' USING ERRCODE = 'P0001'; END IF;
+  UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+    WHERE stream_id = p_stream_id AND status = 'pending'
+      AND created_at < now() - interval '2 minutes';
   INSERT INTO public.live_pk_battles
     (stream_id, creator_a_id, creator_b_id, duration_seconds, created_by)
   VALUES (p_stream_id, p_creator_a_id, p_creator_b_id, p_duration_seconds, p_creator_a_id)
@@ -148,6 +151,57 @@ BEGIN
   RETURN v_battle_id;
 END;
 $$;
+
+
+CREATE OR REPLACE FUNCTION public.accept_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
+RETURNS public.live_pk_battles
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_battle public.live_pk_battles%ROWTYPE;
+  v_stream_status text;
+BEGIN
+  SELECT * INTO v_battle FROM public.live_pk_battles WHERE id = p_battle_id FOR UPDATE;
+  IF NOT FOUND OR v_battle.creator_b_id <> p_creator_id OR v_battle.status <> 'pending' THEN
+    RAISE EXCEPTION 'PK challenge cannot be accepted by this user' USING ERRCODE = '42501';
+  END IF;
+  IF v_battle.created_at < now() - interval '2 minutes' THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now() WHERE id = p_battle_id;
+    RAISE EXCEPTION 'PK challenge has expired' USING ERRCODE = 'P0001';
+  END IF;
+  SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
+  IF v_stream_status <> 'live' THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now() WHERE id = p_battle_id;
+    RAISE EXCEPTION 'LIVE stream has ended' USING ERRCODE = 'P0001';
+  END IF;
+  PERFORM 1 FROM public.live_stream_participants
+    WHERE stream_id = v_battle.stream_id AND user_id = p_creator_id
+      AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Guest must remain on the LIVE stage to accept' USING ERRCODE = '42501'; END IF;
+  UPDATE public.live_pk_battles SET status = 'accepted', updated_at = now()
+    WHERE id = p_battle_id RETURNING * INTO v_battle;
+  RETURN v_battle;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.decline_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
+RETURNS public.live_pk_battles
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_battle public.live_pk_battles%ROWTYPE;
+BEGIN
+  SELECT * INTO v_battle FROM public.live_pk_battles WHERE id = p_battle_id FOR UPDATE;
+  IF NOT FOUND OR v_battle.creator_b_id <> p_creator_id OR v_battle.status <> 'pending' THEN
+    RAISE EXCEPTION 'PK challenge cannot be declined by this user' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+    WHERE id = p_battle_id RETURNING * INTO v_battle;
+  RETURN v_battle;
+END;
+$;
 
 CREATE OR REPLACE FUNCTION public.start_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
 RETURNS public.live_pk_battles
@@ -159,7 +213,7 @@ DECLARE
   v_stream_status text;
 BEGIN
   SELECT * INTO v_battle FROM public.live_pk_battles WHERE id = p_battle_id FOR UPDATE;
-  IF NOT FOUND OR v_battle.creator_a_id <> p_creator_id OR v_battle.status <> 'pending' THEN
+  IF NOT FOUND OR v_battle.creator_a_id <> p_creator_id OR v_battle.status <> 'accepted' THEN
     RAISE EXCEPTION 'PK battle cannot be started by this user' USING ERRCODE = '42501';
   END IF;
   SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
@@ -201,9 +255,13 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.accept_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decline_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.start_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.finish_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.accept_live_pk_battle(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decline_live_pk_battle(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.start_live_pk_battle(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.finish_live_pk_battle(uuid, uuid) TO service_role;
 
