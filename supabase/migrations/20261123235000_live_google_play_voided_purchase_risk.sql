@@ -62,7 +62,7 @@ BEGIN
      OR p_provider_order_id IS NULL OR length(p_provider_order_id) NOT BETWEEN 5 AND 128
      OR p_amount_minor IS NULL OR p_amount_minor <= 0
      OR p_currency IS NULL OR upper(p_currency) <> 'NGN'
-     OR p_refund_type NOT IN ('full', 'partial')
+     OR p_refund_type IS NULL OR p_refund_type NOT IN ('full', 'partial')
      OR p_provider_resource_id IS NULL OR length(p_provider_resource_id) NOT BETWEEN 3 AND 200 THEN
     RAISE EXCEPTION 'invalid Google Play voided purchase event' USING ERRCODE = '22023';
   END IF;
