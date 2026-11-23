@@ -925,10 +925,17 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabaseAdmin.from('live_streams')
       .select('id,creator_id,title,description,visibility,started_at,viewer_limit')
       .eq('status', 'live').eq('visibility', 'public')
-      .order('started_at', { ascending: false }).limit(50);
+      .order('started_at', { ascending: false }).limit(100);
     if (error) throw error;
-    const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
-    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
+    const [blockedIds, feedbackResult] = await Promise.all([
+      getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id)),
+      supabaseAdmin.from('live_stream_feedback')
+        .select('creator_id').eq('user_id', req.user.id).eq('feedback_type', 'not_interested'),
+    ]);
+    if (feedbackResult.error) throw feedbackResult.error;
+    const notInterestedIds = new Set((feedbackResult.data || []).map((row) => row.creator_id));
+    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id) && !notInterestedIds.has(stream.creator_id))
+      .slice(0, 50)
       .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
     const creatorNames = await getProfileNames(visible.map((stream) => stream.creator_id));
     return res.json({ streams: visible.map((stream) => ({
