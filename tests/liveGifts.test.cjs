@@ -22,7 +22,7 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
   assert.match(migration, /insufficient LIVE Sparks/);
   assert.match(migration, /INSERT INTO public\.live_gift_transactions/);
   assert.match(migration, /INSERT INTO public\.live_gift_ledger/);
-  assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);
+  assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);\n  assert.doesNotMatch(migration, /^AS \\$/m);\n  assert.match(migration, /battle_id uuid REFERENCES public\\.live_pk_battles/);\n  assert.match(migration, /score_points, battle_id, idempotency_key/);
   assert.match(migration, /p_quantity NOT BETWEEN 1 AND 20/);
 });
 
