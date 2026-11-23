@@ -14,6 +14,8 @@ const refundMigration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123161848_apple_store_notifications_refunds.sql'),
   'utf8',
 );
+const reversalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123165000_apple_refund_reversal_reconciliation.sql'), 'utf8');
+const orderingMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123173000_apple_notification_signed_date_ordering.sql'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
 test('Apple account binding is stable, UUID-backed and service-role-only', () => {
@@ -66,4 +68,33 @@ test('Apple App Store Server Notifications V2 are verified and idempotently reco
   assert.match(refundMigration, /'apple_iap_risk'/);
   assert.match(refundMigration, /'apple\.refund'/);
   assert.match(refundMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund[\s\S]*FROM PUBLIC, anon, authenticated/);
+});
+
+test('Apple REFUND_REVERSED notifications restore only revoked unspent Sparks', () => {
+  assert.match(notifications, /notificationType === 'REFUND_REVERSED'/);
+  assert.match(notifications, /transaction\.revocationPercentage != null/);
+  assert.match(notifications, /record_live_apple_refund_reversal/);
+  assert.match(reversalMigration, /refunded_unspent_sparks bigint NOT NULL DEFAULT 0/);
+  assert.match(reversalMigration, /SET remaining_sparks = v_restore/);
+  assert.match(reversalMigration, /balance_sparks = balance_sparks \+ v_restore/);
+  assert.match(reversalMigration, /IF v_purchase\.status = 'disputed' THEN/);
+  assert.match(reversalMigration, /ELSIF v_purchase\.status = 'refunded' THEN/);
+  assert.match(reversalMigration, /v_purchase\.verified_at IS NULL/);
+  assert.match(reversalMigration, /status = 'paid', risk_held_sparks = 0/);
+  assert.match(reversalMigration, /risk_hold_reason = NULL/);
+  assert.match(reversalMigration, /'apple\.refund_reversed'/);
+  assert.match(reversalMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund_reversal[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(reversalMigration, /GRANT EXECUTE ON FUNCTION public\.record_live_apple_refund_reversal[\s\S]*TO service_role/);
+});
+
+test('Apple notification signedDate prevents stale refund events from reversing newer state', () => {
+  assert.match(notifications, /notificationSignedDate = Number\(notification\?\.signedDate\)/);
+  assert.match(notifications, /p_signed_date: notificationSignedDate/);
+  assert.match(notifications, /signed_date: notificationSignedDate/);
+  assert.match(orderingMigration, /live_apple_transaction_notification_state/);
+  assert.match(orderingMigration, /p_signed_date <= v_last_signed_date/);
+  assert.match(orderingMigration, /latest_signed_date = EXCLUDED\.latest_signed_date/);
+  assert.match(orderingMigration, /p_notification_type/);
+  assert.match(orderingMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund\([\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(orderingMigration, /GRANT EXECUTE ON FUNCTION public\.record_live_apple_refund_reversal\([\s\S]*TO service_role/);
 });

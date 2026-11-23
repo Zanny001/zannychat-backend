@@ -30,8 +30,10 @@ router.post('/', async (req, res) => {
     const notification = verifiedResult.notification;
     const notificationUuid = notification?.notificationUUID;
     const notificationType = notification?.notificationType;
+    const notificationSignedDate = Number(notification?.signedDate);
     if (typeof notificationUuid !== 'string' || notificationUuid.length < 8
-        || notificationUuid.length > 128 || typeof notificationType !== 'string') {
+        || notificationUuid.length > 128 || typeof notificationType !== 'string'
+        || !Number.isSafeInteger(notificationSignedDate) || notificationSignedDate <= 0) {
       return res.status(400).json({ error: 'Verified Apple notification is missing its event identity' });
     }
 
@@ -49,7 +51,8 @@ router.post('/', async (req, res) => {
 
     if (verifiedResult.environment !== 'Production') {
       processingResult = { ignored: true, reason: 'sandbox_notification' };
-    } else if (notificationType === 'REFUND' || notificationType === 'REVOKE') {
+    } else if (notificationType === 'REFUND' || notificationType === 'REVOKE'
+        || notificationType === 'REFUND_REVERSED') {
       const signedTransaction = notification?.data?.signedTransactionInfo;
       if (typeof signedTransaction !== 'string') {
         throw new Error('Apple refund notification does not contain signed transaction information');
@@ -59,24 +62,45 @@ router.post('/', async (req, res) => {
       if (transactionResult.environment !== 'Production'
           || transaction.bundleId !== process.env.APPLE_APP_BUNDLE_ID
           || transaction.type !== 'Consumable'
-          || !validTransactionId(transaction.transactionId)
-          || transaction.revocationDate == null) {
-        throw new Error('Apple refund notification transaction is not a valid revoked consumable');
+          || !validTransactionId(transaction.transactionId)) {
+        throw new Error('Apple refund notification transaction is not a valid production consumable');
       }
       transactionKey = 'apple:' + sha256Hex(transaction.transactionId);
-      const amountMinor = minorUnitsFromApplePrice(transaction.price, transaction.currency);
-      const refundType = Number(transaction.revocationPercentage) > 0
-        && Number(transaction.revocationPercentage) < 100000 ? 'partial' : 'full';
-      const { data: refundResult, error: refundError } = await supabaseAdmin.rpc('record_live_apple_refund', {
-        p_event_key: 'apple:' + notificationUuid,
-        p_provider_transaction_id: transactionKey,
-        p_amount_minor: amountMinor,
-        p_currency: transaction.currency,
-        p_refund_type: refundType,
-        p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
-      });
-      if (refundError) throw refundError;
-      processingResult = refundResult || { received: true };
+      if (notificationType === 'REFUND_REVERSED') {
+        if (transaction.revocationPercentage != null) {
+          throw new Error('Apple refund reversal still contains a revoked transaction');
+        }
+        const { data: reversalResult, error: reversalError } = await supabaseAdmin.rpc('record_live_apple_refund_reversal', {
+          p_event_key: 'apple-reversal:' + notificationUuid,
+          p_provider_transaction_id: transactionKey,
+          p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
+          p_signed_date: notificationSignedDate,
+          p_notification_uuid: notificationUuid,
+          p_notification_type: notificationType,
+        });
+        if (reversalError) throw reversalError;
+        processingResult = reversalResult || { received: true };
+      } else {
+        if (transaction.revocationDate == null) {
+          throw new Error('Apple refund notification transaction is missing its revocation date');
+        }
+        const amountMinor = minorUnitsFromApplePrice(transaction.price, transaction.currency);
+        const refundType = Number(transaction.revocationPercentage) > 0
+          && Number(transaction.revocationPercentage) < 100000 ? 'partial' : 'full';
+        const { data: refundResult, error: refundError } = await supabaseAdmin.rpc('record_live_apple_refund', {
+          p_event_key: 'apple:' + notificationUuid,
+          p_provider_transaction_id: transactionKey,
+          p_amount_minor: amountMinor,
+          p_currency: transaction.currency,
+          p_refund_type: refundType,
+          p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
+          p_signed_date: notificationSignedDate,
+          p_notification_uuid: notificationUuid,
+          p_notification_type: notificationType,
+        });
+        if (refundError) throw refundError;
+        processingResult = refundResult || { received: true };
+      }
     }
 
     const { error: insertError } = await supabaseAdmin.from('live_apple_server_notifications')
@@ -87,6 +111,7 @@ router.post('/', async (req, res) => {
         environment: verifiedResult.environment,
         transaction_key: transactionKey,
         payload_sha256: payloadSha256,
+        signed_date: notificationSignedDate,
         processing_result: processingResult,
       });
     if (insertError && insertError.code !== '23505') throw insertError;
