@@ -23,3 +23,20 @@ test('one Paystack integration endpoint dispatches purchases, refunds/disputes a
   assert.match(payout, /async \(req, res, next\)/);
   assert.match(payout, /transfer\.reversed'[\s\S]*?return next\(\)/);
 });
+
+test('unified Paystack endpoint passes a signed unrelated event through every raw-body handler', async () => {
+  const crypto = require('node:crypto');
+  const request = require('supertest');
+  const secret = 'sk_test_dispatch_only';
+  process.env.PAYSTACK_SECRET_KEY = secret;
+  const app = require('../src/index');
+  const body = Buffer.from(JSON.stringify({ event: 'customeridentification.success', data: { id: 123 } }));
+  const signature = crypto.createHmac('sha512', secret).update(body).digest('hex');
+  const response = await request(app)
+    .post('/webhooks/paystack')
+    .set('Content-Type', 'application/json')
+    .set('x-paystack-signature', signature)
+    .send(body);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { received: true, ignored: true });
+});
