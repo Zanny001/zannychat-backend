@@ -252,7 +252,7 @@ router.post('/native/verify', async (req, res) => {
     }
 
     const { data: existing, error: existingError } = await supabaseAdmin.from('live_spark_purchases')
-      .select('id,user_id,package_id,provider_reference,status,amount_minor,provider_fee_minor,currency')
+      .select('id,user_id,package_id,provider_reference,provider_order_id,status,amount_minor,provider_fee_minor,currency')
       .eq('provider', 'google_play').eq('provider_transaction_id', transactionKey).maybeSingle();
     if (existingError) throw existingError;
     if (existing && (existing.user_id !== req.user.id || existing.package_id !== pack.package_id)) {
@@ -276,14 +276,16 @@ router.post('/native/verify', async (req, res) => {
           user_id: req.user.id,
           provider: 'google_play',
           provider_reference: reference,
+          provider_order_id: verified.orderId,
           package_id: pack.package_id,
           sparks: pack.sparks,
           amount_minor: verified.amountMinor,
           provider_fee_minor: verified.providerFeeMinor,
+          provider_order_id: verified.orderId,
           currency: verified.currency,
           status: 'pending',
         })
-        .select('id,user_id,package_id,provider_reference,status,amount_minor,provider_fee_minor,currency')
+        .select('id,user_id,package_id,provider_reference,provider_order_id,status,amount_minor,provider_fee_minor,currency')
         .single();
       if (error) throw error;
       purchase = data;
