@@ -36,7 +36,7 @@ test('unified Paystack endpoint passes a signed unrelated event through every ra
     .post('/webhooks/paystack')
     .set('Content-Type', 'application/json')
     .set('x-paystack-signature', signature)
-    .send(body);
+    .send(body.toString('utf8'));
   assert.equal(response.status, 200);
   assert.deepEqual(response.body, { received: true, ignored: true });
 });
