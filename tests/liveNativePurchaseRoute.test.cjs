@@ -53,3 +53,11 @@ test('database fulfilment permits Paystack and Google Play only, remains service
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*TO service_role/);
 });
+
+test('verified Google Play purchases generate a private owner-scoped receipt after atomic fulfilment', () => {
+  assert.match(route, /require\('\.\.\/services\/livePurchaseReceiptService'\)/);
+  const fulfil = route.indexOf("rpc('fulfill_live_spark_purchase'");
+  const receipt = route.indexOf('ensureLivePurchaseReceipt(purchase.provider_reference', fulfil);
+  assert.ok(receipt > fulfil);
+  assert.match(route.slice(receipt), /channel: 'Google Play'/);
+});
