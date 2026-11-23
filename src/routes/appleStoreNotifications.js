@@ -111,7 +111,7 @@ router.post('/', async (req, res) => {
         environment: verifiedResult.environment,
         transaction_key: transactionKey,
         payload_sha256: payloadSha256,
-        signed_date: Number(notification.signedDate),
+        signed_date: notificationSignedDate,
         processing_result: processingResult,
       });
     if (insertError && insertError.code !== '23505') throw insertError;
