@@ -376,5 +376,7 @@ test('LIVE not-interested feedback is server-only and filters future discovery',
   assert.ok(route.includes("from('live_stream_feedback')"));
   assert.ok(route.includes("feedback_type: 'not_interested'"));
   assert.ok(route.includes("!notInterestedIds.has(stream.creator_id)"));
+  assert.ok(route.includes(".limit(100)"));
+  assert.ok(route.includes(".slice(0, 50)"));
   assert.ok(route.includes("requireJoined(streamId, req.user.id)"));
 });
