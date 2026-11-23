@@ -14,7 +14,8 @@ function validUuid(value) {
 function payoutConfigured() {
   return Boolean(process.env.PAYSTACK_SECRET_KEY)
     && process.env.LIVE_PAYOUTS_ENABLED === 'true'
-    && process.env.LIVE_PAYOUTS_TRANSFER_OTP_DISABLED === 'true';
+    && process.env.LIVE_PAYOUTS_TRANSFER_OTP_DISABLED === 'true'
+    && process.env.LIVE_PAYOUTS_FEE_POLICY_CONFIGURED === 'true';
 }
 
 async function paystackRequest(path, options = {}) {
@@ -49,12 +50,14 @@ router.get('/eligibility', async (req, res) => {
     const providerConfigured = Boolean(process.env.PAYSTACK_SECRET_KEY);
     const withdrawalsEnabled = process.env.LIVE_PAYOUTS_ENABLED === 'true';
     const transferOtpDisabled = process.env.LIVE_PAYOUTS_TRANSFER_OTP_DISABLED === 'true';
+    const feePolicyConfigured = process.env.LIVE_PAYOUTS_FEE_POLICY_CONFIGURED === 'true';
     const verified = profile?.verification_status === 'verified' && profile?.payout_hold !== true;
     return res.json({
-      enabled: providerConfigured && withdrawalsEnabled && transferOtpDisabled && verified && Boolean(rule),
+      enabled: providerConfigured && withdrawalsEnabled && transferOtpDisabled && feePolicyConfigured && verified && Boolean(rule),
       providerConfigured,
       withdrawalsEnabled,
       transferOtpDisabled,
+      feePolicyConfigured,
       verificationStatus: profile?.verification_status || 'unverified',
       payoutHold: profile?.payout_hold === true,
       minimumWithdrawalMinor: rule?.minimum_withdrawal_minor || null,
@@ -62,7 +65,8 @@ router.get('/eligibility', async (req, res) => {
       reason: !providerConfigured ? 'PAYOUTS_NOT_CONFIGURED'
         : !withdrawalsEnabled ? 'PAYOUTS_NOT_ENABLED'
           : !transferOtpDisabled ? 'PAYOUT_TRANSFER_APPROVAL_REQUIRED'
-          : !verified ? 'PAYOUT_KYC_REQUIRED'
+          : !feePolicyConfigured ? 'PAYOUT_FEE_POLICY_REQUIRED'
+            : !verified ? 'PAYOUT_KYC_REQUIRED'
           : !rule ? 'CREATOR_REWARD_POLICY_NOT_CONFIGURED' : null,
     });
   } catch (error) {
