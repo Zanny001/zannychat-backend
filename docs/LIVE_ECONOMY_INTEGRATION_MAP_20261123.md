@@ -126,7 +126,7 @@ Automatic speech recognition, continuous microphone transcription and translated
 
 These are implementation requirements, not optional polish:
 
-- **Apple:** App Store Guideline 3.1.1 requires In-App Purchase for in-app digital currency and digital content. StoreKit transaction verification and App Store Server Notifications are the appropriate server connection; Apple's legacy `verifyReceipt` endpoint is deprecated. Purchased credits must not expire, and restore/reconciliation behavior is required. See [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), [StoreKit In-App Purchase](https://developer.apple.com/documentation/storekit/in-app-purchase), and [App Store Server Notifications](https://developer.apple.com/documentation/appstoreservernotifications).
+- **Apple:** App Store Guideline 3.1.1 requires In-App Purchase for in-app digital currency and digital content. The server implementation now uses Apple's official App Store Server library to verify StoreKit 2 signed transaction JWS and App Store Server Notifications V2; the deprecated `verifyReceipt` endpoint is not used. Production activation remains gated on App Store Connect products, verified Apple Root CA configuration, native device/TestFlight acceptance and explicit catalogue activation. See [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), [StoreKit In-App Purchase](https://developer.apple.com/documentation/storekit/in-app-purchase), and [App Store Server Notifications](https://developer.apple.com/documentation/appstoreservernotifications).
 - **Google Play:** use Play Billing for digital currency sold in the Android app. Send the purchase token to the secure backend for verification; consumable products must be consumed/acknowledged, and unacknowledged purchases can be refunded after the acknowledgement window. See [Google Play Billing integration](https://developer.android.com/google/play/billing/integrate) and [one-time purchase lifecycle](https://developer.android.com/google/play/billing/lifecycle/one-time).
 - **Paystack:** verify successful transactions server-side and fulfil only when the transaction's `data.status` is `success`. Verify webhook signatures on the raw body; the timestamped signature uses a 300-second replay window. See [Verify Payments](https://paystack.com/docs/payments/verify-payments/) and [Webhooks](https://paystack.com/docs/payments/webhooks/).
 - **Paystack transfers:** transfers are available to registered businesses in supported countries; the merchant must have enough balance for the transfer plus fees, and recipient details must be verified. See [Transfers](https://paystack.com/docs/transfers/), [How Transfers Work](https://paystack.com/docs/transfers/how-transfers-work/), and [Transfer Recipients](https://paystack.com/docs/transfers/creating-transfer-recipients/).
@@ -153,7 +153,7 @@ The five seeded gift definitions are active. The zero counts mean the production
 ## 9. Remaining release gates
 
 - Create and approve actual Sparks package SKUs and prices for web.
-- Implement Google Play Billing purchase-token verification and Apple StoreKit signed-transaction verification, restore, refund and notification paths before enabling native purchase buttons.
+- Complete the iOS StoreKit client merge, App Store Connect setup, non-production sandbox purchase acceptance and production refund/notification acceptance before enabling native purchase buttons. Google Play server verification and Apple server verification/refund paths are implemented; neither provider has active production packages.
 - Configure Paystack live credentials, unified webhook endpoint, webhook signing secret, transfer capability and merchant funding.
 - Approve creator share, clearance hours, minimum withdrawal, fee allocation and payout policy.
 - Select and implement the creator identity/KYC provider and manual review/appeal operations; do not collect BVN/NIN or identity documents without an approved provider and privacy design.
@@ -187,10 +187,37 @@ The Android wallet now has a native Google Play Billing adapter. It does not use
 - Play Console one-time product IDs and regional NGN prices matching explicitly activated `google_play` rows in `live_spark_packages`
 - Pub/Sub topic/subscription configured for one-time product and voided-purchase RTDNs
 
-No package is active and no billing flag or provider secret is enabled by this implementation. The frontend requires a new native Android build. iOS StoreKit verification remains a separate disabled release gate.
+No package is active and no billing flag or provider secret is enabled by this implementation. The frontend requires a new native Android build. The iOS StoreKit client is tracked separately in frontend PR #385; the Apple backend and production database foundation are in place, but production billing remains disabled.
 
 Official implementation references:
 - Google Play one-time purchase lifecycle: https://developer.android.com/google/play/billing/lifecycle/one-time
 - Google Play RTDN reference: https://developer.android.com/google/play/billing/rtdn-reference
 - Google Play Voided Purchases API: https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.voidedpurchases
 - Google Pub/Sub authenticated push: https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
+
+
+## Native Apple StoreKit 2 Sparks purchase lifecycle (2026-11-23 follow-up)
+
+The backend StoreKit 2 implementation is merged in backend PR #230. Its two migrations are applied to production (Supabase migration versions `20261123161843` and `20261123161848`). The iOS client is tracked in frontend PR #385 and must be merged and accepted on a native build before release.
+
+1. The wallet requests `GET /live/purchases/packages?provider=apple_iap`. The backend returns only active NGN packages and reports purchases as available only when the Apple provider is explicitly enabled and fully configured.
+2. The authenticated client requests `GET /live/purchases/apple/account-binding`. The backend returns a stable random UUID `appAccountToken` stored in the service-role-only `live_apple_account_bindings` table. The raw ZannyChat user ID is never sent to Apple as the token.
+3. StoreKit 2 starts a single-quantity consumable purchase using that `appAccountToken`. The client submits the signed transaction JWS to `POST /live/purchases/apple/verify`; client-supplied price and Sparks quantity are not accepted.
+4. The backend verifies the JWS with Apple's official `@apple/app-store-server-library` `SignedDataVerifier` and configured Apple Root CA certificates. It checks the app bundle, consumable product type, account token, transaction identity, quantity, revocation state, purchase date, active server package and exact NGN price.
+5. A service-role-only idempotent `fulfill_live_spark_purchase` RPC credits the purchased Sparks lot once. The existing private PDF receipt service creates the receipt. The iOS client finishes the StoreKit consumable only after the backend confirms fulfilment.
+6. App Store Server Notifications V2 are received at `POST /webhooks/apple/app-store-server`. The backend verifies the outer signed payload and nested signed transaction, deduplicates by Apple's notification UUID, and reconciles REFUND/REVOKE events through the service-role-only `record_live_apple_refund` function.
+7. Full refunds revoke remaining purchased Sparks and hold related unpaid creator earnings. Partial refunds and accounts with requested, processing or paid creator payouts are held for manual reconciliation. A verified sandbox notification is acknowledged but never credits production Sparks.
+8. Sandbox purchase fulfilment is allowed only when `NODE_ENV` is not `production` and `APPLE_IAP_ALLOW_SANDBOX=true`. The production backend rejects sandbox purchase credit.
+
+### Required Apple / Render configuration (not enabled)
+
+- `LIVE_APPLE_IAP_ENABLED=true` only after the release gate passes.
+- `APPLE_APP_BUNDLE_ID=com.zannychat.app`.
+- `APPLE_APP_ID` set to the numeric App Store app ID.
+- `APPLE_ROOT_CA_CERTIFICATES_BASE64` set to comma-separated base64 DER Apple Root CA certificates.
+- `APPLE_IAP_ALLOW_SANDBOX=false` in production.
+- App Store Connect consumable product IDs must exactly match `apple_iap` rows in `live_spark_packages`, with approved Nigeria NGN price tiers.
+- Production and Sandbox App Store Server Notifications V2 URLs must point to `https://zannychat-backend-1.onrender.com/webhooks/apple/app-store-server`.
+- Complete App Store Connect agreements, tax and banking setup, then perform a non-production sandbox purchase, duplicate notification, account mismatch, refund and notification retry acceptance before production activation.
+
+No Apple package is active. The production package table currently has zero rows for both Apple and Google Play; the code and migrations do not activate store purchases.
