@@ -101,6 +101,16 @@ BEGIN
   WHERE id = v_purchase.id
   FOR UPDATE;
 
+  IF p_currency IS NULL OR upper(p_currency) <> v_purchase.currency
+     OR (p_amount_minor IS NOT NULL AND p_amount_minor > v_purchase.amount_minor) THEN
+    RAISE EXCEPTION 'provider risk resource does not match the purchase amount or currency' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_event_type = 'charge.dispute.resolve'
+     AND p_resolution NOT IN ('merchant-accepted', 'declined') THEN
+    RAISE EXCEPTION 'unsupported dispute resolution' USING ERRCODE = '22023';
+  END IF;
+
   INSERT INTO public.live_purchase_risk_events(
     purchase_id, event_key, event_type, provider_resource_id, provider_reference,
     provider_status, resolution, amount_minor, currency, status
