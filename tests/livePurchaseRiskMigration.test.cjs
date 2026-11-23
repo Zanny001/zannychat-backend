@@ -11,6 +11,8 @@ test('LIVE purchase risk migration freezes Sparks and creator earnings on unreso
   assert.match(migration, /GRANT ALL ON public\.live_purchase_risk_events TO service_role/);
   assert.match(migration, /record_live_purchase_risk_event/);
   assert.match(migration, /risk_held_sparks/);
+  assert.match(migration, /risk_hold_reason = 'paystack_risk'/);
+  assert.match(migration, /e\.risk_hold_reason = 'paystack_risk'/);
   assert.match(migration, /balance_sparks = balance_sparks - v_remaining/);
   assert.match(migration, /status = 'held'/);
   assert.match(migration, /NOT EXISTS \([\s\S]*p2\.status IN \('disputed', 'refunded'\)/);
