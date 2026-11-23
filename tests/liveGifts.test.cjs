@@ -100,7 +100,7 @@ test('PK challenges require explicit guest consent before the host can start', (
 });
 
 test('LIVE captions never fabricate text and require explicit opt-in provider-backed translation', () => {
-  assert.match(captions, /from 'live_streams'/);
+  assert.match(captions, /\.from\('live_streams'\)/);
   assert.match(captions, /stream.status !== 'live'/);
   assert.match(battles, /participant\?\.role === 'guest'/);
   assert.match(battles, /participant\?\.role === 'creator'/);
