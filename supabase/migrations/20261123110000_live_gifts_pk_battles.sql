@@ -158,7 +158,7 @@ CREATE OR REPLACE FUNCTION public.accept_live_pk_battle(p_battle_id uuid, p_crea
 RETURNS public.live_pk_battles
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_battle public.live_pk_battles%ROWTYPE;
   v_stream_status text;
@@ -186,13 +186,13 @@ BEGIN
     WHERE id = p_battle_id RETURNING * INTO v_battle;
   RETURN v_battle;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.decline_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
 RETURNS public.live_pk_battles
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_battle public.live_pk_battles%ROWTYPE;
 BEGIN
@@ -204,7 +204,7 @@ BEGIN
     WHERE id = p_battle_id RETURNING * INTO v_battle;
   RETURN v_battle;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.start_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
 RETURNS public.live_pk_battles
