@@ -39,6 +39,37 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+router.post('/:battleId/accept', async (req, res) => {
+  if (!validUuid(req.params.battleId)) return res.status(400).json({ error: 'Invalid PK battle id' });
+  try {
+    const { data, error } = await supabaseAdmin.rpc('accept_live_pk_battle', {
+      p_battle_id: req.params.battleId,
+      p_creator_id: req.user.id,
+    });
+    if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not accept PK challenge' });
+    return res.json({ battle: data });
+  } catch (error) {
+    console.error('[live-battles] accept failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not accept PK challenge' });
+  }
+});
+
+router.post('/:battleId/decline', async (req, res) => {
+  if (!validUuid(req.params.battleId)) return res.status(400).json({ error: 'Invalid PK battle id' });
+  try {
+    const { data, error } = await supabaseAdmin.rpc('decline_live_pk_battle', {
+      p_battle_id: req.params.battleId,
+      p_creator_id: req.user.id,
+    });
+    if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not decline PK challenge' });
+    return res.json({ battle: data });
+  } catch (error) {
+    console.error('[live-battles] decline failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not decline PK challenge' });
+  }
+});
+
 router.post('/:battleId/start', async (req, res) => {
   if (!validUuid(req.params.battleId)) return res.status(400).json({ error: 'Invalid PK battle id' });
   try {
@@ -80,7 +111,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
     if (participantError) throw participantError;
     const { data: battle, error } = await supabaseAdmin.from('live_pk_battles')
       .select('id,stream_id,creator_a_id,creator_b_id,status,score_a,score_b,duration_seconds,started_at,ends_at,winner_id,created_at')
-      .eq('stream_id', streamId).in('status', ['pending', 'live', 'ended'])
+      .eq('stream_id', streamId).in('status', ['pending', 'accepted', 'live', 'ended', 'cancelled'])
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (error) throw error;
     if (!battle) return res.json({ battle: null, scoring: 'gift_points_only' });
@@ -99,7 +130,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
       if (refreshed.error) throw refreshed.error;
       if (refreshed.data) settled = refreshed.data;
     }
-    return res.json({ battle: settled, scoring: 'gift_points_only' });
+    return res.json({ battle: settled, scoring: 'gift_points_only', canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' });
   } catch (error) {
     console.error('[live-battles] current battle lookup failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load the current PK battle' });
@@ -129,7 +160,7 @@ router.get('/:battleId', async (req, res) => {
       if (result.error && result.error.code !== 'P0001') throw result.error;
       if (result.data) settled = result.data;
     }
-    return res.json({ battle: settled, scoring: 'gift_points_only' });
+    return res.json({ battle: settled, scoring: 'gift_points_only', canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' });
   } catch (error) {
     console.error('[live-battles] read failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load PK battle' });
