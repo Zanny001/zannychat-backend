@@ -171,7 +171,7 @@ test('LIVE gift activity is visible only to joined stage participants and contai
 
 
 const liveEconomyIndexesMigration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123150000_live_economy_foreign_key_indexes.sql'),
+  path.join(__dirname, '../supabase/migrations/20261123110901_live_economy_foreign_key_indexes.sql'),
   'utf8',
 );
 
