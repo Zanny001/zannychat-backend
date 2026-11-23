@@ -33,6 +33,7 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
   assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);
   assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_sender_id::text \|\| ':' \|\| p_idempotency_key, 0\)\)/);
   assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text \|\| ':' \|\| p_idempotency_key, 0\)\)/);
+  assert.match(migration, /v_existing\.reference_id IS DISTINCT FROM p_reference_id/);
   assert.doesNotMatch(migration, /^AS \$$/m);
   assert.doesNotMatch(migration, /^\$$/m);
   assert.match(migration, /battle_id uuid REFERENCES public\.live_pk_battles\(id\) ON DELETE RESTRICT/);
