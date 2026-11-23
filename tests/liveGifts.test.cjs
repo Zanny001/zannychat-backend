@@ -158,3 +158,13 @@ test('LIVE economy service_role is read-only; all mutations remain RPC-owned', (
   assert.match(privilegeHardeningMigration, /GRANT SELECT ON TABLE[\s\S]*TO service_role/);
   assert.doesNotMatch(privilegeHardeningMigration, /GRANT (?:INSERT|UPDATE|DELETE|ALL)/i);
 });
+
+
+test('LIVE gift activity is visible only to joined stage participants and contains server facts', () => {
+  assert.match(route, /router\.get\('\/stream\/:streamId\/recent'/);
+  assert.match(route, /stream\.status !== 'live'/);
+  assert.match(route, /\.eq\('user_id', req\.user\.id\)[\s\S]*\.eq\('status', 'joined'\)[\s\S]*\.is\('left_at', null\)/);
+  assert.match(route, /\.from\('live_gift_transactions'\)[\s\S]*\.eq\('stream_id', streamId\)[\s\S]*\.limit\(20\)/);
+  assert.match(route, /senderName:[\s\S]*recipientName:[\s\S]*scorePoints:/);
+  assert.doesNotMatch(route.slice(route.indexOf("router.get('/stream/:streamId/recent'"), route.indexOf("router.post('/send'")), /\.insert\(|\.update\(|\.delete\(/);
+});
