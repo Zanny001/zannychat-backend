@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.live_spark_purchases (
   user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   provider text NOT NULL CHECK (provider IN ('paystack', 'google_play', 'apple_iap')),
   provider_reference text NOT NULL UNIQUE,
-  provider_transaction_id text UNIQUE,
+  provider_transaction_id text,
   package_id text NOT NULL,
   sparks bigint NOT NULL CHECK (sparks > 0 AND sparks <= 10000000),
   amount_minor bigint NOT NULL CHECK (amount_minor > 0),
@@ -20,10 +20,26 @@ CREATE TABLE IF NOT EXISTS public.live_spark_purchases (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK ((status = 'paid' AND verified_at IS NOT NULL) OR status <> 'paid')
 );
+CREATE UNIQUE INDEX IF NOT EXISTS live_spark_purchases_provider_transaction_idx
+  ON public.live_spark_purchases(provider, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS live_spark_purchases_user_created_idx
   ON public.live_spark_purchases(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS live_spark_purchases_status_created_idx
   ON public.live_spark_purchases(status, created_at);
+
+CREATE TABLE IF NOT EXISTS public.live_spark_packages (
+  package_id text NOT NULL,
+  provider text NOT NULL CHECK (provider IN ('paystack', 'google_play', 'apple_iap')),
+  sparks bigint NOT NULL CHECK (sparks > 0 AND sparks <= 10000000),
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  currency text NOT NULL CHECK (currency IN ('NGN', 'USD', 'GBP', 'EUR')),
+  is_active boolean NOT NULL DEFAULT false,
+  sort_order integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (provider, package_id, currency)
+);
+CREATE INDEX IF NOT EXISTS live_spark_packages_active_idx
+  ON public.live_spark_packages(provider, currency, sort_order) WHERE is_active = true;
 
 CREATE TABLE IF NOT EXISTS public.live_spark_lots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,16 +129,17 @@ CREATE INDEX IF NOT EXISTS live_creator_payouts_creator_idx
 CREATE INDEX IF NOT EXISTS live_creator_payouts_status_idx
   ON public.live_creator_payouts(status, requested_at);
 
+ALTER TABLE public.live_spark_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_spark_purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_spark_lots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_creator_earnings_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_payout_beneficiaries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_creator_payouts ENABLE ROW LEVEL SECURITY;
 
-REVOKE ALL ON public.live_spark_purchases, public.live_spark_lots,
+REVOKE ALL ON public.live_spark_packages, public.live_spark_purchases, public.live_spark_lots,
   public.live_creator_earnings_ledger, public.live_payout_beneficiaries,
   public.live_creator_payouts FROM PUBLIC, anon, authenticated;
-GRANT ALL ON public.live_spark_purchases, public.live_spark_lots,
+GRANT ALL ON public.live_spark_packages, public.live_spark_purchases, public.live_spark_lots,
   public.live_creator_earnings_ledger, public.live_payout_beneficiaries,
   public.live_creator_payouts TO service_role;
 
@@ -199,6 +216,8 @@ REVOKE ALL ON FUNCTION public.fulfill_live_spark_purchase(text, text, bigint, te
 GRANT EXECUTE ON FUNCTION public.fulfill_live_spark_purchase(text, text, bigint, text)
   TO service_role;
 
+COMMENT ON TABLE public.live_spark_packages IS
+  'Operator-configured, provider-specific Sparks packages. No package is purchasable until explicitly activated.';
 COMMENT ON TABLE public.live_spark_purchases IS
   'Server-created payment orders; only verified provider callbacks may fulfil them.';
 COMMENT ON TABLE public.live_spark_lots IS
