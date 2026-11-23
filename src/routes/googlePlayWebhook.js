@@ -67,6 +67,7 @@ router.post('/', async (req, res) => {
       purchaseToken: String(voided.purchaseToken),
       orderId: String(voided.orderId),
       voidedTimeMillis: notification.eventTimeMillis,
+      refundType: voided.refundType,
     });
 
     const transactionKey = 'gplay:' + sha256Hex(verified.purchaseToken);
