@@ -2,9 +2,12 @@ const express = require('express');
 const crypto = require('node:crypto');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createAppleStoreVerifier, appleBillingConfigured, minorUnitsFromApplePrice } = require('../services/appleStoreBilling');
-const { sha256Hex } = require('../services/googlePlayBilling');
 
 const router = express.Router();
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
 
 function validTransactionId(value) {
   return typeof value === 'string' && /^[0-9]{1,32}$/.test(value);
