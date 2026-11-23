@@ -865,7 +865,7 @@ router.get('/invitations', async (req, res) => {
     const preferredInvites = new Map();
     for (const invite of (rawInvites || []).filter((row) =>
       (row.invitation_type === 'viewer' && row.status === 'pending')
-      || (row.invitation_type === 'guest' && ['pending', 'accepted'].includes(row.status))) {
+      || (row.invitation_type === 'guest' && ['pending', 'accepted'].includes(row.status)))) {
       const current = preferredInvites.get(invite.stream_id);
       if (!current || invite.invitation_type === 'guest') preferredInvites.set(invite.stream_id, invite);
     }
