@@ -14,6 +14,7 @@ const refundMigration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123161848_apple_store_notifications_refunds.sql'),
   'utf8',
 );
+const reversalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123165000_apple_refund_reversal_reconciliation.sql'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
 test('Apple account binding is stable, UUID-backed and service-role-only', () => {
@@ -66,4 +67,18 @@ test('Apple App Store Server Notifications V2 are verified and idempotently reco
   assert.match(refundMigration, /'apple_iap_risk'/);
   assert.match(refundMigration, /'apple\.refund'/);
   assert.match(refundMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund[\s\S]*FROM PUBLIC, anon, authenticated/);
+});
+
+test('Apple REFUND_REVERSED notifications restore only revoked unspent Sparks', () => {
+  assert.match(notifications, /notificationType === 'REFUND_REVERSED'/);
+  assert.match(notifications, /transaction\.revocationDate != null \|\| transaction\.revocationPercentage != null/);
+  assert.match(notifications, /record_live_apple_refund_reversal/);
+  assert.match(reversalMigration, /refunded_unspent_sparks bigint NOT NULL DEFAULT 0/);
+  assert.match(reversalMigration, /SET remaining_sparks = v_restore/);
+  assert.match(reversalMigration, /balance_sparks = balance_sparks \+ v_restore/);
+  assert.match(reversalMigration, /status = 'paid', risk_held_sparks = 0/);
+  assert.match(reversalMigration, /risk_hold_reason = NULL/);
+  assert.match(reversalMigration, /'apple\.refund_reversed'/);
+  assert.match(reversalMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund_reversal[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(reversalMigration, /GRANT EXECUTE ON FUNCTION public\.record_live_apple_refund_reversal[\s\S]*TO service_role/);
 });
