@@ -28,17 +28,24 @@ test('askClaude passes a timeout signal and returns provider translation text', 
 });
 
 test('askClaude aborts a provider request that exceeds its deadline', async () => {
-  await assert.rejects(
-    askClaude({
-      system: 'Translate faithfully',
-      messages: [{ role: 'user', content: 'Hello' }],
-      timeoutMs: 10,
-      fetchImpl: (_url, options) => new Promise((_resolve, reject) => {
-        options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+  // AbortSignal.timeout() intentionally uses an unreferenced timer in Node.
+  // Keep this isolated mocked-fetch test alive until the timeout is observed.
+  const keepAlive = setTimeout(() => {}, 100);
+  try {
+    await assert.rejects(
+      askClaude({
+        system: 'Translate faithfully',
+        messages: [{ role: 'user', content: 'Hello' }],
+        timeoutMs: 10,
+        fetchImpl: (_url, options) => new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+        }),
       }),
-    }),
-    (error) => error.name === 'TimeoutError' && error.code === 'ETIMEDOUT',
-  );
+      (error) => error.name === 'TimeoutError' && error.code === 'ETIMEDOUT',
+    );
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });
 
 test('askClaude propagates caller cancellation instead of reporting a provider timeout', async () => {
@@ -52,6 +59,10 @@ test('askClaude propagates caller cancellation instead of reporting a provider t
       options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
     }),
   });
-  controller.abort(new DOMException('Cancelled by caller', 'AbortError'));
+  const cancellation = new Promise((resolve) => setTimeout(() => {
+    controller.abort(new DOMException('Cancelled by caller', 'AbortError'));
+    resolve();
+  }, 5));
+  await cancellation;
   await assert.rejects(request, (error) => error.name === 'AbortError');
 });
