@@ -161,6 +161,11 @@ BEGIN
     WHERE stream_id = p_stream_id AND user_id = p_creator_b_id
       AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
   IF NOT FOUND THEN RAISE EXCEPTION 'opponent must join this LIVE as a guest first' USING ERRCODE = 'P0001'; END IF;
+  UPDATE public.live_pk_battles
+    SET status = 'ended',
+        winner_id = CASE WHEN score_a > score_b THEN creator_a_id WHEN score_b > score_a THEN creator_b_id ELSE NULL END,
+        updated_at = now()
+    WHERE stream_id = p_stream_id AND status = 'live' AND ends_at <= now();
   UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
     WHERE stream_id = p_stream_id
       AND ((status = 'pending' AND created_at < now() - interval '2 minutes')
