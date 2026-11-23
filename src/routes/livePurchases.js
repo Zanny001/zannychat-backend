@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { createGooglePlayBillingClient, sha256Hex } = require('../services/googlePlayBilling');
+const { ensureLivePurchaseReceipt } = require('../services/livePurchaseReceiptService');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'LIVE purchase requests are rate-limited.' }));
@@ -313,6 +314,18 @@ router.post('/native/verify', async (req, res) => {
     if (fulfilment?.rejected) {
       return res.status(409).json({ error: 'The store purchase could not be assigned to this account' });
     }
+
+    const paidAt = Number(verified.purchaseTimeMillis) > 0
+      ? new Date(Number(verified.purchaseTimeMillis)).toISOString()
+      : new Date().toISOString();
+    await ensureLivePurchaseReceipt(purchase.provider_reference, {
+      reference: purchase.provider_reference,
+      status: 'success',
+      amount: verified.amountMinor,
+      currency: verified.currency,
+      paid_at: paidAt,
+      channel: 'Google Play',
+    });
 
     return res.status(200).json({
       verified: true,
