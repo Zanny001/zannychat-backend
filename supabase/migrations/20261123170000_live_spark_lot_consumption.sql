@@ -6,10 +6,12 @@ ALTER TABLE public.live_spark_lots ADD CONSTRAINT live_spark_lots_source_check
   CHECK (source IN ('purchase', 'promotion', 'support_adjustment', 'legacy'));
 
 INSERT INTO public.live_spark_lots(user_id, source, granted_sparks, remaining_sparks)
-SELECT user_id, 'legacy', balance_sparks, balance_sparks
-FROM public.live_gift_wallets
-WHERE balance_sparks > 0
-  AND NOT EXISTS (SELECT 1 FROM public.live_spark_lots l WHERE l.user_id = live_gift_wallets.user_id)
+SELECT w.user_id, 'legacy', w.balance_sparks - COALESCE(SUM(l.remaining_sparks), 0),
+  w.balance_sparks - COALESCE(SUM(l.remaining_sparks), 0)
+FROM public.live_gift_wallets w
+LEFT JOIN public.live_spark_lots l ON l.user_id = w.user_id
+GROUP BY w.user_id, w.balance_sparks
+HAVING w.balance_sparks > COALESCE(SUM(l.remaining_sparks), 0)
 ON CONFLICT DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.grant_live_sparks(
