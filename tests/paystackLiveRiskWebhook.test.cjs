@@ -56,6 +56,7 @@ test('dispute verification uses Paystack state and resolution rather than trusti
     status: 'resolved',
     resolution: 'declined',
     refund_amount: null,
+    dueAt: '2026-11-24T18:00:00.000Z',
     currency: 'NGN',
     transaction: { reference: 'zanny-purchase-ref-3', currency: 'NGN' },
   });
@@ -64,6 +65,7 @@ test('dispute verification uses Paystack state and resolution rather than trusti
   assert.equal(verified.resourceId, 'dispute:456');
   assert.equal(verified.providerReference, 'zanny-purchase-ref-3');
   assert.equal(verified.resolution, 'declined');
+  assert.equal(verified.providerDueAt, '2026-11-24T18:00:00.000Z');
 });
 
 test('dispute verification rejects unknown provider states and unresolved resolution values', async () => {
