@@ -25,6 +25,9 @@ test('service account configuration is parsed and validated without logging secr
   assert.throws(() => parseServiceAccount('{bad json'), /configuration is invalid/);
   assert.throws(() => parseServiceAccount({ client_email: 'billing@test' }), /configuration is incomplete/);
   assert.equal(sha256Hex('user-123').length, 64);
+  assert.equal(moneyToMinor({ currencyCode: 'NGN', units: '125', nanos: 500000000 }), 12550);
+  assert.throws(() => moneyToMinor({ currencyCode: 'USD', units: '1', nanos: 0 }), /currency/);
+  assert.throws(() => moneyToMinor({ currencyCode: 'NGN', units: '1', nanos: 1 }), /minor currency/);
 });
 
 test('verifies Google Play product purchase, account binding, Nigeria region, and consumes only after verification', async () => {
@@ -42,6 +45,18 @@ test('verifies Google Play product purchase, account binding, Nigeria region, an
       return response({ access_token: 'google-access-token', expires_in: 3600 });
     }
     if (options.method === 'POST') return response(null, 204);
+    if (url.includes('/orders/')) return response({
+      state: 'PROCESSED',
+      purchaseToken: 'google-purchase-token-123456',
+      buyerAddress: { buyerCountry: 'NG' },
+      total: { currencyCode: 'NGN', units: '2500', nanos: 0 },
+      developerRevenueInBuyerCurrency: { currencyCode: 'NGN', units: '2250', nanos: 0 },
+      lineItems: [{
+        productId: 'zanny_sparks_100',
+        total: { currencyCode: 'NGN', units: '2500', nanos: 0 },
+        oneTimePurchaseDetails: { quantity: 1 },
+      }],
+    });
     return response({
       purchaseState: 0,
       consumptionState: 0,
@@ -67,16 +82,19 @@ test('verifies Google Play product purchase, account binding, Nigeria region, an
   assert.equal(verified.productId, 'zanny_sparks_100');
   assert.equal(verified.consumptionState, 0);
   assert.equal(verified.regionCode, 'NG');
+  assert.equal(verified.amountMinor, 250000);
+  assert.equal(verified.providerFeeMinor, 25000);
 
   await client.consumeProductPurchase({
     packageName: 'com.zannychat.app',
     productId: 'zanny_sparks_100',
     purchaseToken: 'google-purchase-token-123456',
   });
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.match(calls[1].url, /applications\/com\.zannychat\.app\/purchases\/products\/zanny_sparks_100\/tokens\/google-purchase-token-123456$/);
   assert.equal(calls[1].options.headers.Authorization, 'Bearer google-access-token');
-  assert.match(calls[2].url, /:consume$/);
+  assert.match(calls[2].url, /applications\/com\.zannychat\.app\/orders\/GPA\.test-order$/);
+  assert.match(calls[3].url, /:consume$/);
 });
 
 test('rejects pending, wrong-account, and non-Nigeria Google Play purchases', async (t) => {
