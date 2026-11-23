@@ -101,8 +101,8 @@ test('PK challenges require explicit guest consent before the host can start', (
   assert.match(migration, /status = 'pending' AND created_at < now\(\) - interval '2 minutes'/);
   assert.match(migration, /status = 'live' AND ends_at <= now\(\)/);
   assert.match(migration, /v_battle.created_at < now\(\) - interval '10 minutes'/);
-  assert.match(battles, /router\.post\('/:battleId\/accept'/);
-  assert.match(battles, /router\.post\('/:battleId\/decline'/);
+  assert.ok(battles.includes("router.post('/:battleId/accept'"));
+  assert.ok(battles.includes("router.post('/:battleId/decline'"));
   assert.match(battles, /live_pk_challenge/);
   assert.match(battles, /live_pk_accepted/);
 });
