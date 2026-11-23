@@ -33,7 +33,9 @@ router.post('/', async (req, res) => {
       p_duration_seconds: durationSeconds,
     });
     if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not create PK battle' });
-    void sendPushToUser(opponentId, { title: 'LIVE PK challenge', body: 'A creator challenged you. Open this LIVE to accept or decline.', data: { type: 'live_pk_challenge', streamId, battleId: data } })\n      .catch((pushError) => console.error('[live-battles] challenge notification failed:', pushError?.message || pushError));\n    return res.status(201).json({ battleId: data, status: 'pending', scoring: 'gift_points_only' });
+    void sendPushToUser(opponentId, { title: 'LIVE PK challenge', body: 'A creator challenged you. Open this LIVE to accept or decline.', data: { type: 'live_pk_challenge', streamId, battleId: data } })
+      .catch((pushError) => console.error('[live-battles] challenge notification failed:', pushError?.message || pushError));
+    return res.status(201).json({ battleId: data, status: 'pending', scoring: 'gift_points_only' });
   } catch (error) {
     console.error('[live-battles] create failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not create PK battle' });
@@ -49,7 +51,9 @@ router.post('/:battleId/accept', async (req, res) => {
       p_creator_id: req.user.id,
     });
     if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not accept PK challenge' });
-    void sendPushToUser(data.creator_a_id, { title: 'PK challenge accepted', body: 'Your LIVE PK challenge was accepted. You can start the battle.', data: { type: 'live_pk_accepted', battleId: data.id, streamId: data.stream_id } })\n      .catch((pushError) => console.error('[live-battles] acceptance notification failed:', pushError?.message || pushError));\n    return res.json({ battle: data });
+    void sendPushToUser(data.creator_a_id, { title: 'PK challenge accepted', body: 'Your LIVE PK challenge was accepted. You can start the battle.', data: { type: 'live_pk_accepted', battleId: data.id, streamId: data.stream_id } })
+      .catch((pushError) => console.error('[live-battles] acceptance notification failed:', pushError?.message || pushError));
+    return res.json({ battle: data });
   } catch (error) {
     console.error('[live-battles] accept failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not accept PK challenge' });
