@@ -69,6 +69,43 @@ router.post('/:battleId/finish', async (req, res) => {
   }
 });
 
+
+router.get('/stream/:streamId/current', async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validUuid(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
+      .select('user_id').eq('stream_id', streamId).eq('user_id', req.user.id)
+      .eq('status', 'joined').is('left_at', null).maybeSingle();
+    if (participantError) throw participantError;
+    const { data: battle, error } = await supabaseAdmin.from('live_pk_battles')
+      .select('id,stream_id,creator_a_id,creator_b_id,status,score_a,score_b,duration_seconds,started_at,ends_at,winner_id,created_at')
+      .eq('stream_id', streamId).in('status', ['pending', 'live'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!battle) return res.json({ battle: null, scoring: 'gift_points_only' });
+    if (!participant && ![battle.creator_a_id, battle.creator_b_id].includes(req.user.id)) {
+      return res.status(403).json({ error: 'Join this LIVE to view its PK battle' });
+    }
+    let settled = battle;
+    if (battle.status === 'live' && battle.ends_at && Date.now() >= Date.parse(battle.ends_at)) {
+      const result = await supabaseAdmin.rpc('finish_live_pk_battle', {
+        p_battle_id: battle.id, p_creator_id: null,
+      });
+      if (result.error && result.error.code !== 'P0001') throw result.error;
+      const refreshed = await supabaseAdmin.from('live_pk_battles')
+        .select('id,stream_id,creator_a_id,creator_b_id,status,score_a,score_b,duration_seconds,started_at,ends_at,winner_id,created_at')
+        .eq('id', battle.id).maybeSingle();
+      if (refreshed.error) throw refreshed.error;
+      if (refreshed.data) settled = refreshed.data;
+    }
+    return res.json({ battle: settled, scoring: 'gift_points_only' });
+  } catch (error) {
+    console.error('[live-battles] current battle lookup failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not load the current PK battle' });
+  }
+});
+
 router.get('/:battleId', async (req, res) => {
   if (!validUuid(req.params.battleId)) return res.status(400).json({ error: 'Invalid PK battle id' });
   try {
