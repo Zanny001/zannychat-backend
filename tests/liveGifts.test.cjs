@@ -192,10 +192,11 @@ test('LIVE economy foreign keys have supporting indexes for production joins and
 test('committed LIVE gifts publish an opaque room feed invalidation once', () => {
   const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
   const roomAdmin = fs.readFileSync(path.join(__dirname, '../src/services/livekitRoomAdmin.js'), 'utf8');
-  assert.match(route, /require\('../services\/livekitRoomAdmin'\)/);
-  assert.match(route, /rpc\('send_live_gift'/);
-  assert.match(route, /if \(!data\?\.replayed\)[\s\S]*?select\('room_name'\)/);
-  assert.match(route, /sendRoomData\(stream\.room_name, \{ v: 1, type: 'feed_changed' \}\)/);
-  assert.match(roomAdmin, /topic: 'zanny\.live\.feed\.v1'/);
-  assert.match(roomAdmin, /type: 'feed_changed'/);
+  assert.ok(route.includes("require('../services/livekitRoomAdmin')"));
+  assert.ok(route.includes("rpc('send_live_gift'"));
+  assert.ok(route.includes("if (!data?.replayed)"));
+  assert.ok(route.includes(".select('room_name')"));
+  assert.ok(route.includes("sendRoomData(stream.room_name, { v: 1, type: 'feed_changed' })"));
+  assert.ok(roomAdmin.includes("topic: 'zanny.live.feed.v1'"));
+  assert.ok(roomAdmin.includes("type: 'feed_changed'"));
 });
