@@ -42,8 +42,8 @@ test('PK gift attribution is derived from the active battle on the server, not f
   assert.match(migration, /Battle attribution is derived from locked server state/);
   assert.match(migration, /p_recipient_id IN \(creator_a_id, creator_b_id\)/);
   assert.match(migration, /v_effective_battle_id := v_battle\.id/);
-  assert.match(migration, /score_a = score_a \\+ v_points/);
-  assert.match(migration, /score_b = score_b \\+ v_points/);
+  assert.match(migration, /score_a = score_a \+ v_points/);
+  assert.match(migration, /score_b = score_b \+ v_points/);
   assert.doesNotMatch(route, /p_battle_id/);
 });
 
@@ -90,7 +90,7 @@ test('PK expiry is performed by a privileged RPC, not direct service-role table 
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.expire_live_pk_battle_challenges\(uuid\) TO service_role/);
   assert.match(battles, /rpc\('expire_live_pk_battle_challenges'/);
   assert.ok(battles.indexOf(".eq('user_id', req.user.id)") < battles.indexOf("rpc('expire_live_pk_battle_challenges'"));
-  assert.match(battles, /if \(!participant\) return res\.status\(403\)/);
+  assert.ok(battles.includes('if (!participant) return res.status(403)'));
   assert.doesNotMatch(battles, /\.from\('live_pk_battles'\)\.update/);
 });
 
@@ -111,12 +111,12 @@ test('PK challenges require explicit guest consent before the host can start', (
 test('LIVE captions never fabricate text and require explicit opt-in provider-backed translation', () => {
   assert.match(captions, /\.from\('live_streams'\)/);
   assert.match(captions, /stream.status !== 'live'/);
-  assert.match(battles, /participant\?\.role === 'guest'/);
-  assert.match(battles, /participant\?\.role === 'creator'/);
+  assert.ok(battles.includes("participant?.role === 'guest'"));
+  assert.ok(battles.includes("participant?.role === 'creator'"));
 
   assert.match(captions, /LIVE_TRANSLATION_ENABLED !== 'true'/);
-  assert.match(captions, /isAiConfigured\(\)/);
-  assert.match(captions, /await askClaude\(/);
+  assert.ok(captions.includes('isAiConfigured()'));
+  assert.ok(captions.includes('await askClaude('));
   assert.match(captions, /status: false|transcription: false/);
   assert.match(captions, /transcriptStored: false/);
   assert.match(captions, /\.eq\('status', 'joined'\)/);
