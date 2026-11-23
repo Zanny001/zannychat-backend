@@ -35,7 +35,7 @@ test('LIVE monetisation separates purchased Sparks, creator cash earnings and pa
 });
 
 test('LIVE monetisation tables are inaccessible to clients and writes are privileged', () => {
-  assert.equal((migration.match(/ENABLE ROW LEVEL SECURITY/g) || []).length, 5);
+  assert.equal((migration.match(/ENABLE ROW LEVEL SECURITY/g) || []).length, 6);
   assert.match(migration, /REVOKE ALL ON[\s\S]*FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT ALL ON[\s\S]*TO service_role/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*FROM PUBLIC, anon, authenticated/);
