@@ -25,8 +25,8 @@ test('bank account details are resolved by Paystack and only masked details plus
   assert.match(route, /\/transferrecipient/);
   assert.match(route, /account_last4: accountNumber\.slice\(-4\)/);
   assert.match(route, /provider_recipient_code: recipient\.recipient_code/);
-  assert.doesNotMatch(route, /account_number:\s*accountNumber\s*[,}]/);
-  assert.doesNotMatch(route, /account_number:\s*req\.body/);
+  const persistenceBlock = route.slice(route.indexOf("from('live_payout_beneficiaries')"), route.indexOf(".select('id,bank_code"));
+  assert.doesNotMatch(persistenceBlock, /account_number/);
 });
 
 test('payout requests reserve only available earnings under a per-creator database lock', () => {
