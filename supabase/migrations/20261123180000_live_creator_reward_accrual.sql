@@ -260,7 +260,7 @@ BEGIN
   RETURN jsonb_build_object(
     'currency', 'NGN',
     'pendingMinor', v_pending,
-    'availableMinor', GREATEST(0, v_available - v_processing),
+    'availableMinor', GREATEST(0, v_available - v_processing - v_paid_out),
     'heldMinor', v_held,
     'lifetimeNetMinor', v_lifetime,
     'paidOutMinor', v_paid_out,
