@@ -373,6 +373,7 @@ BEGIN
     RAISE EXCEPTION 'invalid LIVE Sparks grant' USING ERRCODE = '22023';
   END IF;
 
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_idempotency_key, 0));
   SELECT * INTO v_existing FROM public.live_gift_ledger
     WHERE user_id = p_user_id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
