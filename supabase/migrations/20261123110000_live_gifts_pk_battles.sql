@@ -135,6 +135,36 @@ CREATE TRIGGER live_gift_transactions_append_only
   BEFORE UPDATE OR DELETE ON public.live_gift_transactions
   FOR EACH ROW EXECUTE FUNCTION public.prevent_live_gift_audit_mutation();
 
+
+CREATE OR REPLACE FUNCTION public.expire_live_pk_battle_challenges(p_stream_id uuid)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_stream_status text;
+BEGIN
+  IF p_stream_id IS NULL THEN
+    RAISE EXCEPTION 'stream id is required' USING ERRCODE = '22023';
+  END IF;
+  SELECT status INTO v_stream_status FROM public.live_streams WHERE id = p_stream_id;
+  IF v_stream_status IS DISTINCT FROM 'live' THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE stream_id = p_stream_id AND status IN ('pending', 'accepted', 'live');
+    RETURN;
+  END IF;
+  UPDATE public.live_pk_battles
+    SET status = 'ended',
+        winner_id = CASE WHEN score_a > score_b THEN creator_a_id WHEN score_b > score_a THEN creator_b_id ELSE NULL END,
+        updated_at = now()
+    WHERE stream_id = p_stream_id AND status = 'live' AND ends_at <= now();
+  UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+    WHERE stream_id = p_stream_id
+      AND ((status = 'pending' AND created_at < now() - interval '2 minutes')
+        OR (status = 'accepted' AND created_at < now() - interval '10 minutes'));
+END;
+$;
+
 CREATE OR REPLACE FUNCTION public.create_live_pk_battle(
   p_stream_id uuid, p_creator_a_id uuid, p_creator_b_id uuid, p_duration_seconds integer DEFAULT 300
 ) RETURNS uuid
@@ -300,11 +330,13 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.prevent_live_gift_audit_mutation() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.expire_live_pk_battle_challenges(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.accept_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.decline_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.start_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.finish_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.expire_live_pk_battle_challenges(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.accept_live_pk_battle(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.decline_live_pk_battle(uuid, uuid) TO service_role;
