@@ -427,7 +427,10 @@ router.post('/apple/verify', async (req, res) => {
     if (transaction.appAccountToken.toLowerCase() !== appAccountToken.toLowerCase()) {
       return res.status(403).json({ error: 'Apple transaction belongs to a different ZannyChat account', code: 'APPLE_ACCOUNT_MISMATCH' });
     }
-    if (verifiedResult.environment !== 'Production') {
+    const sandboxAllowed = verifiedResult.environment === 'Sandbox'
+      && process.env.NODE_ENV !== 'production'
+      && process.env.APPLE_IAP_ALLOW_SANDBOX === 'true';
+    if (verifiedResult.environment !== 'Production' && !sandboxAllowed) {
       return res.status(403).json({ error: 'Sandbox transactions cannot credit production Sparks', code: 'APPLE_TEST_PURCHASE_NOT_ALLOWED' });
     }
 
