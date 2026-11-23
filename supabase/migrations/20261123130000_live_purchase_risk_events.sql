@@ -92,9 +92,11 @@ BEGIN
   END IF;
 
   -- Match the gift path's lock order: wallet first, then purchase, then lots.
-  INSERT INTO public.live_gift_wallets(user_id, balance_sparks)
-  VALUES (v_purchase.user_id, 0) ON CONFLICT (user_id) DO NOTHING;
-  PERFORM 1 FROM public.live_gift_wallets WHERE user_id = v_purchase.user_id FOR UPDATE;
+  IF v_purchase.user_id IS NOT NULL THEN
+    INSERT INTO public.live_gift_wallets(user_id, balance_sparks)
+    VALUES (v_purchase.user_id, 0) ON CONFLICT (user_id) DO NOTHING;
+    PERFORM 1 FROM public.live_gift_wallets WHERE user_id = v_purchase.user_id FOR UPDATE;
+  END IF;
 
   SELECT * INTO v_purchase
   FROM public.live_spark_purchases
@@ -139,7 +141,7 @@ BEGIN
     IF v_purchase.status = 'paid' THEN
       SELECT COALESCE(sum(remaining_sparks), 0) INTO v_remaining
       FROM public.live_spark_lots WHERE purchase_id = v_purchase.id;
-      IF v_remaining > 0 THEN
+      IF v_remaining > 0 AND v_purchase.user_id IS NOT NULL THEN
         UPDATE public.live_gift_wallets
           SET balance_sparks = balance_sparks - v_remaining, updated_at = now()
           WHERE user_id = v_purchase.user_id AND balance_sparks >= v_remaining;
@@ -175,7 +177,7 @@ BEGIN
       IF v_purchase.status = 'paid' THEN
         SELECT COALESCE(sum(remaining_sparks), 0) INTO v_remaining
         FROM public.live_spark_lots WHERE purchase_id = v_purchase.id;
-        IF v_remaining > 0 THEN
+        IF v_remaining > 0 AND v_purchase.user_id IS NOT NULL THEN
           UPDATE public.live_gift_wallets
             SET balance_sparks = balance_sparks - v_remaining, updated_at = now()
             WHERE user_id = v_purchase.user_id AND balance_sparks >= v_remaining;
@@ -200,7 +202,7 @@ BEGIN
     SELECT COALESCE(sum(remaining_sparks), 0) INTO v_remaining
     FROM public.live_spark_lots WHERE purchase_id = v_purchase.id;
     v_adjust := GREATEST(v_remaining - v_purchase.risk_held_sparks, 0);
-    IF v_adjust > 0 THEN
+    IF v_adjust > 0 AND v_purchase.user_id IS NOT NULL THEN
       UPDATE public.live_gift_wallets
         SET balance_sparks = balance_sparks - v_adjust, updated_at = now()
         WHERE user_id = v_purchase.user_id AND balance_sparks >= v_adjust;
@@ -235,7 +237,7 @@ BEGIN
     FROM public.live_purchase_risk_events
     WHERE purchase_id = v_purchase.id AND status = 'open';
     IF v_open_events = 0 AND v_purchase.status = 'disputed' THEN
-      IF v_purchase.risk_held_sparks > 0 THEN
+      IF v_purchase.risk_held_sparks > 0 AND v_purchase.user_id IS NOT NULL THEN
         UPDATE public.live_gift_wallets
           SET balance_sparks = balance_sparks + v_purchase.risk_held_sparks, updated_at = now()
           WHERE user_id = v_purchase.user_id;
