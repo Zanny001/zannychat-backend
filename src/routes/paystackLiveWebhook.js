@@ -46,7 +46,7 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('live_spark_purchases')
-      .select('id,user_id,amount_minor,currency')
+      .select('id,user_id,amount_minor,currency,status,provider_fee_minor')
       .eq('provider_reference', eventReference)
       .maybeSingle();
     if (orderError) throw orderError;
@@ -62,6 +62,21 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
     const paidEmail = String(verified.customer?.email || '').trim().toLowerCase();
     if (!expectedEmail || !paidEmail || expectedEmail !== paidEmail) {
       throw new Error('Verified payment customer does not match the ZannyChat account');
+    }
+    const providerFeeMinor = Number(verified.fees);
+    if (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0
+        || providerFeeMinor >= Number(order.amount_minor)) {
+      throw new Error('Verified provider fee is missing or invalid');
+    }
+    if (order.status === 'pending') {
+      const { data: feeOrder, error: feeError } = await supabaseAdmin
+        .from('live_spark_purchases')
+        .update({ provider_fee_minor: providerFeeMinor, updated_at: new Date().toISOString() })
+        .eq('id', order.id).eq('status', 'pending').select('id').maybeSingle();
+      if (feeError) throw feeError;
+      if (!feeOrder) throw new Error('Could not persist verified provider fee before fulfilment');
+    } else if (Number(order.provider_fee_minor) !== providerFeeMinor) {
+      throw new Error('Verified provider fee differs from the already fulfilled purchase');
     }
 
     const { data, error } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
