@@ -65,6 +65,18 @@ test('PK battle routes require authentication and expose creator-controlled life
   assert.match(index, /app\.use\('\/live\/battles', liveBattlesRouter\)/);
 });
 
+test('PK challenges require explicit guest consent before the host can start', () => {
+  assert.match(migration, /status IN \\('pending', 'accepted', 'live', 'ended', 'cancelled'\\)/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.accept_live_pk_battle/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.decline_live_pk_battle/);
+  assert.match(migration, /v_battle\\.status <> 'accepted'/);
+  assert.match(migration, /status = 'pending' AND created_at < now\\(\\) - interval '2 minutes'/);
+  assert.match(battles, /router\\.post\\('\/:battleId\\/accept'/);
+  assert.match(battles, /router\\.post\\('\/:battleId\\/decline'/);
+  assert.match(battles, /live_pk_challenge/);
+  assert.match(battles, /live_pk_accepted/);
+});
+
 test('LIVE captions never fabricate text and require explicit opt-in provider-backed translation', () => {
   assert.match(captions, /LIVE_TRANSLATION_ENABLED !== 'true'/);
   assert.match(captions, /isAiConfigured\(\)/);
