@@ -411,8 +411,8 @@ router.post('/apple/verify', async (req, res) => {
     if (!transaction || transaction.bundleId !== process.env.APPLE_APP_BUNDLE_ID
         || transaction.type !== 'Consumable'
         || !validUuid(transaction.appAccountToken)
-        || !Number.isSafeInteger(Number(transaction.transactionId))
-        || Number(transaction.transactionId) <= 0
+        || typeof transaction.transactionId !== 'string'
+        || !/^\\d{1,32}$/.test(transaction.transactionId)
         || Number(transaction.quantity || 1) !== 1
         || transaction.revocationDate != null) {
       return res.status(403).json({ error: 'Apple transaction does not represent an eligible Sparks purchase', code: 'APPLE_TRANSACTION_NOT_ELIGIBLE' });
