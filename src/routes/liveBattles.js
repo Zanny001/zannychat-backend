@@ -137,7 +137,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
       if (refreshed.error) throw refreshed.error;
       if (refreshed.data) settled = refreshed.data;
     }
-    return res.json({ battle: settled, scoring: 'gift_points_only', canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' });
+    return res.json({ battle: { ...settled, canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' }, scoring: 'gift_points_only' });
   } catch (error) {
     console.error('[live-battles] current battle lookup failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load the current PK battle' });
