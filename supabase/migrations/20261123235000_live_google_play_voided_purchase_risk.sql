@@ -54,7 +54,7 @@ DECLARE
   v_event_id uuid;
   v_remaining bigint := 0;
   v_adjust bigint := 0;
-  v_paid_earnings boolean := false;
+  v_creator_has_payouts boolean := false;
   v_event_status text := 'resolved';
 BEGIN
   IF p_event_key IS NULL OR length(p_event_key) NOT BETWEEN 8 AND 200
@@ -134,17 +134,19 @@ BEGIN
     RAISE EXCEPTION 'Google Play Sparks purchase is not eligible for void reconciliation' USING ERRCODE = '23514';
   END IF;
 
+  -- Earnings are not marked "paid" on the earnings ledger. Payouts are
+  -- aggregated by creator, so any in-flight or completed payout requires
+  -- operator reconciliation before the void event can be closed.
   SELECT EXISTS (
-    SELECT 1
-    FROM public.live_creator_earnings_ledger e
-    WHERE e.status = 'paid'
-      AND e.gift_transaction_id IN (
-        SELECT a.gift_transaction_id
-        FROM public.live_spark_spend_allocations a
-        JOIN public.live_spark_lots l ON l.id = a.lot_id
-        WHERE l.purchase_id = v_purchase.id
-      )
-  ) INTO v_paid_earnings;
+    SELECT 1 FROM public.live_creator_payouts p
+    WHERE p.creator_id = v_purchase.user_id
+      AND p.status IN ('requested', 'processing', 'paid')
+  ) INTO v_creator_has_payouts;
+  IF v_creator_has_payouts THEN
+    UPDATE public.live_creator_payout_profiles
+      SET payout_hold = true, updated_at = now()
+      WHERE creator_id = v_purchase.user_id;
+  END IF;
 
   SELECT COALESCE(sum(remaining_sparks), 0) INTO v_remaining
   FROM public.live_spark_lots WHERE purchase_id = v_purchase.id;
@@ -173,7 +175,7 @@ BEGIN
           WHERE l.purchase_id = v_purchase.id
         );
     RETURN jsonb_build_object('manualReviewRequired', true, 'purchaseId', v_purchase.id,
-      'status', 'disputed', 'heldSparks', v_remaining, 'creatorEarningsAlreadyPaid', v_paid_earnings);
+      'status', 'disputed', 'heldSparks', v_remaining, 'creatorPayoutReconciliationRequired', v_creator_has_payouts);
   END IF;
 
   v_adjust := GREATEST(v_remaining - v_purchase.risk_held_sparks, 0);
