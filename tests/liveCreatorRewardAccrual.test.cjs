@@ -3,6 +3,7 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+const netMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123210000_live_provider_fee_net_creator_rewards.sql'), 'utf8');
 const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123180000_live_creator_reward_accrual.sql'),
   'utf8',
@@ -37,4 +38,10 @@ test('PK points remain gift-point based and separate from creator cash earnings'
   assert.match(migration, /score_b = score_b \+ v_points/);
   assert.match(migration, /creatorEarningCreated/);
   assert.match(migration, /scorePoints/);
+});
+
+test('creator reward base deducts the exact verified Paystack fee before sharing net purchase value', () => {
+  assert.match(netMigration, /provider_fee_minor bigint NOT NULL DEFAULT 0/);
+  assert.match(netMigration, /provider_fee_minor >= 0 AND provider_fee_minor < amount_minor/);
+  assert.match(netMigration, /amount_minor - v_purchase\.provider_fee_minor/);
 });

@@ -39,6 +39,9 @@ test('Paystack webhook authenticates raw bytes and independently verifies the tr
   assert.match(webhook, /verified\.customer\?\.email/);
   assert.match(webhook, /auth\.admin\.getUserById\(order\.user_id\)/);
   assert.match(webhook, /expectedEmail !== paidEmail/);
+  assert.match(webhook, /Number\(verified\.fees\)/);
+  assert.match(webhook, /provider_fee_minor: providerFeeMinor/);
+  assert.match(webhook, /Verified provider fee differs from the already fulfilled purchase/);
 });
 
 test('Paystack webhook is mounted before JSON parsing and authenticated checkout after parsing', () => {
