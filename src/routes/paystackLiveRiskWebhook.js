@@ -33,7 +33,7 @@ async function verifyRefundResource(eventData, secret, fetchImpl = fetch) {
     fetchImpl,
   );
   const refunds = Array.isArray(data) ? data : (data ? [data] : []);
-  const refund = refunds.find((item) => String(item.reference || '') === refundReference) || refunds[0];
+  const refund = refunds.find((item) => String(item.reference || '').toLowerCase() === refundReference.toLowerCase());
   if (!refund || !REFUND_EVENT_BY_STATUS[refund.status]) throw new Error('Verified refund record is missing or invalid');
 
   let transaction = refund.transaction;
