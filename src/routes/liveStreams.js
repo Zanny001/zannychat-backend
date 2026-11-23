@@ -865,7 +865,7 @@ router.get('/invitations', async (req, res) => {
     const preferredInvites = new Map();
     for (const invite of (rawInvites || []).filter((row) =>
       (row.invitation_type === 'viewer' && row.status === 'pending')
-      || (row.invitation_type === 'guest' && row.status === 'accepted'))) {
+      || (row.invitation_type === 'guest' && ['pending', 'accepted'].includes(row.status)))) {
       const current = preferredInvites.get(invite.stream_id);
       if (!current || invite.invitation_type === 'guest') preferredInvites.set(invite.stream_id, invite);
     }
@@ -1010,7 +1010,11 @@ router.post('/', async (req, res) => {
 
 router.post('/:streamId/join', async (req, res) => {
   const streamId = req.params.streamId;
+  const requestedMediaMode = req.body?.mediaMode;
   if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  if (requestedMediaMode !== undefined && !['audio', 'video'].includes(requestedMediaMode)) {
+    return res.status(400).json({ error: 'LIVE guest media mode must be audio or video' });
+  }
   const config = getLiveKitConfig();
   if (!config) return res.status(503).json({ error: 'LIVE streaming is not enabled on this server yet' });
   try {
@@ -1051,11 +1055,23 @@ router.post('/:streamId/join', async (req, res) => {
       }
     }
     const canPublish = role === 'creator' || role === 'guest';
-    const token = issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room');
+    const guestMediaMode = stream.experience_mode === 'audio_room'
+      ? 'audio'
+      : (requestedMediaMode || 'video');
+    const mediaMode = role === 'guest'
+      ? guestMediaMode
+      : stream.experience_mode === 'audio_room' ? 'audio' : role === 'creator' ? 'video' : 'viewer';
+    const token = issueToken(
+      req.user,
+      stream.room_name,
+      config,
+      canPublish,
+      stream.experience_mode === 'audio_room' || (role === 'guest' && guestMediaMode === 'audio'),
+    );
     const canModerate = await canModerateLive(stream, req.user.id);
     return res.json({
       stream, livekitUrl: config.url,
-      token, role, canPublish, canModerate,
+      token, role, canPublish, canModerate, mediaMode,
     });
   } catch (error) {
     console.error('[live] join failed:', error?.message || error);
@@ -1165,7 +1181,7 @@ router.post('/:streamId/guests/invite', makeLimiter({ windowMs: 60 * 1000, max: 
     if (!profile) return res.status(404).json({ error: 'The invited user was not found' });
     const { error: inviteError } = await supabaseAdmin.from('live_stream_invites').upsert({
       stream_id: streamId, user_id: userId, invited_by: req.user.id,
-      requested_by: null, invitation_type: 'guest', status: 'accepted',
+      requested_by: null, invitation_type: 'guest', status: 'pending',
       updated_at: new Date().toISOString(),
     }, { onConflict: 'stream_id,user_id,invitation_type' });
     if (inviteError) throw inviteError;
@@ -1194,6 +1210,50 @@ router.get('/:streamId/guest-status', async (req, res) => {
   } catch (error) {
     console.error('[live] guest status fetch failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not check guest request status' });
+  }
+});
+
+router.patch('/:streamId/guest-invitation', makeLimiter({ windowMs: 60 * 1000, max: 6, error: 'Please wait before updating this LIVE invitation.' }), async (req, res) => {
+  const streamId = req.params.streamId;
+  const status = req.body?.status;
+  if (!validId(streamId) || !['accepted', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid LIVE guest invitation decision' });
+  }
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (status === 'accepted' && !stream.allow_guests) {
+      return res.status(409).json({ error: 'Guest participation is disabled for this LIVE stream' });
+    }
+    if (await hasBlockBetween(stream.creator_id, req.user.id)) {
+      return res.status(403).json({ error: 'Guest access is unavailable' });
+    }
+    const { data: invitation, error: invitationError } = await supabaseAdmin.from('live_stream_invites')
+      .select('invited_by,status')
+      .eq('stream_id', streamId).eq('user_id', req.user.id)
+      .eq('invitation_type', 'guest').maybeSingle();
+    if (invitationError) throw invitationError;
+    if (!invitation || invitation.status !== 'pending' || invitation.invited_by !== stream.creator_id) {
+      return res.status(409).json({ error: 'This LIVE guest invitation is no longer available' });
+    }
+    const { data: updated, error: updateError } = await supabaseAdmin.from('live_stream_invites')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('stream_id', streamId).eq('user_id', req.user.id)
+      .eq('invitation_type', 'guest').eq('status', 'pending')
+      .eq('invited_by', stream.creator_id)
+      .select('status').maybeSingle();
+    if (updateError) throw updateError;
+    if (!updated) return res.status(409).json({ error: 'This LIVE guest invitation has already been answered' });
+    const guestName = req.user.user_metadata?.name || req.user.user_metadata?.full_name || 'Your invited guest';
+    await notifyLiveUsers([stream.creator_id], {
+      title: status === 'accepted' ? 'LIVE guest invitation accepted' : 'LIVE guest invitation declined',
+      body: guestName + (status === 'accepted' ? ' accepted your invitation to join the stage.' : ' declined your invitation to join the stage.'),
+      data: { type: 'live_guest_decision', streamId, guestId: req.user.id, status },
+    });
+    return res.json({ status: updated.status });
+  } catch (error) {
+    console.error('[live] guest invitation decision failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not update this LIVE guest invitation' });
   }
 });
 
