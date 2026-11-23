@@ -94,6 +94,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS live_pk_one_open_battle_per_stream_idx
 CREATE INDEX IF NOT EXISTS live_pk_battles_creator_history_idx
   ON public.live_pk_battles (creator_a_id, created_at DESC);
 
+ALTER TABLE public.live_gift_transactions
+  ADD COLUMN IF NOT EXISTS battle_id uuid REFERENCES public.live_pk_battles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS live_gift_transactions_battle_created_idx
+  ON public.live_gift_transactions (battle_id, created_at DESC)
+  WHERE battle_id IS NOT NULL;
+
 ALTER TABLE public.live_gift_catalog ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_gift_wallets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.live_gift_ledger ENABLE ROW LEVEL SECURITY;
@@ -114,7 +120,7 @@ CREATE OR REPLACE FUNCTION public.create_live_pk_battle(
 ) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_stream public.live_streams%ROWTYPE;
   v_battle_id uuid;
@@ -141,13 +147,13 @@ BEGIN
   RETURNING id INTO v_battle_id;
   RETURN v_battle_id;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.start_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
 RETURNS public.live_pk_battles
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_battle public.live_pk_battles%ROWTYPE;
   v_stream_status text;
@@ -164,13 +170,13 @@ BEGIN
     WHERE id = p_battle_id RETURNING * INTO v_battle;
   RETURN v_battle;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.finish_live_pk_battle(p_battle_id uuid, p_creator_id uuid DEFAULT NULL)
 RETURNS public.live_pk_battles
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_battle public.live_pk_battles%ROWTYPE;
 BEGIN
@@ -192,7 +198,7 @@ BEGIN
     WHERE id = p_battle_id RETURNING * INTO v_battle;
   RETURN v_battle;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.start_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
@@ -278,7 +284,8 @@ BEGIN
     WHERE sender_id = p_sender_id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
     IF v_existing.stream_id <> p_stream_id OR v_existing.recipient_id <> p_recipient_id
-       OR v_existing.gift_id <> p_gift_id OR v_existing.quantity <> p_quantity THEN
+       OR v_existing.gift_id <> p_gift_id OR v_existing.quantity <> p_quantity
+       OR v_existing.battle_id IS DISTINCT FROM p_battle_id THEN
       RAISE EXCEPTION 'idempotency key reused with different gift details' USING ERRCODE = '23505';
     END IF;
     SELECT balance_sparks INTO v_balance FROM public.live_gift_wallets WHERE user_id = p_sender_id;
@@ -317,9 +324,9 @@ BEGIN
     WHERE user_id = p_sender_id RETURNING balance_sparks INTO v_balance;
 
   INSERT INTO public.live_gift_transactions
-    (sender_id, recipient_id, stream_id, gift_id, quantity, total_sparks, score_points, idempotency_key)
+    (sender_id, recipient_id, stream_id, gift_id, quantity, total_sparks, score_points, battle_id, idempotency_key)
   VALUES
-    (p_sender_id, p_recipient_id, p_stream_id, p_gift_id, p_quantity, v_total, v_points, p_idempotency_key)
+    (p_sender_id, p_recipient_id, p_stream_id, p_gift_id, p_quantity, v_total, v_points, p_battle_id, p_idempotency_key)
   RETURNING id INTO v_transaction_id;
 
   INSERT INTO public.live_gift_ledger
