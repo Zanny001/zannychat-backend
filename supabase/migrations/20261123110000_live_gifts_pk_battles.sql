@@ -119,11 +119,11 @@ CREATE OR REPLACE FUNCTION public.prevent_live_gift_audit_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
-AS $
+AS $$
 BEGIN
   RAISE EXCEPTION 'LIVE gift audit records are append-only' USING ERRCODE = '55000';
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS live_gift_ledger_append_only ON public.live_gift_ledger;
 CREATE TRIGGER live_gift_ledger_append_only
