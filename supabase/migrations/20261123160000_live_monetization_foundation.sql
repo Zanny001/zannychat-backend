@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.live_spark_purchases (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   provider text NOT NULL CHECK (provider IN ('paystack', 'google_play', 'apple_iap')),
   provider_reference text NOT NULL UNIQUE,
   provider_transaction_id text UNIQUE,
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS live_payout_beneficiaries_creator_idx
 
 CREATE TABLE IF NOT EXISTS public.live_creator_payouts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  creator_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  creator_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   beneficiary_id uuid REFERENCES public.live_payout_beneficiaries(id) ON DELETE SET NULL,
   amount_minor bigint NOT NULL CHECK (amount_minor > 0),
   currency text NOT NULL DEFAULT 'NGN' CHECK (currency = 'NGN'),
