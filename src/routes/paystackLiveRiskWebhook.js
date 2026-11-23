@@ -25,38 +25,70 @@ async function fetchPaystackData(url, secret, fetchImpl = fetch) {
 }
 
 async function verifyRefundResource(eventData, secret, fetchImpl = fetch) {
-  const refundReference = String(eventData?.reference || '');
-  if (!refundReference) throw new Error('Refund reference is missing');
-  const data = await fetchPaystackData(
-    'https://api.paystack.co/refund?reference=' + encodeURIComponent(refundReference),
+  const transactionReference = String(eventData?.transaction_reference || '');
+  const eventAmount = Number(eventData?.amount);
+  const eventCurrency = String(eventData?.currency || '').toUpperCase();
+  if (!transactionReference || !Number.isSafeInteger(eventAmount) || eventAmount <= 0 || !eventCurrency) {
+    throw new Error('Refund webhook transaction details are missing');
+  }
+
+  // Paystack refund webhooks identify the original transaction with
+  // transaction_reference; refund_reference may be null. Resolve the
+  // transaction first, then fetch its refunds from the documented API.
+  const transaction = await fetchPaystackData(
+    'https://api.paystack.co/transaction/verify/' + encodeURIComponent(transactionReference),
     secret,
     fetchImpl,
   );
-  const refunds = Array.isArray(data) ? data : (data ? [data] : []);
-  const refund = refunds.find((item) => String(item.reference || '').toLowerCase() === refundReference.toLowerCase());
-  if (!refund || !REFUND_EVENT_BY_STATUS[refund.status]) throw new Error('Verified refund record is missing or invalid');
+  if (!transaction?.id || String(transaction.reference || '') !== transactionReference
+      || String(transaction.currency || '').toUpperCase() !== eventCurrency
+      || (Number.isSafeInteger(Number(transaction.amount)) && eventAmount > Number(transaction.amount))) {
+    throw new Error('Verified refund transaction does not match the webhook');
+  }
 
-  let transaction = refund.transaction;
-  if (!transaction || typeof transaction !== 'object' || !transaction.reference) {
-    const transactionId = typeof transaction === 'object' ? transaction.id : transaction;
-    if (!transactionId) throw new Error('Refund is missing its original transaction');
-    transaction = await fetchPaystackData(
-      'https://api.paystack.co/transaction/' + encodeURIComponent(String(transactionId)),
+  const refundReference = eventData?.refund_reference == null ? '' : String(eventData.refund_reference);
+  let refunds;
+  if (/^\d+$/.test(refundReference)) {
+    const refund = await fetchPaystackData(
+      'https://api.paystack.co/refund/' + encodeURIComponent(refundReference),
       secret,
       fetchImpl,
     );
+    refunds = refund ? [refund] : [];
+  } else {
+    const data = await fetchPaystackData(
+      'https://api.paystack.co/refund?transaction=' + encodeURIComponent(String(transaction.id)) + '&perPage=100',
+      secret,
+      fetchImpl,
+    );
+    refunds = Array.isArray(data) ? data : (data ? [data] : []);
   }
-  if (!transaction?.reference) throw new Error('Verified refund transaction reference is missing');
 
-  const amount = Number(refund.amount);
-  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Verified refund amount is invalid');
+  const candidates = refunds.filter((refund) =>
+    String(refund.transaction) === String(transaction.id)
+    && Number(refund.amount) === eventAmount
+    && String(refund.currency || '').toUpperCase() === eventCurrency
+  );
+  let refund = null;
+  if (refundReference) {
+    refund = candidates.find((item) => String(item.id) === refundReference || String(item.reference || '') === refundReference) || null;
+  } else if (candidates.length === 1) {
+    refund = candidates[0];
+  } else if (candidates.length > 1 && eventData.status) {
+    const statusMatches = candidates.filter((item) => String(item.status).toLowerCase() === String(eventData.status).toLowerCase());
+    if (statusMatches.length === 1) refund = statusMatches[0];
+  }
+  if (!refund || !REFUND_EVENT_BY_STATUS[String(refund.status).toLowerCase()]) {
+    throw new Error('Verified refund record is missing or ambiguous');
+  }
+
   return {
-    eventType: REFUND_EVENT_BY_STATUS[refund.status],
-    resourceId: 'refund:' + String(refund.id || eventData.id || refundReference),
+    eventType: REFUND_EVENT_BY_STATUS[String(refund.status).toLowerCase()],
+    resourceId: 'refund:' + String(refund.id),
     providerReference: String(transaction.reference),
-    providerStatus: String(refund.status),
-    amountMinor: amount,
-    currency: String(refund.currency || transaction.currency || '').toUpperCase(),
+    providerStatus: String(refund.status).toLowerCase(),
+    amountMinor: Number(refund.amount),
+    currency: eventCurrency,
     resolution: null,
   };
 }
