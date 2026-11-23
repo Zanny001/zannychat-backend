@@ -22,7 +22,11 @@ Gift spending consumes promotional/support/legacy lots before purchased lots. Th
 5. The server verifies the raw-body webhook signature, then independently calls Paystack's transaction verification endpoint.
 6. The verified reference, order metadata, amount, currency and customer email must match the pending ZannyChat purchase.
 7. The exact provider fee is persisted in kobo. The database fulfilment function is idempotent and credits the purchased Sparks lot once only.
-8. A browser redirect or a client success callback is never proof of payment.
+8. After fulfilment, the server generates a deterministic PDF purchase receipt and stores it in the private `live-purchase-receipts` bucket.
+9. Receipt metadata is stored in `live_spark_purchase_receipts`; client roles have no direct table or bucket access.
+10. The purchase owner requests a 60-second signed download URL through the authenticated receipt endpoint. Receipt files contain transaction and product details, not bank details or unnecessary customer PII.
+11. Receipt generation is idempotent and is retried with the payment webhook if storage or metadata persistence fails.
+12. A browser redirect or a client success callback is never proof of payment.
 
 ### Store billing
 

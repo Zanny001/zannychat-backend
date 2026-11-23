@@ -1,6 +1,7 @@
 const express = require('express');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { validPaystackWebhookSignature } = require('../utils/paystackWebhookSignature.cjs');
+const { ensureLivePurchaseReceipt } = require('../services/livePurchaseReceiptService');
 
 const router = express.Router();
 
@@ -82,6 +83,7 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
       }
       throw error;
     }
+    if (!data?.rejected) await ensureLivePurchaseReceipt(eventReference, verified);
     return res.status(200).json({ received: true, fulfilled: !data?.rejected, rejected: Boolean(data?.rejected), replayed: Boolean(data?.replayed) });
   } catch (error) {
     console.error('[live-purchases] webhook fulfilment failed:', error?.message || error);
