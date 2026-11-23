@@ -16,6 +16,14 @@ test('LIVE Sparks are non-cash promotional credits with a server-only ledger', (
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.grant_live_sparks[\s\S]*TO service_role/);
 });
 
+test('wallet and PK writes stay behind server RPCs and audit rows are immutable', () => {
+  assert.match(migration, /GRANT SELECT ON public\\.live_gift_catalog, public\\.live_gift_wallets/);
+  assert.doesNotMatch(migration, /GRANT ALL ON public\\.live_gift_catalog/);
+  assert.match(migration, /CREATE TRIGGER live_gift_ledger_append_only/);
+  assert.match(migration, /CREATE TRIGGER live_gift_transactions_append_only/);
+  assert.match(migration, /LIVE gift audit records are append-only/);
+});
+
 test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks atomically', () => {
   for (const gift of ['heart', 'spark', 'crown', 'aurora', 'royal_star']) assert.ok(migration.includes("'" + gift + "'"));
   assert.match(migration, /SELECT balance_sparks INTO v_balance[\s\S]*FOR UPDATE/);
