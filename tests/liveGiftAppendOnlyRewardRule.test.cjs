@@ -9,11 +9,11 @@ const migration = fs.readFileSync(
 );
 
 test('creator reward rule is snapshotted in the original append-only gift transaction insert', () => {
-  assert.match(migration, /SELECT \* INTO v_rule FROM public\\.live_creator_reward_rules[\\s\\S]*FOR SHARE/);
-  assert.match(migration, /battle_id, reward_rule_id,[\\s\\S]*v_effective_battle_id, v_rule\\.id/);
-  assert.match(migration, /replace\\(v_definition, v_old_insert, v_new_insert\\)/);
-  assert.match(migration, /replace\\(v_updated_definition, v_old_rule, v_new_rule\\)/);
-  assert.match(migration, /IF v_rule\\.id IS NOT NULL AND v_eligible_gross > 0/);
+  assert.match(migration, /SELECT \* INTO v_rule FROM public\.live_creator_reward_rules[\s\S]*FOR SHARE/);
+  assert.match(migration, /battle_id, reward_rule_id,[\s\S]*v_effective_battle_id, v_rule\.id/);
+  assert.match(migration, /replace\(v_definition, v_old_insert, v_new_insert\)/);
+  assert.match(migration, /replace\(v_updated_definition, v_old_rule, v_new_rule\)/);
+  assert.match(migration, /IF v_rule\.id IS NOT NULL AND v_eligible_gross > 0/);
 });
 
 test('the migration preserves append-only audit enforcement and refuses unexpected source rewrites', () => {
