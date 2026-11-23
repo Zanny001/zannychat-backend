@@ -162,3 +162,35 @@ The five seeded gift definitions are active. The zero counts mean the production
 - Keep automatic microphone transcription clearly out of scope until a speech-to-text provider, consent/retention policy, language coverage, latency and per-minute cost model are selected.
 
 No production payment, payout, price, revenue-share or identity-verification switch is enabled by this audit.
+
+
+## Native Google Play Sparks purchase lifecycle (2026-11-23 follow-up)
+
+The Android wallet now has a native Google Play Billing adapter. It does not use Paystack checkout on Android.
+
+1. The wallet requests `GET /live/purchases/packages?provider=google_play`. The backend returns only active NGN packages from `live_spark_packages`, and reports purchases as available only when the protected Google Play provider configuration is enabled.
+2. The wallet requests `GET /live/purchases/native/account-binding`. The authenticated backend returns SHA-256 of the current Supabase user ID as the Google Play obfuscated account identifier. The app sends this identifier in the Google Play Billing request.
+3. After a completed store purchase, the app sends the product ID and purchase token to `POST /live/purchases/native/verify`.
+4. The backend verifies the purchase token with Google Play Developer API, requires the correct product, completed state, Nigeria Play region and account binding, then verifies the order, exact product line item, buyer-paid amount and developer proceeds. Sparks quantity and configured package price are never accepted from the client.
+5. The backend records the verified order ID, gross amount and provider fee, then calls the service-role-only `fulfill_live_spark_purchase` RPC. The RPC atomically credits the wallet, creates the purchased Sparks lot and writes the ledger.
+6. The backend generates the existing private PDF receipt. Only after the API reports successful credit does the Android client finish/consume the Google Play consumable. Unfinished purchases are recovered and reverified on wallet entry; the server fulfilment is idempotent.
+7. Google Play RTDN is delivered through authenticated Pub/Sub push to `/webhooks/google-play`. The backend verifies Google's OIDC JWT (issuer, rotating signing key, audience, email and expiry), then cross-checks a voided notification against the Google Voided Purchases API before revoking unspent Sparks.
+8. Full voids revoke remaining purchased Sparks and hold related unpaid creator earnings. Partial refunds and cases where creator earnings were already paid are left for operator review; the system does not silently invent a negative wallet or reverse a completed payout.
+
+### Required Google/Render configuration (not enabled)
+
+- `LIVE_GOOGLE_PLAY_BILLING_ENABLED=true`
+- Protected `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, with Android Publisher access and the financial-report permission required by the Voided Purchases API
+- `GOOGLE_PLAY_PACKAGE_NAME=com.zannychat.app`
+- `GOOGLE_PLAY_PUBSUB_AUDIENCE` equal to the exact configured push audience
+- `GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL` equal to the Pub/Sub push authentication service account
+- Play Console one-time product IDs and regional NGN prices matching explicitly activated `google_play` rows in `live_spark_packages`
+- Pub/Sub topic/subscription configured for one-time product and voided-purchase RTDNs
+
+No package is active and no billing flag or provider secret is enabled by this implementation. The frontend requires a new native Android build. iOS StoreKit verification remains a separate disabled release gate.
+
+Official implementation references:
+- Google Play one-time purchase lifecycle: https://developer.android.com/google/play/billing/lifecycle/one-time
+- Google Play RTDN reference: https://developer.android.com/google/play/billing/rtdn-reference
+- Google Play Voided Purchases API: https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.voidedpurchases
+- Google Pub/Sub authenticated push: https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
