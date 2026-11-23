@@ -158,3 +158,16 @@ test('LIVE economy service_role is read-only; all mutations remain RPC-owned', (
   assert.match(privilegeHardeningMigration, /GRANT SELECT ON TABLE[\s\S]*TO service_role/);
   assert.doesNotMatch(privilegeHardeningMigration, /GRANT (?:INSERT|UPDATE|DELETE|ALL)/i);
 });
+
+
+const liveEconomyIndexesMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261123150000_live_economy_foreign_key_indexes.sql'),
+  'utf8',
+);
+
+test('LIVE economy foreign keys have supporting indexes for production joins and deletes', () => {
+  assert.match(liveEconomyIndexesMigration, /live_gift_transactions_gift_id_idx[\\s\\S]*ON public\\.live_gift_transactions \\(gift_id\\)/);
+  assert.match(liveEconomyIndexesMigration, /live_pk_battles_created_by_idx[\\s\\S]*ON public\\.live_pk_battles \\(created_by\\)/);
+  assert.match(liveEconomyIndexesMigration, /live_pk_battles_creator_b_idx[\\s\\S]*ON public\\.live_pk_battles \\(creator_b_id\\)/);
+  assert.match(liveEconomyIndexesMigration, /live_pk_battles_winner_id_idx[\\s\\S]*ON public\\.live_pk_battles \\(winner_id\\)/);
+});
