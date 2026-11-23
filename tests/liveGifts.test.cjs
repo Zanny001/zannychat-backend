@@ -89,6 +89,8 @@ test('PK expiry is performed by a privileged RPC, not direct service-role table 
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.expire_live_pk_battle_challenges/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.expire_live_pk_battle_challenges\(uuid\) TO service_role/);
   assert.match(battles, /rpc\('expire_live_pk_battle_challenges'/);
+  assert.ok(battles.indexOf(".eq('user_id', req.user.id)") < battles.indexOf("rpc('expire_live_pk_battle_challenges'"));
+  assert.match(battles, /if \(!participant\) return res\.status\(403\)/);
   assert.doesNotMatch(battles, /\.from\('live_pk_battles'\)\.update/);
 });
 
