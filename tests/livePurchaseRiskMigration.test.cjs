@@ -13,6 +13,7 @@ test('LIVE purchase risk migration freezes Sparks and creator earnings on unreso
   assert.match(migration, /risk_held_sparks/);
   assert.match(migration, /balance_sparks = balance_sparks - v_remaining/);
   assert.match(migration, /status = 'held'/);
+  assert.match(migration, /NOT EXISTS \([\s\S]*p2\.status IN \('disputed', 'refunded'\)/);
   assert.match(migration, /refund\.processed/);
   assert.match(migration, /charge\.dispute\.resolve/);
   assert.match(migration, /manualReviewRequired/);
