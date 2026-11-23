@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS public.live_creator_reward_rules (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   currency text NOT NULL DEFAULT 'NGN' CHECK (currency = 'NGN'),
   creator_share_bps integer NOT NULL CHECK (creator_share_bps BETWEEN 1 AND 10000),
-  clearance_hours integer NOT NULL DEFAULT 168 CHECK (clearance_hours BETWEEN 0 AND 720),
-  minimum_withdrawal_minor bigint NOT NULL CHECK (minimum_withdrawal_minor > 0),
+  clearance_hours integer NOT NULL CHECK (clearance_hours BETWEEN 0 AND 720),
+  minimum_withdrawal_minor bigint NOT NULL CHECK (minimum_withdrawal_minor > 0 AND minimum_withdrawal_minor <= 9007199254740991),
   is_active boolean NOT NULL DEFAULT false,
   created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
