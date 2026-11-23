@@ -24,7 +24,7 @@ router.post('/', async (req, res) => {
 
   try {
     const verifier = createAppleStoreVerifier({
-      allowSandbox: process.env.APPLE_IAP_ALLOW_SANDBOX === 'true',
+      allowSandbox: true, // Verify sandbox notifications so they can be acknowledged without crediting production Sparks.
     });
     const verifiedResult = await verifier.verifyNotification(signedPayload);
     const notification = verifiedResult.notification;
