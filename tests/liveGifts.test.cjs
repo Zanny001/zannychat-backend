@@ -1,0 +1,49 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123110000_live_gifts_pk_battles.sql'), 'utf8');
+const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
+const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+
+test('LIVE Sparks are non-cash promotional credits with a server-only ledger', () => {
+  assert.match(migration, /balance_sparks bigint NOT NULL DEFAULT 0 CHECK \(balance_sparks >= 0\)/);
+  assert.match(migration, /entry_type IN \('grant', 'spend', 'refund', 'adjustment'\)/);
+  assert.match(migration, /UNIQUE \(user_id, idempotency_key\)/);
+  assert.match(migration, /not money, not purchasable, and not redeemable for cash/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.grant_live_sparks[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.grant_live_sparks[\s\S]*TO service_role/);
+});
+
+test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks atomically', () => {
+  for (const gift of ['heart', 'spark', 'crown', 'aurora', 'royal_star']) assert.ok(migration.includes("'" + gift + "'"));
+  assert.match(migration, /SELECT balance_sparks INTO v_balance[\s\S]*FOR UPDATE/);
+  assert.match(migration, /insufficient LIVE Sparks/);
+  assert.match(migration, /INSERT INTO public\.live_gift_transactions/);
+  assert.match(migration, /INSERT INTO public\.live_gift_ledger/);
+  assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);
+  assert.match(migration, /p_quantity NOT BETWEEN 1 AND 20/);
+});
+
+test('LIVE PK score is server-owned, time-bounded, and sourced from committed gift points only', () => {
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.live_pk_battles/);
+  assert.match(migration, /score_a bigint NOT NULL DEFAULT 0/);
+  assert.match(migration, /score_b bigint NOT NULL DEFAULT 0/);
+  assert.match(migration, /now\(\) >= started_at AND now\(\) < ends_at/);
+  assert.match(migration, /score_a = score_a \+ v_points/);
+  assert.match(migration, /score_b = score_b \+ v_points/);
+  assert.match(migration, /score increases only from committed gift transactions/i);
+});
+
+test('LIVE gift API derives sender from authentication and exposes no client balance mutation', () => {
+  assert.match(route, /router\.use\(requireAuth/);
+  assert.match(route, /p_sender_id: req\.user\.id/);
+  assert.match(route, /router\.get\('\/wallet'/);
+  assert.match(route, /router\.get\('\/catalog'/);
+  assert.match(route, /router\.post\('\/send'/);
+  assert.doesNotMatch(route, /grant_live_sparks/);
+  assert.match(route, /p_idempotency_key: idempotencyKey/);
+  assert.match(route, /p_battle_id: battleId/);
+  assert.match(index, /app\.use\('\/live\/gifts', liveGiftsRouter\)/);
+});
