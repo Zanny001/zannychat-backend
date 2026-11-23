@@ -38,6 +38,15 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
   assert.match(migration, /p_quantity NOT BETWEEN 1 AND 20/);
 });
 
+test('PK gift attribution is derived from the active battle on the server, not from client input', () => {
+  assert.match(migration, /Battle attribution is derived from locked server state/);
+  assert.match(migration, /p_recipient_id IN \\(creator_a_id, creator_b_id\\)/);
+  assert.match(migration, /v_effective_battle_id := v_battle\\.id/);
+  assert.match(migration, /score_a = score_a \\+ v_points/);
+  assert.match(migration, /score_b = score_b \\+ v_points/);
+  assert.doesNotMatch(route, /p_battle_id/);
+});
+
 test('LIVE PK score is server-owned, time-bounded, and sourced from committed gift points only', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.live_pk_battles/);
   assert.match(migration, /score_a bigint NOT NULL DEFAULT 0/);
@@ -56,7 +65,7 @@ test('LIVE gift API derives sender from authentication and exposes no client bal
   assert.match(route, /router\.post\('\/send'/);
   assert.doesNotMatch(route, /grant_live_sparks/);
   assert.match(route, /p_idempotency_key: idempotencyKey/);
-  assert.match(route, /p_battle_id: battleId/);
+  assert.doesNotMatch(route, /p_battle_id/);
   assert.match(index, /app\.use\('\/live\/gifts', liveGiftsRouter\)/);
 });
 
