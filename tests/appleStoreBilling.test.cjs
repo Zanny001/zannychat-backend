@@ -6,12 +6,12 @@ const assert = require('node:assert/strict');
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/livePurchases.js'), 'utf8');
 const verifier = fs.readFileSync(path.join(__dirname, '../src/services/appleStoreBilling.js'), 'utf8');
 const migration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123240000_apple_store_sparks_verification.sql'),
+  path.join(__dirname, '../supabase/migrations/20261124000000_apple_store_sparks_verification.sql'),
   'utf8',
 );
 const notifications = fs.readFileSync(path.join(__dirname, '../src/routes/appleStoreNotifications.js'), 'utf8');
 const refundMigration = fs.readFileSync(
-  path.join(__dirname, '../supabase/migrations/20261123241000_apple_store_notifications_refunds.sql'),
+  path.join(__dirname, '../supabase/migrations/20261124001000_apple_store_notifications_refunds.sql'),
   'utf8',
 );
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
