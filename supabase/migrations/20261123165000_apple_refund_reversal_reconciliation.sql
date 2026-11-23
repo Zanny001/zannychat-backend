@@ -240,32 +240,45 @@ BEGIN
     RETURN jsonb_build_object('replayed', true, 'purchaseId', v_purchase.id, 'status', v_purchase.status);
   END IF;
 
-  IF v_purchase.status = 'disputed' AND v_purchase.risk_held_sparks > 0 THEN
-    v_restore := v_purchase.risk_held_sparks;
-    IF v_purchase.user_id IS NULL THEN
+  IF v_purchase.status = 'disputed' THEN
+    v_restore := COALESCE(v_purchase.risk_held_sparks, 0);
+    IF v_restore > 0 AND v_purchase.user_id IS NULL THEN
       UPDATE public.live_purchase_risk_events SET status = 'unmatched', updated_at = now() WHERE id = v_event_id;
       RETURN jsonb_build_object('restored', false, 'manualReviewRequired', true,
         'reason', 'account_unavailable', 'purchaseId', v_purchase.id);
     END IF;
-    UPDATE public.live_gift_wallets
-      SET balance_sparks = balance_sparks + v_restore, updated_at = now()
-      WHERE user_id = v_purchase.user_id RETURNING balance_sparks INTO v_balance;
+    IF v_restore > 0 THEN
+      UPDATE public.live_gift_wallets
+        SET balance_sparks = balance_sparks + v_restore, updated_at = now()
+        WHERE user_id = v_purchase.user_id RETURNING balance_sparks INTO v_balance;
+    END IF;
     UPDATE public.live_spark_purchases
       SET status = 'paid', risk_held_sparks = 0, updated_at = now()
       WHERE id = v_purchase.id;
-  ELSIF v_purchase.status = 'refunded' AND v_purchase.refunded_unspent_sparks > 0 THEN
-    v_restore := v_purchase.refunded_unspent_sparks;
-    IF v_purchase.user_id IS NULL THEN
+  ELSIF v_purchase.status = 'refunded' THEN
+    v_restore := COALESCE(v_purchase.refunded_unspent_sparks, 0);
+    IF v_restore > 0 AND v_purchase.user_id IS NULL THEN
       UPDATE public.live_purchase_risk_events SET status = 'unmatched', updated_at = now() WHERE id = v_event_id;
       RETURN jsonb_build_object('restored', false, 'manualReviewRequired', true,
         'reason', 'account_unavailable', 'purchaseId', v_purchase.id);
     END IF;
-    UPDATE public.live_gift_wallets
-      SET balance_sparks = balance_sparks + v_restore, updated_at = now()
-      WHERE user_id = v_purchase.user_id RETURNING balance_sparks INTO v_balance;
-    UPDATE public.live_spark_lots
-      SET remaining_sparks = v_restore
-      WHERE purchase_id = v_purchase.id;
+    IF v_restore > 0 THEN
+      UPDATE public.live_gift_wallets
+        SET balance_sparks = balance_sparks + v_restore, updated_at = now()
+        WHERE user_id = v_purchase.user_id RETURNING balance_sparks INTO v_balance;
+      UPDATE public.live_spark_lots
+        SET remaining_sparks = v_restore
+        WHERE purchase_id = v_purchase.id;
+    END IF;
+    IF v_purchase.verified_at IS NULL THEN
+      UPDATE public.live_spark_purchases
+        SET status = 'pending', refunded_unspent_sparks = 0, refunded_at = NULL, updated_at = now()
+        WHERE id = v_purchase.id;
+      UPDATE public.live_purchase_risk_events SET status = 'resolved', updated_at = now()
+        WHERE id = v_event_id;
+      RETURN jsonb_build_object('restored', false, 'awaitingPurchaseVerification', true,
+        'purchaseId', v_purchase.id, 'status', 'pending');
+    END IF;
     UPDATE public.live_spark_purchases
       SET status = 'paid', refunded_unspent_sparks = 0, refunded_at = NULL, updated_at = now()
       WHERE id = v_purchase.id;
