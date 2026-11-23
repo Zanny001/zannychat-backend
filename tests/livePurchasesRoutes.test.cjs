@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const purchases = fs.readFileSync(path.join(__dirname, '../src/routes/livePurchases.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(__dirname, '../src/routes/paystackLiveWebhook.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+const gifts = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
 const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123160000_live_monetization_foundation.sql'),
   'utf8',
@@ -43,4 +44,12 @@ test('no payment package is enabled by default and payment fulfilment remains se
   assert.match(migration, /is_active boolean NOT NULL DEFAULT false/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*TO service_role/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*FROM PUBLIC, anon, authenticated/);
+});
+
+test('wallet API reports purchased, promotional and legacy Sparks from server-side lots', () => {
+  assert.match(gifts, /\.from\('live_spark_lots'\)/);
+  assert.match(gifts, /purchasedSparks/);
+  assert.match(gifts, /promotionalSparks/);
+  assert.match(gifts, /legacySparks/);
+  assert.match(gifts, /redeemable: false/);
 });
