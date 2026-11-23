@@ -26,6 +26,9 @@ test('native Play verification fulfils through the existing atomic ledger RPC be
   assert.ok(fulfil > 0);
   assert.ok(consume > fulfil);
   assert.match(route, /provider_transaction_id/);
+  assert.match(route, /provider_fee_minor: verified\.providerFeeMinor/);
+  assert.match(route, /amount_minor: verified\.amountMinor/);
+  assert.match(route, /p_amount_minor: verified\.amountMinor/);
   assert.match(route, /gplay:' \+ sha256Hex\(purchaseToken\)/);
   assert.match(route, /STORE_TRANSACTION_FINALIZATION_PENDING/);
   assert.match(route, /consumptionState === 1 && \(!existing \|\| existing\.status !== 'paid'\)/);
@@ -37,6 +40,9 @@ test('Google verifier requires a completed purchase, account binding and Nigeria
   assert.match(verifier, /purchase\?\.regionCode !== 'NG'/);
   assert.match(verifier, /purchases\/products/);
   assert.match(verifier, /:consume/);
+  assert.match(verifier, /\/orders\//);
+  assert.match(verifier, /developerRevenueInBuyerCurrency/);
+  assert.match(verifier, /buyerCountry !== 'NG'/);
   assert.match(verifier, /GOOGLE_PLAY_SCOPE/);
 });
 
