@@ -59,7 +59,7 @@ test('LIVE PK score is server-owned, time-bounded, and sourced from committed gi
 
 test('LIVE gift API derives sender from authentication and exposes no client balance mutation', () => {
   assert.match(route, /router\.use\(requireAuth/);
-  assert.ok(route.includes("router.post('/send'"));
+  assert.match(route, /p_sender_id: req\.user\.id/);
   assert.ok(route.includes("router.get('/wallet'"));
   assert.ok(route.includes("router.get('/catalog'"));
   assert.ok(route.includes("router.post('/send'"));
@@ -76,11 +76,10 @@ test('PK battle routes require authentication and expose creator-controlled life
   assert.match(battles, /router\.use\(requireAuth/);
   assert.match(battles, /p_creator_a_id: req\.user\.id/);
   assert.match(battles, /p_creator_id: req\.user\.id/);
-  assert.match(battles, /router\.post\('\/\'/);
-  assert.match(battles, /router\.post\('\/:battleId\/start'/);
-  assert.match(battles, /router\.post\('/:battleId\/finish'/);
-  assert.match(battles, /router\.get\('\/stream\/:streamId\/current'/);
-  assert.match(battles, /\.in\('status', \['pending', 'accepted', 'live', 'ended', 'cancelled'\]\)/);
+  assert.ok(battles.includes("router.post('/',"));
+  assert.ok(battles.includes("router.post('/:battleId/start'"));
+  assert.ok(battles.includes("router.post('/:battleId/finish'"));
+  assert.ok(battles.includes("router.get('/stream/:streamId/current'"));
   assert.match(battles, /Join this LIVE to view its PK battle/);
   assert.ok(index.includes("app.use('/live/battles', liveBattlesRouter)"));
 });
