@@ -90,7 +90,7 @@ async function verifyDisputeResource(eventData, secret, fetchImpl = fetch) {
   };
 }
 
-router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res) => {
+router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res, next) => {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return res.status(503).json({ error: 'Payment risk webhook is not configured' });
   if (!validPaystackWebhookSignature({ rawBody: req.body, headers: req.headers, apiSecret: secret })) {
@@ -104,7 +104,7 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
   const incomingType = String(event?.event || '');
   const isRefund = incomingType.startsWith('refund.');
   const isDispute = incomingType.startsWith('charge.dispute.');
-  if (!isRefund && !isDispute) return res.status(200).json({ received: true, ignored: true });
+  if (!isRefund && !isDispute) return next();
 
   try {
     const verified = isRefund

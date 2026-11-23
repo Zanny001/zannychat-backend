@@ -18,7 +18,7 @@ Gift spending consumes promotional/support/legacy lots before purchased lots. Th
 1. The authenticated client fetches the active package catalogue from `GET /live/purchases/packages`.
 2. The server owns the package ID, Sparks quantity, NGN price and currency. The client cannot submit a price or Sparks amount.
 3. On web, checkout is initialized through `POST /live/purchases/initialize`. The server creates a pending order and a unique Paystack reference.
-4. Paystack sends `charge.success` to `POST /webhooks/paystack/live`.
+4. Paystack sends `charge.success` to the single integration endpoint `POST /webhooks/paystack`; the backend dispatches it to the purchase handler.
 5. The server verifies the raw-body webhook signature, then independently calls Paystack's transaction verification endpoint.
 6. The verified reference, order metadata, amount, currency and customer email must match the pending ZannyChat purchase.
 7. The exact provider fee is persisted in kobo. The database fulfilment function is idempotent and credits the purchased Sparks lot once only.
@@ -85,16 +85,41 @@ Paystack's published Nigerian transfer fees and statutory levies can change. Nev
 
 ## 6. Required provider webhooks
 
-Configure these backend URLs in the Paystack dashboard:
+Paystack's standard integration settings use one webhook URL. Its multi-endpoint API is currently a pilot, so the unified dispatcher is the compatible default. Configure this single endpoint in the Paystack dashboard:
 
-- LIVE purchase success: `POST /webhooks/paystack/live`
-- Creator payout transfer status: `POST /webhooks/paystack/live-payouts`
+- **Unified Paystack webhook:** `POST /webhooks/paystack`
 
-The current purchase webhook verifies successful charges and credits orders. The payout webhook verifies transfer success, failure and reversal events.
+The dispatcher routes signed events to the correct server handler:
 
-**Not yet production-ready:** signed refund lifecycle events (`refund.pending`, `refund.processing`, `refund.processed`, `refund.failed`) and chargeback/dispute events (`charge.dispute.create`, `charge.dispute.remind`, `charge.dispute.resolve`) are not yet reconciled into Spark revocations, creator earning holds/reversals and dispute resolution. Until those handlers and tests exist, keep `LIVE_PURCHASES_RISK_WEBHOOKS_READY` unset. Do not activate paid packages.
+- `charge.success` — verifies the transaction and fulfils the matching Sparks purchase.
+- `refund.pending`, `refund.processing`, `refund.needs-attention`, `refund.failed`, `refund.processed` — independently verifies the refund resource and updates the purchase risk ledger.
+- `charge.dispute.create`, `charge.dispute.remind`, `charge.dispute.resolve` — independently verifies the dispute resource and freezes/restores the related purchase and creator earnings according to the verified resolution.
+- `transfer.success`, `transfer.failed`, `transfer.reversed` — verifies the transfer and reconciles the creator payout record.
 
-Webhook handlers must validate signatures over the raw request body, deduplicate repeated events, verify provider state where appropriate, acknowledge only after durable acceptance, and retain an auditable reconciliation record.
+The older specific paths remain for compatibility, but the Paystack dashboard should use the unified endpoint so purchase, risk and payout events all reach the same integration.
+
+### Webhook signature configuration
+
+- `PAYSTACK_SECRET_KEY` is the Paystack API key used for server-to-server verification.
+- `PAYSTACK_WEBHOOK_SECRET` is the separate current webhook signing secret for the timestamped `Paystack-Signature` header.
+- `PAYSTACK_WEBHOOK_SECRET_PREVIOUS` may be set temporarily during signing-secret rotation.
+- The backend continues to accept legacy `x-paystack-signature` HMAC-SHA512 events during Paystack's migration window. If a timestamped header is present but invalid, it never downgrades to the legacy signature.
+- Timestamped signatures have a strict five-minute replay window.
+
+Never paste webhook signing secrets into chat, source control, client bundles or logs. Configure them only in the Render service's encrypted environment settings.
+
+### Refund and dispute safeguards
+
+- A verified unresolved refund/dispute freezes the unspent purchased Sparks from that purchase and places linked, unpaid creator earnings on a Paystack-risk hold.
+- A verified failed refund or dispute resolved in the merchant's favour restores the held Sparks and eligible earnings only when no other risk event remains open.
+- A verified full refund revokes the remaining Sparks from that purchase and holds linked creator earnings.
+- Partial refunds remain frozen for manual reconciliation. ZannyChat does not invent proportional Spark reversals or creator clawbacks.
+- Already initiated or completed creator transfers are not automatically cancelled or clawed back by this handler. They require a documented finance reconciliation process.
+- The risk event ledger is idempotent and service-role-only; it does not expose payment or dispute records to client roles.
+
+**Still not production-ready:** the manual partial-refund and dispute-evidence operations, payout-in-flight reconciliation, creator KYC workflow and real provider end-to-end tests are not complete. Keep `LIVE_PURCHASES_RISK_WEBHOOKS_READY` unset and do not activate paid packages until these operational controls are tested.
+
+Webhook handlers validate raw request bytes, deduplicate provider events, independently verify provider state and retain an auditable reconciliation record. Paystack dispute deadlines must be tracked from the verified dispute's provider-supplied due date; do not assume a fixed response window.
 
 ## 7. Feature activation gates
 
@@ -104,9 +129,9 @@ All must be true:
 
 - `PAYSTACK_SECRET_KEY` configured securely on the backend.
 - `LIVE_PURCHASES_ENABLED=true`.
-- `LIVE_PURCHASES_RISK_WEBHOOKS_READY=true` only after refund/dispute lifecycle handling is implemented and verified.
+- `LIVE_PURCHASES_RISK_WEBHOOKS_READY=true` only after the unified webhook is configured and tested, partial-refund/dispute operations are staffed, payout-in-flight reconciliation is tested, and the manual dispute evidence workflow is ready.
 - At least one server-managed Paystack NGN package deliberately activated.
-- Paystack dashboard webhook endpoint configured and tested.
+- Paystack unified dashboard webhook endpoint configured and tested, including the separate timestamped signing secret.
 - Pricing, customer terms, refund policy, support and reconciliation ready.
 
 ### Creator payouts
@@ -136,12 +161,12 @@ The database foundation and API routes are deployed. The following were checked 
 The following are still not complete and must not be represented as live:
 
 - Android Google Play Billing and iOS StoreKit purchase verification.
-- Refund and dispute/chargeback webhook reconciliation and earnings reversals.
-- A complete creator KYC verification provider/workflow.
+- Automated full-refund/dispute risk holds and verified provider reconciliation are implemented; partial refunds, already-reserved payouts and post-payout clawback still require an operator workflow.
+- A complete creator KYC verification provider/workflow and secure operator approval/appeal process.
 - Commercial creator share, clearance and minimum-withdrawal terms.
 - Transfer fee/stamp-duty policy and accounting.
-- Real two-account gift, PK, purchase, refund and payout end-to-end tests.
-- Paystack production onboarding, funded balance and verified webhook delivery.
+- Real two-account gift, PK, purchase, full/partial refund, dispute resolution and payout end-to-end tests.
+- Paystack production onboarding, funded balance, webhook signing-secret configuration and verified unified webhook delivery.
 
 No production payment, Spark grant, gift send, creator earning or bank transfer should be initiated as a test. Use Paystack test mode and isolated test accounts before any live activation.
 

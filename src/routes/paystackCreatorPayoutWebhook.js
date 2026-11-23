@@ -16,7 +16,7 @@ async function verifyTransfer(reference) {
   return payload.data;
 }
 
-router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res) => {
+router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res, next) => {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return res.status(503).json({ error: 'Payout webhook is not configured' });
   if (!validPaystackWebhookSignature({ rawBody: req.body, headers: req.headers, apiSecret: secret })) {
@@ -28,9 +28,7 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
     return res.status(400).json({ error: 'Invalid payout webhook payload' });
   }
   if (!['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event?.event)
-      || !event?.data?.reference) {
-    return res.status(200).json({ received: true, ignored: true });
-  }
+      || !event?.data?.reference) return next();
 
   try {
     const reference = String(event.data.reference);
