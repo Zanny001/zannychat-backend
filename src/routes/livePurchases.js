@@ -240,7 +240,7 @@ router.post('/native/verify', async (req, res) => {
     }
 
     const { data: existing, error: existingError } = await supabaseAdmin.from('live_spark_purchases')
-      .select('id,user_id,package_id,provider_reference,status')
+      .select('id,user_id,package_id,provider_reference,status,amount_minor,provider_fee_minor,currency')
       .eq('provider', 'google_play').eq('provider_transaction_id', transactionKey).maybeSingle();
     if (existingError) throw existingError;
     if (existing && (existing.user_id !== req.user.id || existing.package_id !== pack.package_id)) {
@@ -251,6 +251,12 @@ router.post('/native/verify', async (req, res) => {
     }
 
     let purchase = existing;
+    if (purchase?.status === 'paid'
+        && (Number(purchase.amount_minor) !== verified.amountMinor
+          || Number(purchase.provider_fee_minor) !== verified.providerFeeMinor
+          || purchase.currency !== verified.currency)) {
+      return res.status(409).json({ error: 'The verified Google Play order differs from the previously fulfilled purchase' });
+    }
     if (!purchase) {
       const reference = 'ZC_GPLAY_' + crypto.randomUUID().replace(/-/g, '');
       const { data, error } = await supabaseAdmin.from('live_spark_purchases')
@@ -260,21 +266,37 @@ router.post('/native/verify', async (req, res) => {
           provider_reference: reference,
           package_id: pack.package_id,
           sparks: pack.sparks,
-          amount_minor: pack.amount_minor,
-          currency: pack.currency,
+          amount_minor: verified.amountMinor,
+          provider_fee_minor: verified.providerFeeMinor,
+          currency: verified.currency,
           status: 'pending',
         })
-        .select('id,user_id,package_id,provider_reference,status')
+        .select('id,user_id,package_id,provider_reference,status,amount_minor,provider_fee_minor,currency')
         .single();
       if (error) throw error;
       purchase = data;
+    } else if (purchase.status === 'pending') {
+      const { data, error } = await supabaseAdmin.from('live_spark_purchases')
+        .update({
+          amount_minor: verified.amountMinor,
+          provider_fee_minor: verified.providerFeeMinor,
+          currency: verified.currency,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id).eq('status', 'pending')
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Could not persist verified Google Play order amounts before fulfilment');
+    } else if (purchase.status !== 'paid') {
+      return res.status(409).json({ error: 'This Google Play purchase order is not eligible for fulfilment' });
     }
 
     const { data: fulfilment, error: fulfilmentError } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
       p_provider_reference: purchase.provider_reference,
       p_provider_transaction_id: transactionKey,
-      p_amount_minor: Number(pack.amount_minor),
-      p_currency: pack.currency,
+      p_amount_minor: verified.amountMinor,
+      p_currency: verified.currency,
     });
     if (fulfilmentError) throw fulfilmentError;
     if (fulfilment?.rejected) {
