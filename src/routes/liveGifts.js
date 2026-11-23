@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const { makeLimiter } = require('../middleware/rateLimit');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { sendRoomData } = require('../services/livekitRoomAdmin');
 
 const router = express.Router();
 router.use(requireAuth, makeLimiter({ windowMs: 60 * 1000, max: 60, error: 'LIVE gift actions are rate-limited.' }));
@@ -164,6 +165,20 @@ router.post('/send', makeLimiter({ windowMs: 60 * 1000, max: 12, error: 'Please 
       if (error.code === 'P0001') return res.status(409).json({ error: error.message || 'LIVE gift cannot be sent' });
       if (error.code === '23505') return res.status(409).json({ error: 'This gift request conflicts with an earlier request' });
       throw error;
+    }
+    // The gift, wallet debit and PK score are already committed atomically.
+    // Publish only an opaque invalidation so clients refresh through the
+    // authenticated, viewer-filtered API rather than trusting room payloads.
+    if (!data?.replayed) {
+      const { data: stream, error: streamError } = await supabaseAdmin.from('live_streams')
+        .select('room_name').eq('id', streamId).maybeSingle();
+      if (streamError) {
+        console.error('[live-gifts] room notification lookup failed:', streamError?.message || streamError);
+      } else if (stream?.room_name) {
+        void sendRoomData(stream.room_name, { v: 1, type: 'feed_changed' }).catch((notifyError) => {
+          console.error('[live-gifts] room gift notification failed:', notifyError?.message || notifyError);
+        });
+      }
     }
     return res.status(data?.replayed ? 200 : 201).json(data);
   } catch (error) {
