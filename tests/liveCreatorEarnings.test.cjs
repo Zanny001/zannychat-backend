@@ -27,3 +27,8 @@ test('earnings summary separates pending, available, held, paid-out and processi
   assert.match(migration, /'processingPayoutMinor', v_processing/);
   assert.match(migration, /'earningEnabled', COALESCE\(v_enabled, false\)/);
 });
+
+test('creator earnings automatically clear after the configured availability timestamp', () => {
+  assert.match(migration, /SET status = 'available'/);
+  assert.match(migration, /status = 'pending' AND available_at IS NOT NULL AND available_at <= now\(\)/);
+});
