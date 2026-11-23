@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.live_spark_purchases (
   provider_transaction_id text,
   package_id text NOT NULL,
   sparks bigint NOT NULL CHECK (sparks > 0 AND sparks <= 10000000),
-  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0 AND amount_minor <= 9007199254740991),
   currency text NOT NULL CHECK (currency IN ('NGN', 'USD', 'GBP', 'EUR')),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'paid', 'failed', 'refunded', 'disputed')),
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS live_spark_packages_active_idx
 
 CREATE TABLE IF NOT EXISTS public.live_spark_lots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   purchase_id uuid REFERENCES public.live_spark_purchases(id) ON DELETE RESTRICT,
   source text NOT NULL CHECK (source IN ('purchase', 'promotion', 'support_adjustment')),
   granted_sparks bigint NOT NULL CHECK (granted_sparks > 0),
