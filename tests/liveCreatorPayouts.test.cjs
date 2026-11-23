@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveCreatorPayouts.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(__dirname, '../src/routes/paystackCreatorPayoutWebhook.js'), 'utf8');
+const signatureVerifier = fs.readFileSync(path.join(__dirname, '../src/utils/paystackWebhookSignature.cjs'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123190000_live_creator_payout_reservations.sql'),
@@ -45,8 +46,9 @@ test('payout requests reserve only available earnings under a per-creator databa
 
 test('transfer webhooks authenticate raw bytes and independently verify provider transfer state', () => {
   assert.match(webhook, /express\.raw\(\{ type: 'application\/json'/);
-  assert.match(webhook, /createHmac\('sha512'/);
-  assert.match(webhook, /timingSafeEqual/);
+  assert.match(webhook, /validPaystackWebhookSignature/);
+  assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET/);
+  assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET_PREVIOUS/);
   assert.match(webhook, /\/transfer\/verify\//);
   assert.match(webhook, /transfer\.success/);
   assert.match(webhook, /transfer\.failed/);

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const purchases = fs.readFileSync(path.join(__dirname, '../src/routes/livePurchases.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(__dirname, '../src/routes/paystackLiveWebhook.js'), 'utf8');
+const signatureVerifier = fs.readFileSync(path.join(__dirname, '../src/utils/paystackWebhookSignature.cjs'), 'utf8');
 const gifts = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 const migration = fs.readFileSync(
@@ -29,8 +30,9 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
 
 test('Paystack webhook authenticates raw bytes and independently verifies the transaction', () => {
   assert.match(webhook, /express\.raw\(\{ type: 'application\/json'/);
-  assert.match(webhook, /createHmac\('sha512'/);
-  assert.match(webhook, /timingSafeEqual/);
+  assert.match(webhook, /validPaystackWebhookSignature/);
+  assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET/);
+  assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET_PREVIOUS/);
   assert.match(webhook, /api\.paystack\.co\/transaction\/verify/);
   assert.match(webhook, /payload\?\.data\?\.status !== 'success'/);
   assert.match(webhook, /rpc\('fulfill_live_spark_purchase'/);
