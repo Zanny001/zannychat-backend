@@ -35,6 +35,8 @@ test('Google Play risk migration is idempotent, service-role-only and protects w
   assert.match(migration, /provider_order_id/);
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /risk_held_sparks/);
+  assert.match(migration, /live_creator_payouts/);
+  assert.match(migration, /payout_hold = true/);
   assert.match(migration, /google_play_risk/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.record_live_google_play_voided_purchase[\s\S]*FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.record_live_google_play_voided_purchase[\s\S]*TO service_role/);
