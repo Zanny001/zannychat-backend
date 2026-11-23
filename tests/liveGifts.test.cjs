@@ -60,19 +60,21 @@ test('PK battle routes require authentication and expose creator-controlled life
   assert.match(battles, /p_creator_id: req\.user\.id/);
   assert.match(battles, /router\.post\('\/\'/);
   assert.match(battles, /router\.post\('\/:battleId\/start'/);
-  assert.match(battles, /router\.post\('\/:battleId\/finish'/);\n  assert.match(battles, /router\.get\('\/stream\/:streamId\/current'/);\n  assert.match(battles, /\.in\('status', \['pending', 'live', 'ended'\]\)/);
+  assert.match(battles, /router\.post\('/:battleId\/finish'/);
+  assert.match(battles, /router\.get\('\/stream\/:streamId\/current'/);
+  assert.match(battles, /\.in\('status', \['pending', 'accepted', 'live', 'ended', 'cancelled'\]\)/);
   assert.match(battles, /Join this LIVE to view its PK battle/);
   assert.match(index, /app\.use\('\/live\/battles', liveBattlesRouter\)/);
 });
 
 test('PK challenges require explicit guest consent before the host can start', () => {
-  assert.match(migration, /status IN \\('pending', 'accepted', 'live', 'ended', 'cancelled'\\)/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.accept_live_pk_battle/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.decline_live_pk_battle/);
-  assert.match(migration, /v_battle\\.status <> 'accepted'/);
-  assert.match(migration, /status = 'pending' AND created_at < now\\(\\) - interval '2 minutes'/);
-  assert.match(battles, /router\\.post\\('\/:battleId\\/accept'/);
-  assert.match(battles, /router\\.post\\('\/:battleId\\/decline'/);
+  assert.match(migration, /status IN \('pending', 'accepted', 'live', 'ended', 'cancelled'\)/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.accept_live_pk_battle/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.decline_live_pk_battle/);
+  assert.match(migration, /v_battle\.status <> 'accepted'/);
+  assert.match(migration, /status = 'pending' AND created_at < now\(\) - interval '2 minutes'/);
+  assert.match(battles, /router\.post\('/:battleId\/accept'/);
+  assert.match(battles, /router\.post\('/:battleId\/decline'/);
   assert.match(battles, /live_pk_challenge/);
   assert.match(battles, /live_pk_accepted/);
 });
