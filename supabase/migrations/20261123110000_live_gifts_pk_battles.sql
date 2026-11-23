@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS live_pk_battles_creator_history_idx
   ON public.live_pk_battles (creator_a_id, created_at DESC);
 
 ALTER TABLE public.live_gift_transactions
-  ADD COLUMN IF NOT EXISTS battle_id uuid REFERENCES public.live_pk_battles(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS battle_id uuid REFERENCES public.live_pk_battles(id) ON DELETE RESTRICT;
 CREATE INDEX IF NOT EXISTS live_gift_transactions_battle_created_idx
   ON public.live_gift_transactions (battle_id, created_at DESC)
   WHERE battle_id IS NOT NULL;
