@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 test('LIVE purchase risk migration freezes Sparks and creator earnings on unresolved refunds or disputes', () => {
-  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123130000_live_purchase_risk_events.sql'), 'utf8');
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123130604_live_purchase_risk_events_20261123130000.sql'), 'utf8');
   assert.match(migration, /live_purchase_risk_events/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL ON public\.live_purchase_risk_events FROM PUBLIC, anon, authenticated/);
@@ -22,7 +22,7 @@ test('LIVE purchase risk migration freezes Sparks and creator earnings on unreso
 });
 
 test('partial refunds remain held for manual reconciliation rather than silently revoking or releasing the full purchase', () => {
-  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123130000_live_purchase_risk_events.sql'), 'utf8');
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123130604_live_purchase_risk_events_20261123130000.sql'), 'utf8');
   assert.match(migration, /IF NOT v_full_refund THEN[\s\S]*manualReviewRequired/);
   assert.match(migration, /Partial refunds require operator review/);
 });
