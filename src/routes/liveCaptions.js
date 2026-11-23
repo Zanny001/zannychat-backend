@@ -42,6 +42,10 @@ router.post('/translate', async (req, res) => {
       .select('status').eq('id', streamId).maybeSingle();
     if (streamError) throw streamError;
     if (!stream || stream.status !== 'live') return res.status(409).json({ error: 'LIVE stream is not active' });
+    const { data: stream, error: streamError } = await supabaseAdmin.from('live_streams')
+      .select('status').eq('id', streamId).maybeSingle();
+    if (streamError) throw streamError;
+    if (!stream || stream.status !== 'live') return res.status(409).json({ error: 'LIVE stream is not active' });
     const { data: participant, error: membershipError } = await supabaseAdmin.from('live_stream_participants')
       .select('user_id').eq('stream_id', streamId).eq('user_id', req.user.id)
       .eq('status', 'joined').is('left_at', null).maybeSingle();
