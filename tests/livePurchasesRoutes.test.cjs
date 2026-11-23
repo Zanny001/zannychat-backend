@@ -29,8 +29,8 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
 
 test('Paystack webhook authenticates raw bytes and independently verifies the transaction', () => {
   assert.match(webhook, /express\.raw\(\{ type: 'application\/json'/);
-  assert.match(webhook, /createHmac\('sha512'/);
-  assert.match(webhook, /timingSafeEqual/);
+  assert.match(webhook, /validPaystackWebhookSignature/);
+  assert.match(webhook, /PAYSTACK_WEBHOOK_SECRET/);
   assert.match(webhook, /api\.paystack\.co\/transaction\/verify/);
   assert.match(webhook, /payload\?\.data\?\.status !== 'success'/);
   assert.match(webhook, /rpc\('fulfill_live_spark_purchase'/);
