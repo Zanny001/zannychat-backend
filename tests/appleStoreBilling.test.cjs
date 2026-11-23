@@ -9,6 +9,12 @@ const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123240000_apple_store_sparks_verification.sql'),
   'utf8',
 );
+const notifications = fs.readFileSync(path.join(__dirname, '../src/routes/appleStoreNotifications.js'), 'utf8');
+const refundMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261123241000_apple_store_notifications_refunds.sql'),
+  'utf8',
+);
+const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
 test('Apple account binding is stable, UUID-backed and service-role-only', () => {
   assert.match(route, /router\.get\('\/apple\/account-binding'/);
@@ -44,4 +50,19 @@ test('Apple fulfilment is atomic, idempotent and production rejects sandbox tran
   assert.match(migration, /v_purchase\.provider NOT IN \('paystack', 'google_play', 'apple_iap'\)/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*TO service_role/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.fulfill_live_spark_purchase[\s\S]*FROM PUBLIC, anon, authenticated/);
+});
+
+test('Apple App Store Server Notifications V2 are verified and idempotently reconciled', () => {
+  assert.match(notifications, /verifyNotification\(signedPayload\)/);
+  assert.match(notifications, /signedTransactionInfo/);
+  assert.match(notifications, /verifyTransaction\(signedTransaction\)/);
+  assert.match(notifications, /notificationUUID/);
+  assert.match(notifications, /record_live_apple_refund/);
+  assert.match(notifications, /REFUND.*REVOKE|REFUND' \|\| notificationType === 'REVOKE/);
+  assert.match(index, /app\.use\(express\.json[\s\S]*app\.use\('\/webhooks\/apple\/app-store-server', appleStoreNotificationsRouter\)/);
+  assert.match(refundMigration, /notification_uuid text NOT NULL UNIQUE/);
+  assert.match(refundMigration, /record_live_apple_refund/);
+  assert.match(refundMigration, /'apple_iap_risk'/);
+  assert.match(refundMigration, /'apple\.refund'/);
+  assert.match(refundMigration, /REVOKE ALL ON FUNCTION public\.record_live_apple_refund[\s\S]*FROM PUBLIC, anon, authenticated/);
 });
