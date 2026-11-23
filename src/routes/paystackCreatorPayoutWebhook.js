@@ -1,6 +1,7 @@
 const express = require('express');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
 const { validPaystackWebhookSignature } = require('../utils/paystackWebhookSignature.cjs');
+const { transferMatchesPayout } = require('../services/livePayoutReconciliation');
 
 const router = express.Router();
 
@@ -33,7 +34,17 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
   try {
     const reference = String(event.data.reference);
     const transfer = await verifyTransfer(reference);
-    if (String(transfer.reference) !== reference) throw new Error('Verified transfer reference mismatch');
+    const { data: payout, error: payoutError } = await supabaseAdmin.from('live_creator_payouts')
+      .select('id,provider_reference,amount_minor,currency,status,provider')
+      .eq('provider_reference', reference).maybeSingle();
+    if (payoutError) throw payoutError;
+    if (!payout || payout.provider !== 'paystack'
+        || !['requested', 'processing'].includes(payout.status)) {
+      return res.status(200).json({ received: true, ignored: true });
+    }
+    if (!transferMatchesPayout(transfer, payout)) {
+      throw new Error('Verified Paystack transfer does not match the reserved payout');
+    }
 
     const statusMap = { success: 'paid', failed: 'failed', reversed: 'reversed', pending: 'processing', otp: 'processing' };
     const status = statusMap[String(transfer.status).toLowerCase()];
