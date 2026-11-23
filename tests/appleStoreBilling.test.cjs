@@ -76,6 +76,9 @@ test('Apple REFUND_REVERSED notifications restore only revoked unspent Sparks', 
   assert.match(reversalMigration, /refunded_unspent_sparks bigint NOT NULL DEFAULT 0/);
   assert.match(reversalMigration, /SET remaining_sparks = v_restore/);
   assert.match(reversalMigration, /balance_sparks = balance_sparks \+ v_restore/);
+  assert.match(reversalMigration, /IF v_purchase\.status = 'disputed' THEN/);
+  assert.match(reversalMigration, /ELSIF v_purchase\.status = 'refunded' THEN/);
+  assert.match(reversalMigration, /v_purchase\.verified_at IS NULL/);
   assert.match(reversalMigration, /status = 'paid', risk_held_sparks = 0/);
   assert.match(reversalMigration, /risk_hold_reason = NULL/);
   assert.match(reversalMigration, /'apple\.refund_reversed'/);
