@@ -4,6 +4,10 @@ ALTER TABLE public.live_spark_purchases
   ADD COLUMN IF NOT EXISTS risk_held_sparks bigint NOT NULL DEFAULT 0
   CHECK (risk_held_sparks >= 0);
 
+ALTER TABLE public.live_creator_earnings_ledger
+  ADD COLUMN IF NOT EXISTS risk_hold_reason text
+  CHECK (risk_hold_reason IS NULL OR risk_hold_reason = 'paystack_risk');
+
 CREATE TABLE IF NOT EXISTS public.live_purchase_risk_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   purchase_id uuid REFERENCES public.live_spark_purchases(id) ON DELETE SET NULL,
@@ -157,7 +161,7 @@ BEGIN
     END IF;
 
     UPDATE public.live_creator_earnings_ledger e
-      SET status = 'held'
+      SET status = 'held', risk_hold_reason = 'paystack_risk'
       WHERE e.status IN ('pending', 'available')
         AND e.gift_transaction_id IN (
           SELECT a.gift_transaction_id
@@ -188,7 +192,7 @@ BEGIN
           WHERE id = v_purchase.id;
       END IF;
       UPDATE public.live_creator_earnings_ledger e
-        SET status = 'held'
+        SET status = 'held', risk_hold_reason = 'paystack_risk'
         WHERE e.status IN ('pending', 'available')
           AND e.gift_transaction_id IN (
             SELECT a.gift_transaction_id
@@ -213,8 +217,9 @@ BEGIN
       SET status = 'refunded', risk_held_sparks = 0, refunded_at = now(), updated_at = now()
       WHERE id = v_purchase.id;
     UPDATE public.live_creator_earnings_ledger e
-      SET status = 'held'
-      WHERE e.gift_transaction_id IN (
+      SET status = 'held', risk_hold_reason = 'paystack_risk'
+      WHERE e.status IN ('pending', 'available')
+        AND e.gift_transaction_id IN (
         SELECT a.gift_transaction_id
         FROM public.live_spark_spend_allocations a
         JOIN public.live_spark_lots l ON l.id = a.lot_id
@@ -248,8 +253,9 @@ BEGIN
         SET status = 'paid', risk_held_sparks = 0, updated_at = now()
         WHERE id = v_purchase.id;
       UPDATE public.live_creator_earnings_ledger e
-        SET status = CASE WHEN e.available_at > now() THEN 'pending' ELSE 'available' END
-        WHERE e.status = 'held'
+        SET status = CASE WHEN e.available_at > now() THEN 'pending' ELSE 'available' END,
+            risk_hold_reason = NULL
+        WHERE e.status = 'held' AND e.risk_hold_reason = 'paystack_risk'
           AND e.gift_transaction_id IN (
             SELECT a.gift_transaction_id
             FROM public.live_spark_spend_allocations a
