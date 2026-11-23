@@ -47,6 +47,20 @@ Use version 2 only. The backend verifies the outer `signedPayload` and nested `s
 - [ ] App Store Connect financial reports are used for actual proceeds and fee reconciliation; signed transaction price is only a package-price check.
 - [ ] Apple-funded creator earnings remain withheld while `provider_fee_status='pending'`; an authorized service-role reconciliation records the actual provider fee and releases eligible gift earnings using the reward rule captured at gift time.
 
+## Creator earnings and App Store fee reconciliation
+
+Apple-funded gift earnings intentionally remain withheld while `provider_fee_status='pending'`. Do not estimate a provider fee from a generic 15% or 30% assumption. Reconcile the actual transaction proceeds/commission from App Store Connect financial reports or an audited settlement export.
+
+For each Apple Sparks purchase:
+
+1. Match the App Store settlement row to the stored purchase using its verified Apple transaction ID (stored as `apple:` plus SHA-256 of the transaction ID).
+2. Derive the actual provider fee in NGN minor units from the settlement amount and buyer-paid amount, preserving the documented exchange-rate/rounding policy where applicable.
+3. Invoke `public.reconcile_live_apple_provider_fee(text,bigint)` only through a trusted service-role backend job. Never expose this RPC to an app client or an authenticated user.
+4. Verify the purchase changes to `provider_fee_status='verified'`, the spend allocations are updated, and eligible creator earnings are created once using the reward rule captured when each gift was sent.
+5. Reconcile any refund, payout, currency conversion or settlement discrepancy before releasing creator funds.
+
+The function is idempotent and rejects conflicting repeat fee values. Keep a reconciliation evidence record outside the client app for finance/audit review.
+
 ## Activation gate
 
 Only after the acceptance matrix passes should an operator:
