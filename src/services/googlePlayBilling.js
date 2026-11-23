@@ -198,6 +198,7 @@ module.exports = {
   createGooglePlayBillingClient,
   parseServiceAccount,
   sha256Hex,
+  moneyToMinor,
   GOOGLE_PLAY_SCOPE,
   GOOGLE_TOKEN_URL,
   GOOGLE_API_BASE,
