@@ -183,6 +183,56 @@ function createGooglePlayBillingClient({
     };
   }
 
+  async function verifyVoidedPurchase({ packageName, purchaseToken, orderId, voidedTimeMillis, refundType }) {
+    if (!packageName || typeof purchaseToken !== 'string' || purchaseToken.length < 16
+        || purchaseToken.length > 4096 || typeof orderId !== 'string' || !orderId) {
+      throw new Error('Google Play voided purchase evidence is incomplete');
+    }
+    const normalizedRefundType = Number(refundType);
+    if (![1, 2].includes(normalizedRefundType)) {
+      throw new Error('Google Play voided notification has an unsupported refund type');
+    }
+    const eventTime = Number(voidedTimeMillis);
+    const endTime = now();
+    const startTime = Number.isFinite(eventTime) && eventTime > 0
+      ? Math.max(0, eventTime - 24 * 60 * 60 * 1000)
+      : Math.max(0, endTime - 30 * 24 * 60 * 60 * 1000);
+    let pageToken = null;
+    for (let page = 0; page < 10; page += 1) {
+      const params = new URLSearchParams({
+        type: '0',
+        maxResults: '1000',
+        startTime: String(startTime),
+        endTime: String(endTime),
+        includeQuantityBasedPartialRefund: 'true',
+      });
+      if (pageToken) params.set('token', pageToken);
+      const url = GOOGLE_API_BASE + '/applications/' + encodeURIComponent(packageName)
+        + '/purchases/voidedpurchases?' + params.toString();
+      const payload = await googleRequest(url);
+      const purchases = Array.isArray(payload?.voidedPurchases) ? payload.voidedPurchases : [];
+      const match = purchases.find((item) =>
+        String(item.purchaseToken || '') === purchaseToken
+        && String(item.orderId || '') === orderId
+      );
+      if (match) {
+        return {
+          purchaseToken,
+          orderId,
+          voidedTimeMillis: String(match.voidedTimeMillis || voidedTimeMillis || ''),
+          refundType: normalizedRefundType,
+          voidedQuantity: Number.isSafeInteger(Number(match.voidedQuantity))
+            ? Number(match.voidedQuantity) : null,
+          voidedSource: Number(match.voidedSource),
+          voidedReason: Number(match.voidedReason),
+        };
+      }
+      pageToken = payload?.tokenPagination?.nextPageToken || payload?.nextPageToken || null;
+      if (!pageToken) break;
+    }
+    throw new Error('Google Play Voided Purchases API did not confirm this notification');
+  }
+
   async function consumeProductPurchase({ packageName, productId, purchaseToken }) {
     const url = GOOGLE_API_BASE + '/applications/' + encodeURIComponent(packageName)
       + '/purchases/products/' + encodeURIComponent(productId)
@@ -191,7 +241,7 @@ function createGooglePlayBillingClient({
     return { consumed: true };
   }
 
-  return { verifyProductPurchase, consumeProductPurchase };
+  return { verifyProductPurchase, verifyVoidedPurchase, consumeProductPurchase };
 }
 
 module.exports = {
