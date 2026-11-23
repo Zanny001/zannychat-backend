@@ -286,6 +286,14 @@ BEGIN
     RETURN v_battle;
   END IF;
   PERFORM 1 FROM public.live_stream_participants
+    WHERE stream_id = v_battle.stream_id AND user_id = v_battle.creator_a_id
+      AND role = 'creator' AND status = 'joined' AND left_at IS NULL;
+  IF NOT FOUND THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
+  END IF;
+  PERFORM 1 FROM public.live_stream_participants
     WHERE stream_id = v_battle.stream_id AND user_id = v_battle.creator_b_id
       AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
   IF NOT FOUND THEN
@@ -416,6 +424,8 @@ BEGIN
     RAISE EXCEPTION 'invalid LIVE gift request' USING ERRCODE = '22023';
   END IF;
 
+  -- Serialize retries for the same sender/key, including requests racing across different streams.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_sender_id::text || ':' || p_idempotency_key, 0));
   SELECT * INTO v_existing FROM public.live_gift_transactions
     WHERE sender_id = p_sender_id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
