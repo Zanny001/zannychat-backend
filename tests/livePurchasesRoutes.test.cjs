@@ -33,6 +33,10 @@ test('Paystack webhook authenticates raw bytes and independently verifies the tr
   assert.match(webhook, /rpc\('fulfill_live_spark_purchase'/);
   assert.match(webhook, /p_amount_minor: Number\(verified\.amount\)/);
   assert.match(webhook, /p_currency: String\(verified\.currency\)/);
+  assert.match(webhook, /verified\.metadata\?\.purchase_id/);
+  assert.match(webhook, /verified\.customer\?\.email/);
+  assert.match(webhook, /auth\.admin\.getUserById\(order\.user_id\)/);
+  assert.match(webhook, /expectedEmail !== paidEmail/);
 });
 
 test('Paystack webhook is mounted before JSON parsing and authenticated checkout after parsing', () => {
