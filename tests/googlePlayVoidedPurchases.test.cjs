@@ -35,8 +35,6 @@ test('verifies one-time Google Play void notifications against the authoritative
         voidedPurchases: [{
           purchaseToken: 'google-purchase-token-123456',
           orderId: 'GPA.test-order',
-          productType: 2,
-          refundType: 1,
           voidedTimeMillis: '1795429900000',
           voidedSource: 0,
           voidedReason: 1,
@@ -49,6 +47,7 @@ test('verifies one-time Google Play void notifications against the authoritative
     purchaseToken: 'google-purchase-token-123456',
     orderId: 'GPA.test-order',
     voidedTimeMillis: '1795429900000',
+    refundType: 1,
   });
   assert.equal(verified.refundType, 1);
   assert.equal(verified.orderId, 'GPA.test-order');
@@ -64,8 +63,6 @@ test('does not accept a voided notification for another token, order or subscrip
         voidedPurchases: [{
           purchaseToken: 'different-token-123456',
           orderId: 'GPA.other-order',
-          productType: 1,
-          refundType: 1,
         }],
       }),
   });
@@ -74,5 +71,6 @@ test('does not accept a voided notification for another token, order or subscrip
     purchaseToken: 'google-purchase-token-123456',
     orderId: 'GPA.test-order',
     voidedTimeMillis: '1795429900000',
+    refundType: 1,
   }), /did not confirm this notification/);
 });
