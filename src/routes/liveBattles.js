@@ -68,6 +68,8 @@ router.post('/:battleId/decline', async (req, res) => {
       p_creator_id: req.user.id,
     });
     if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not decline PK challenge' });
+    void sendPushToUser(data.creator_a_id, { title: 'PK challenge declined', body: 'Your LIVE PK challenge was declined.', data: { type: 'live_pk_declined', battleId: data.id, streamId: data.stream_id } })
+      .catch((pushError) => console.error('[live-battles] decline notification failed:', pushError?.message || pushError));
     return res.json({ battle: data });
   } catch (error) {
     console.error('[live-battles] decline failed:', error?.message || error);
