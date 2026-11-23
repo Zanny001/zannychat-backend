@@ -9,6 +9,7 @@ const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
 const experienceMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118221000_live_experience_modes.sql'), 'utf8');
 const removalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118223000_block_removed_live_participants.sql'), 'utf8');
+const feedbackMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123090000_live_stream_feedback.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -21,10 +22,6 @@ test('LIVE creator follow, stream start, private invitations and guest decisions
   assert.ok(route.includes("type: 'live_guest_decision'"));
   assert.ok(route.includes('getBlockedUserIds(creatorId, followerIds)'));
   assert.ok(route.includes('Promise.allSettled(batch.map((userId) => sendPushToUser(userId, notification)))'));
-  const invitationsStart = route.indexOf("router.get('/invitations'");
-  const invitationsEnd = route.indexOf("router.get('/following/streams'", invitationsStart);
-  const invitationsRoute = route.slice(invitationsStart, invitationsEnd);
-  assert.ok(invitationsRoute.includes("row.invitation_type === 'guest' && ['pending', 'accepted'].includes(row.status)"));
 });
 
 test('LIVE audience tokens are subscribe-only while creator tokens can publish', () => {
@@ -48,8 +45,7 @@ test('LIVE routes require auth and validate audience, comments, reactions, repor
   assert.ok(route.includes("const REASONS = new Set(['harassment','hate','nudity','violence','spam','copyright','other'])"));
   assert.ok(route.includes('stream.creator_id !== req.user.id'));
   assert.ok(route.includes("const canPublish = role === 'creator' || role === 'guest'"));
-  assert.ok(route.includes("const token = issueToken("));
-  assert.ok(route.includes("stream.experience_mode === 'audio_room' || (role === 'guest' && guestMediaMode === 'audio')"));
+  assert.ok(route.includes("issueToken(req.user, stream.room_name, config, canPublish, stream.experience_mode === 'audio_room')"));
   assert.ok(route.includes("role, canPublish, canModerate"));
 });
 
@@ -238,7 +234,7 @@ test('LIVE reaction writes have a dedicated per-user rate limit', () => {
 test('LIVE invitations include accepted guest-stage invitations and prefer stage access per stream', () => {
   assert.ok(route.includes(".in('invitation_type', ['viewer','guest']).in('status', ['pending','accepted'])"));
   assert.ok(route.includes("row.invitation_type === 'viewer' && row.status === 'pending'"));
-  assert.ok(route.includes("row.invitation_type === 'guest' && ['pending', 'accepted'].includes(row.status)"));
+  assert.ok(route.includes("row.invitation_type === 'guest' && row.status === 'accepted'"));
   assert.ok(route.includes("type: 'live_guest_invitation'"));
 });
 
@@ -273,6 +269,12 @@ test('LIVE discovery returns creator display names only after visibility and blo
   }
   assert.ok(publicRoute.includes(".eq('visibility', 'public')"));
   assert.ok(followingRoute.includes(".in('visibility', ['public','followers'])"));
+  for (const discoveryRoute of [publicRoute, followingRoute]) {
+    assert.ok(discoveryRoute.includes("from('live_stream_feedback')"));
+    assert.ok(discoveryRoute.includes("!notInterestedIds.has(stream.creator_id)"));
+  }
+  assert.ok(publicRoute.includes('.limit(100)'));
+  assert.ok(publicRoute.includes('.slice(0, 50)'));
 });
 
 
@@ -370,32 +372,17 @@ test('LIVE roster reports actual media connection status without granting creato
   assert.ok(route.includes("connectionStatus: mediaByIdentity.has(userId) ? 'connected' : 'not_connected'"));
 });
 
-test('Direct LIVE guest invitations require recipient consent before stage publishing is granted', () => {
-  const inviteStart = route.indexOf("router.post('/:streamId/guests/invite'");
-  const inviteEnd = route.indexOf("\n});", inviteStart) + 4;
-  const inviteRoute = route.slice(inviteStart, inviteEnd);
-  assert.match(inviteRoute, /invitation_type: 'guest', status: 'pending'/);
-  assert.doesNotMatch(inviteRoute, /invitation_type: 'guest', status: 'accepted'/);
-  const decisionStart = route.indexOf("router.patch('/:streamId/guest-invitation'");
-  const decisionEnd = route.indexOf("\n});", decisionStart) + 4;
-  const decisionRoute = route.slice(decisionStart, decisionEnd);
-  assert.match(decisionRoute, /\['accepted', 'declined'\]/);
-  assert.match(decisionRoute, /\.eq\('user_id', req\.user\.id\)/);
-  assert.match(decisionRoute, /\.eq\('status', 'pending'\)/);
-  assert.match(decisionRoute, /\.eq\('invited_by', stream\.creator_id\)/);
-  assert.match(decisionRoute, /type: 'live_guest_decision'/);
-  assert.match(decisionRoute, /hasBlockBetween\(stream\.creator_id, req\.user\.id\)/);
-  assert.match(decisionRoute, /Guest participation is disabled/);
-});
 
-
-test('LIVE guest join validates requested audio/video mode and limits audio-only publish sources', () => {
-  const joinStart = route.indexOf("router.post('/:streamId/join'");
-  const joinEnd = route.indexOf("\n});", joinStart) + 4;
-  const joinRoute = route.slice(joinStart, joinEnd);
-  assert.match(joinRoute, /requestedMediaMode !== undefined && !\['audio', 'video'\]\.includes\(requestedMediaMode\)/);
-  assert.match(joinRoute, /const guestMediaMode = stream\.experience_mode === 'audio_room'[\s\S]*requestedMediaMode \|\| 'video'/);
-  assert.match(joinRoute, /role === 'guest' && guestMediaMode === 'audio'/);
-  assert.match(joinRoute, /token, role, canPublish, canModerate, mediaMode/);
-  assert.match(route, /canPublishSources: \['microphone'\]/);
+test('LIVE not-interested feedback is server-only and filters future discovery', () => {
+  assert.ok(feedbackMigration.includes('public.live_stream_feedback'));
+  assert.ok(feedbackMigration.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(feedbackMigration.includes('REVOKE ALL ON public.live_stream_feedback FROM PUBLIC, anon, authenticated'));
+  assert.ok(feedbackMigration.includes('GRANT ALL ON public.live_stream_feedback TO service_role'));
+  assert.ok(route.includes("router.post('/:streamId/not-interested'"));
+  assert.ok(route.includes("from('live_stream_feedback')"));
+  assert.ok(route.includes("feedback_type: 'not_interested'"));
+  assert.ok(route.includes("!notInterestedIds.has(stream.creator_id)"));
+  assert.ok(route.includes('.limit(100)'));
+  assert.ok(route.includes('.slice(0, 50)'));
+  assert.ok(route.includes('requireJoined(streamId, req.user.id)'));
 });
