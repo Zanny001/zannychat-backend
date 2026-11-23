@@ -900,8 +900,14 @@ router.get('/following/streams', async (req, res) => {
       .eq('status', 'live').in('visibility', ['public','followers'])
       .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(50);
     if (error) throw error;
-    const blockedIds = await getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id));
-    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id))
+    const [blockedIds, feedbackResult] = await Promise.all([
+      getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id)),
+      supabaseAdmin.from('live_stream_feedback')
+        .select('creator_id').eq('user_id', req.user.id).eq('feedback_type', 'not_interested'),
+    ]);
+    if (feedbackResult.error) throw feedbackResult.error;
+    const notInterestedIds = new Set((feedbackResult.data || []).map((row) => row.creator_id));
+    const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id) && !notInterestedIds.has(stream.creator_id))
       .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
     const creatorNames = await getProfileNames(visible.map((stream) => stream.creator_id));
     return res.json({ streams: visible.map((stream) => ({
@@ -1005,6 +1011,31 @@ router.post('/', async (req, res) => {
     if (error?.code === '22023' || error?.code === '23503') return res.status(400).json({ error: 'LIVE details or invitees are invalid' });
     console.error('[live] create failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not start LIVE right now' });
+  }
+});
+
+router.post('/:streamId/not-interested', makeLimiter({ windowMs: 60 * 1000, max: 10, error: 'Please wait before sending more LIVE feedback.' }), async (req, res) => {
+  const streamId = req.params.streamId;
+  if (!validId(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
+  try {
+    const stream = await getStream(streamId);
+    if (!stream || stream.status !== 'live') return res.status(404).json({ error: 'LIVE stream has ended' });
+    if (stream.creator_id === req.user.id) return res.status(400).json({ error: 'You cannot hide your own LIVE stream' });
+    const participant = await requireJoined(streamId, req.user.id);
+    if (!participant || participant.role === 'creator') {
+      return res.status(403).json({ error: 'Join this LIVE stream before sending feedback' });
+    }
+    const { error } = await supabaseAdmin.from('live_stream_feedback').upsert({
+      user_id: req.user.id,
+      creator_id: stream.creator_id,
+      feedback_type: 'not_interested',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,creator_id,feedback_type' });
+    if (error) throw error;
+    return res.status(201).json({ saved: true, feedback: 'not_interested' });
+  } catch (error) {
+    console.error('[live] not-interested feedback failed:', error?.message || error);
+    return res.status(503).json({ error: 'Could not save LIVE discovery feedback' });
   }
 });
 
