@@ -12,6 +12,10 @@ function validPackageId(value) {
   return typeof value === 'string' && /^[a-z0-9][a-z0-9_-]{1,39}$/.test(value);
 }
 
+function validGooglePlayProductId(value) {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,149}$/.test(value);
+}
+
 function paystackConfigured() {
   return process.env.LIVE_PURCHASES_ENABLED === 'true'
     && process.env.LIVE_PURCHASES_RISK_WEBHOOKS_READY === 'true'
@@ -207,7 +211,7 @@ router.post('/initialize', async (req, res) => {
 
 router.post('/native/verify', async (req, res) => {
   const { packageId, purchaseToken } = req.body || {};
-  if (!validPackageId(packageId) || typeof purchaseToken !== 'string'
+  if (!validGooglePlayProductId(packageId) || typeof purchaseToken !== 'string'
       || purchaseToken.length < 16 || purchaseToken.length > 4096) {
     return res.status(400).json({ error: 'A valid Sparks product and store purchase token are required' });
   }
