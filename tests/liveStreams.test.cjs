@@ -269,6 +269,12 @@ test('LIVE discovery returns creator display names only after visibility and blo
   }
   assert.ok(publicRoute.includes(".eq('visibility', 'public')"));
   assert.ok(followingRoute.includes(".in('visibility', ['public','followers'])"));
+  for (const discoveryRoute of [publicRoute, followingRoute]) {
+    assert.ok(discoveryRoute.includes("from('live_stream_feedback')"));
+    assert.ok(discoveryRoute.includes("!notInterestedIds.has(stream.creator_id)"));
+  }
+  assert.ok(publicRoute.includes(".limit(100)"));
+  assert.ok(publicRoute.includes(".slice(0, 50)"));
 });
 
 
