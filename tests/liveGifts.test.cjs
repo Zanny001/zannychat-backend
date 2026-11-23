@@ -32,9 +32,10 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
   assert.match(migration, /INSERT INTO public\.live_gift_ledger/);
   assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);
   assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_sender_id::text \|\| ':' \|\| p_idempotency_key, 0\)\)/);
+  assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text \|\| ':' \|\| p_idempotency_key, 0\)\)/);
   assert.doesNotMatch(migration, /^AS \$$/m);
   assert.doesNotMatch(migration, /^\$$/m);
-  assert.match(migration, /battle_id uuid REFERENCES public\.live_pk_battles/);
+  assert.match(migration, /battle_id uuid REFERENCES public\.live_pk_battles\(id\) ON DELETE RESTRICT/);
   assert.match(migration, /score_points, battle_id, idempotency_key/);
   assert.match(migration, /p_quantity NOT BETWEEN 1 AND 20/);
 });
