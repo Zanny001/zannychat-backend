@@ -21,6 +21,10 @@ test('LIVE creator follow, stream start, private invitations and guest decisions
   assert.ok(route.includes("type: 'live_guest_decision'"));
   assert.ok(route.includes('getBlockedUserIds(creatorId, followerIds)'));
   assert.ok(route.includes('Promise.allSettled(batch.map((userId) => sendPushToUser(userId, notification)))'));
+  const invitationsStart = route.indexOf("router.get('/invitations'");
+  const invitationsEnd = route.indexOf("\\n});", invitationsStart) + 4;
+  const invitationsRoute = route.slice(invitationsStart, invitationsEnd);
+  assert.match(invitationsRoute, /invitation_type === 'guest'.*\\['pending', 'accepted'\\]\\.includes\\(row\\.status\\)/s);
 });
 
 test('LIVE audience tokens are subscribe-only while creator tokens can publish', () => {
