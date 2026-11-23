@@ -119,7 +119,7 @@ async function notifyReplayReady(replay, dependencies = {}) {
   }
 }
 async function finalizeReplay(event, dependencies = {}) {
-  const admin = dependencies.admin || admin;
+  const admin = dependencies.admin || supabaseAdmin;
   const clearStop = dependencies.clearStop || clearLiveReplayStop;
   const now = dependencies.now || (() => new Date());
   const info = getEgressInfo(event);
