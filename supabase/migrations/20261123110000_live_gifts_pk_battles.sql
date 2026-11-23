@@ -140,7 +140,7 @@ CREATE OR REPLACE FUNCTION public.expire_live_pk_battle_challenges(p_stream_id u
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_stream_status text;
 BEGIN
@@ -163,7 +163,7 @@ BEGIN
       AND ((status = 'pending' AND created_at < now() - interval '2 minutes')
         OR (status = 'accepted' AND created_at < now() - interval '10 minutes'));
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.create_live_pk_battle(
   p_stream_id uuid, p_creator_a_id uuid, p_creator_b_id uuid, p_duration_seconds integer DEFAULT 300
