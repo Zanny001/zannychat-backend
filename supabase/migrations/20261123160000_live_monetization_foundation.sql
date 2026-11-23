@@ -169,6 +169,17 @@ BEGIN
     WHERE provider_reference = p_provider_reference FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'purchase order not found' USING ERRCODE = 'P0002'; END IF;
 
+  IF v_purchase.provider <> 'paystack' THEN
+    RAISE EXCEPTION 'payment provider does not match this fulfilment handler' USING ERRCODE = '22023';
+  END IF;
+  IF v_purchase.user_id IS NULL THEN
+    UPDATE public.live_spark_purchases
+      SET status = 'disputed', updated_at = now()
+      WHERE id = v_purchase.id;
+    RETURN jsonb_build_object('purchaseId', v_purchase.id, 'rejected', true,
+      'reason', 'account_unavailable', 'replayed', false);
+  END IF;
+
   IF v_purchase.status = 'paid' THEN
     IF v_purchase.provider_transaction_id IS DISTINCT FROM p_provider_transaction_id
        OR v_purchase.amount_minor <> p_amount_minor OR v_purchase.currency <> p_currency THEN
