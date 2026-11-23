@@ -7,7 +7,7 @@ const { sha256Hex } = require('../services/googlePlayBilling');
 const router = express.Router();
 
 function validTransactionId(value) {
-  return typeof value === 'string' && /^\\d{1,32}$/.test(value);
+  return typeof value === 'string' && /^[0-9]{1,32}$/.test(value);
 }
 
 router.post('/', async (req, res) => {
