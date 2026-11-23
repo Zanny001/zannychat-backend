@@ -25,11 +25,35 @@ router.get('/catalog', async (req, res) => {
 
 router.get('/wallet', async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.from('live_gift_wallets')
-      .select('balance_sparks,updated_at').eq('user_id', req.user.id).maybeSingle();
+    const [{ data, error }, { data: lots, error: lotsError }] = await Promise.all([
+      supabaseAdmin.from('live_gift_wallets')
+        .select('balance_sparks,updated_at').eq('user_id', req.user.id).maybeSingle(),
+      supabaseAdmin.from('live_spark_lots')
+        .select('source,remaining_sparks').eq('user_id', req.user.id).gt('remaining_sparks', 0),
+    ]);
     if (error) throw error;
-    return res.json({ balanceSparks: data?.balance_sparks || 0, updatedAt: data?.updated_at || null,
-      currency: 'Sparks', cashValue: false, purchasable: false, redeemable: false });
+    if (lotsError) throw lotsError;
+    const sourceBalances = (lots || []).reduce((totals, lot) => {
+      const amount = Number(lot.remaining_sparks || 0);
+      if (lot.source === 'purchase') totals.purchasedSparks += amount;
+      else if (lot.source === 'promotion') totals.promotionalSparks += amount;
+      else totals.legacySparks += amount;
+      return totals;
+    }, { purchasedSparks: 0, promotionalSparks: 0, legacySparks: 0 });
+    const balanceSparks = Number(data?.balance_sparks || 0);
+    const lotBalance = sourceBalances.purchasedSparks + sourceBalances.promotionalSparks + sourceBalances.legacySparks;
+    if (!Number.isSafeInteger(balanceSparks) || lotBalance !== balanceSparks) {
+      throw new Error('LIVE Sparks aggregate and source ledgers do not reconcile');
+    }
+    return res.json({
+      balanceSparks,
+      ...sourceBalances,
+      updatedAt: data?.updated_at || null,
+      currency: 'Sparks',
+      cashValue: false,
+      purchasable: false,
+      redeemable: false,
+    });
   } catch (error) {
     console.error('[live-gifts] wallet lookup failed:', error?.message || error);
     return res.status(503).json({ error: 'LIVE gift balance is temporarily unavailable' });
