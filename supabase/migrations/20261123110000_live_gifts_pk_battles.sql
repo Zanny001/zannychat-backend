@@ -108,6 +108,99 @@ GRANT ALL ON public.live_gift_catalog, public.live_gift_wallets,
   public.live_gift_ledger, public.live_gift_transactions, public.live_pk_battles
   TO service_role;
 
+
+CREATE OR REPLACE FUNCTION public.create_live_pk_battle(
+  p_stream_id uuid, p_creator_a_id uuid, p_creator_b_id uuid, p_duration_seconds integer DEFAULT 300
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_stream public.live_streams%ROWTYPE;
+  v_battle_id uuid;
+BEGIN
+  IF p_stream_id IS NULL OR p_creator_a_id IS NULL OR p_creator_b_id IS NULL
+     OR p_creator_a_id = p_creator_b_id OR p_duration_seconds NOT BETWEEN 60 AND 900 THEN
+    RAISE EXCEPTION 'invalid PK battle request' USING ERRCODE = '22023';
+  END IF;
+  SELECT * INTO v_stream FROM public.live_streams WHERE id = p_stream_id FOR UPDATE;
+  IF NOT FOUND OR v_stream.status <> 'live' OR v_stream.creator_id <> p_creator_a_id THEN
+    RAISE EXCEPTION 'only the active stream creator can create a PK battle' USING ERRCODE = '42501';
+  END IF;
+  PERFORM 1 FROM public.live_stream_participants
+    WHERE stream_id = p_stream_id AND user_id = p_creator_a_id
+      AND role = 'creator' AND status = 'joined' AND left_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'creator must be on the LIVE stage' USING ERRCODE = 'P0001'; END IF;
+  PERFORM 1 FROM public.live_stream_participants
+    WHERE stream_id = p_stream_id AND user_id = p_creator_b_id
+      AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'opponent must join this LIVE as a guest first' USING ERRCODE = 'P0001'; END IF;
+  INSERT INTO public.live_pk_battles
+    (stream_id, creator_a_id, creator_b_id, duration_seconds, created_by)
+  VALUES (p_stream_id, p_creator_a_id, p_creator_b_id, p_duration_seconds, p_creator_a_id)
+  RETURNING id INTO v_battle_id;
+  RETURN v_battle_id;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.start_live_pk_battle(p_battle_id uuid, p_creator_id uuid)
+RETURNS public.live_pk_battles
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_battle public.live_pk_battles%ROWTYPE;
+  v_stream_status text;
+BEGIN
+  SELECT * INTO v_battle FROM public.live_pk_battles WHERE id = p_battle_id FOR UPDATE;
+  IF NOT FOUND OR v_battle.creator_a_id <> p_creator_id OR v_battle.status <> 'pending' THEN
+    RAISE EXCEPTION 'PK battle cannot be started by this user' USING ERRCODE = '42501';
+  END IF;
+  SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
+  IF v_stream_status <> 'live' THEN RAISE EXCEPTION 'LIVE stream has ended' USING ERRCODE = 'P0001'; END IF;
+  UPDATE public.live_pk_battles
+    SET status = 'live', started_at = now(),
+        ends_at = now() + make_interval(secs => duration_seconds), updated_at = now()
+    WHERE id = p_battle_id RETURNING * INTO v_battle;
+  RETURN v_battle;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.finish_live_pk_battle(p_battle_id uuid, p_creator_id uuid DEFAULT NULL)
+RETURNS public.live_pk_battles
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  v_battle public.live_pk_battles%ROWTYPE;
+BEGIN
+  SELECT * INTO v_battle FROM public.live_pk_battles WHERE id = p_battle_id FOR UPDATE;
+  IF NOT FOUND OR v_battle.status <> 'live' THEN
+    RAISE EXCEPTION 'PK battle is not live' USING ERRCODE = 'P0001';
+  END IF;
+  IF p_creator_id IS NOT NULL AND p_creator_id <> v_battle.creator_a_id THEN
+    RAISE EXCEPTION 'only the battle host can end this PK battle early' USING ERRCODE = '42501';
+  END IF;
+  IF p_creator_id IS NULL AND now() < v_battle.ends_at THEN
+    RAISE EXCEPTION 'PK battle timer has not elapsed' USING ERRCODE = 'P0001';
+  END IF;
+  UPDATE public.live_pk_battles
+    SET status = 'ended',
+        winner_id = CASE WHEN score_a > score_b THEN creator_a_id
+                         WHEN score_b > score_a THEN creator_b_id ELSE NULL END,
+        updated_at = now()
+    WHERE id = p_battle_id RETURNING * INTO v_battle;
+  RETURN v_battle;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.start_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.finish_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.start_live_pk_battle(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.finish_live_pk_battle(uuid, uuid) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.grant_live_sparks(
   p_user_id uuid,
   p_amount bigint,
@@ -125,7 +218,7 @@ DECLARE
   v_existing public.live_gift_ledger%ROWTYPE;
 BEGIN
   IF p_user_id IS NULL OR p_amount IS NULL OR p_amount < 1 OR p_amount > 100000
-     OR p_reference_type NOT IN ('promotion', 'support_adjustment')
+     OR p_reference_type IS NULL OR p_reference_type NOT IN ('promotion', 'support_adjustment')
      OR p_idempotency_key IS NULL OR length(p_idempotency_key) NOT BETWEEN 8 AND 128 THEN
     RAISE EXCEPTION 'invalid LIVE Sparks grant' USING ERRCODE = '22023';
   END IF;
