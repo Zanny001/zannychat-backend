@@ -80,3 +80,8 @@ Production catalog verification confirms the complete current publication invent
 `call_sessions`, `call_signals`, `conversation_participants`, `conversations`, `message_delivery_receipts`, `message_reactions`, `messages`, and `status_updates`.
 
 Before publication changes, `conversation_participants` and `message_reactions` were absent even though the frontend subscribed to them. Both tables have RLS enabled, no anon SELECT privilege, and authenticated SELECT policies scoped to conversation membership. No grants or policies were changed; these migrations only add tables to the publication. Catalog membership is not a substitute for two-account event-delivery acceptance.
+
+
+## Proposed LIVE discovery feedback migration — 2026-11-23
+
+The feature branch for PR #193 proposes `20261123090000_live_stream_feedback.sql` to store viewer-scoped LIVE creator suppression preferences. This migration is **not applied to production** and is not part of the production migration ledger. It must remain pending until the backend PR is reviewed, merged, and the migration is separately applied and verified against the production catalog. The migration enables RLS, revokes direct client access, and grants table access only to `service_role`.
