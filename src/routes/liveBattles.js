@@ -80,7 +80,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
     if (participantError) throw participantError;
     const { data: battle, error } = await supabaseAdmin.from('live_pk_battles')
       .select('id,stream_id,creator_a_id,creator_b_id,status,score_a,score_b,duration_seconds,started_at,ends_at,winner_id,created_at')
-      .eq('stream_id', streamId).in('status', ['pending', 'live'])
+      .eq('stream_id', streamId).in('status', ['pending', 'live', 'ended'])
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (error) throw error;
     if (!battle) return res.json({ battle: null, scoring: 'gift_points_only' });
