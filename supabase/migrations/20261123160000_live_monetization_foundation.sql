@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.live_spark_packages (
   package_id text NOT NULL,
   provider text NOT NULL CHECK (provider IN ('paystack', 'google_play', 'apple_iap')),
   sparks bigint NOT NULL CHECK (sparks > 0 AND sparks <= 10000000),
-  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0 AND amount_minor <= 9007199254740991),
   currency text NOT NULL CHECK (currency IN ('NGN', 'USD', 'GBP', 'EUR')),
   is_active boolean NOT NULL DEFAULT false,
   sort_order integer NOT NULL DEFAULT 0,
