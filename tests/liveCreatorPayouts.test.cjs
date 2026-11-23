@@ -14,6 +14,8 @@ const migration = fs.readFileSync(
 test('creator payouts require verified identity, verified beneficiary and explicit payout enablement', () => {
   assert.match(route, /LIVE_PAYOUTS_ENABLED === 'true'/);
   assert.match(route, /LIVE_PAYOUTS_TRANSFER_OTP_DISABLED === 'true'/);
+  assert.match(route, /LIVE_PAYOUTS_FEE_POLICY_CONFIGURED === 'true'/);
+  assert.match(route, /PAYOUT_FEE_POLICY_REQUIRED/);
   assert.match(route, /PAYOUT_TRANSFER_APPROVAL_REQUIRED/);
   assert.match(route, /verificationStatus: profile\?\.verification_status/);
   assert.match(route, /PAYOUT_KYC_REQUIRED/);
