@@ -242,6 +242,9 @@ router.post('/native/verify', async (req, res) => {
     if (![0, 1].includes(verified.consumptionState)) {
       return res.status(503).json({ error: 'Google Play purchase consumption state could not be confirmed' });
     }
+    if (verified.amountMinor !== Number(pack.amount_minor)) {
+      return res.status(409).json({ error: 'The verified Google Play price does not match the configured Sparks package price', code: 'STORE_PRODUCT_PRICE_MISMATCH' });
+    }
 
     const { data: existing, error: existingError } = await supabaseAdmin.from('live_spark_purchases')
       .select('id,user_id,package_id,provider_reference,status,amount_minor,provider_fee_minor,currency')
