@@ -31,6 +31,7 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
   assert.match(migration, /INSERT INTO public\.live_gift_transactions/);
   assert.match(migration, /INSERT INTO public\.live_gift_ledger/);
   assert.match(migration, /UNIQUE \(sender_id, idempotency_key\)/);
+  assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_sender_id::text \|\| ':' \|\| p_idempotency_key, 0\)\)/);
   assert.doesNotMatch(migration, /^AS \$$/m);
   assert.doesNotMatch(migration, /^\$$/m);
   assert.match(migration, /battle_id uuid REFERENCES public\.live_pk_battles/);
@@ -44,6 +45,7 @@ test('PK gift attribution is derived from the active battle on the server, not f
   assert.match(migration, /v_effective_battle_id := v_battle\.id/);
   assert.match(migration, /score_a = score_a \+ v_points/);
   assert.match(migration, /score_b = score_b \+ v_points/);
+  assert.match(migration, /user_id = v_battle\.creator_a_id[\s\S]*role = 'creator'/);
   assert.doesNotMatch(route, /p_battle_id/);
 });
 
