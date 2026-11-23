@@ -56,7 +56,7 @@
     "test:group-calls": "node --test tests/groupCalls.test.cjs tests/callInvitePrivacy.unit.test.cjs tests/callConferenceUpgrade.test.cjs tests/callConferenceMediaModeMigration.test.cjs tests/mediaParticipantHeartbeatCleanup.test.cjs tests/mediaHeartbeatOptInMigration.test.cjs",
     "test:live-gifts": "node --test tests/liveGifts.test.cjs",
     "test:live-battles-captions": "node --test tests/liveGifts.test.cjs",
-    "test:live-streams": "node --test tests/liveStreams.test.cjs tests/liveGifts.test.cjs tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs tests/liveStageManagement.test.cjs tests/liveCreatorImpactMigration.test.cjs tests/liveCreatorImpact.test.cjs tests/liveCreatorImpactHistoryBackfill.test.cjs tests/liveCreatorImpactUpsertAlias.test.cjs tests/livekitRoomDeletion.test.cjs tests/liveCreatorPreferences.test.cjs tests/liveEvents.test.cjs tests/liveEventReminders.test.cjs tests/liveStreamTimeout.test.cjs",
+    "test:live-streams": "node --test tests/liveStreams.test.cjs tests/liveGifts.test.cjs tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs tests/liveSparkLotConsumption.test.cjs tests/liveStageManagement.test.cjs tests/liveCreatorImpactMigration.test.cjs tests/liveCreatorImpact.test.cjs tests/liveCreatorImpactHistoryBackfill.test.cjs tests/liveCreatorImpactUpsertAlias.test.cjs tests/livekitRoomDeletion.test.cjs tests/liveCreatorPreferences.test.cjs tests/liveEvents.test.cjs tests/liveEventReminders.test.cjs tests/liveStreamTimeout.test.cjs",
     "test:live-events": "node --test tests/liveEvents.test.cjs",
     "test:group-live-admission": "node --test tests/groupLiveAdmission.test.cjs",
     "test:api-hardening": "node --test tests/rateLimit.unit.test.cjs tests/requestBodyLimit.test.cjs",
@@ -70,7 +70,7 @@
     "test:chat-media-upload-limit": "node --test tests/chatMediaUploadSizeLimitMigration.test.cjs tests/chatMediaSafeMimeTypesMigration.test.cjs tests/chatMediaExtensionGuardCorrection.test.cjs",
     "test:account-storage-cleanup": "node --test tests/accountStorageCleanupQueueMigration.test.cjs tests/accountStorageCleanupWorker.test.cjs tests/accountDeletionEndedSessionGuard.test.cjs",
     "test:contact-directory-rpc-ambiguity": "node --test tests/contactDirectoryRpcAmbiguityMigration.test.cjs",
-    "test:live-monetization": "node --test tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs"
+    "test:live-monetization": "node --test tests/liveMonetizationFoundation.test.cjs tests/livePurchasesRoutes.test.cjs tests/liveSparkLotConsumption.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
