@@ -112,6 +112,25 @@ router.get('/stream/:streamId/current', async (req, res) => {
   const streamId = req.params.streamId;
   if (!validUuid(streamId)) return res.status(400).json({ error: 'Invalid LIVE stream id' });
   try {
+    const now = new Date();
+    const pendingExpiry = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+    const acceptedExpiry = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+    const [expiredPending, expiredAccepted] = await Promise.all([
+      supabaseAdmin.from('live_pk_battles').update({ status: 'cancelled', updated_at: now.toISOString() })
+        .eq('stream_id', streamId).eq('status', 'pending').lt('created_at', pendingExpiry),
+      supabaseAdmin.from('live_pk_battles').update({ status: 'cancelled', updated_at: now.toISOString() })
+        .eq('stream_id', streamId).eq('status', 'accepted').lt('created_at', acceptedExpiry),
+    ]);
+    if (expiredPending.error || expiredAccepted.error) throw expiredPending.error || expiredAccepted.error;
+    const { data: stream, error: streamError } = await supabaseAdmin.from('live_streams')
+      .select('status').eq('id', streamId).maybeSingle();
+    if (streamError) throw streamError;
+    if (!stream || stream.status !== 'live') {
+      const { error: closeError } = await supabaseAdmin.from('live_pk_battles')
+        .update({ status: 'cancelled', updated_at: now.toISOString() })
+        .eq('stream_id', streamId).in('status', ['pending', 'accepted', 'live']);
+      if (closeError) throw closeError;
+    }
     const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
       .select('user_id').eq('stream_id', streamId).eq('user_id', req.user.id)
       .eq('status', 'joined').is('left_at', null).maybeSingle();
