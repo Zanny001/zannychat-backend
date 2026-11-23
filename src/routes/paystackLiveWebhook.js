@@ -43,6 +43,27 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
     const eventReference = String(event.data.reference);
     const verified = await verifyPaystackTransaction(eventReference);
     if (String(verified.reference) !== eventReference) throw new Error('Verified payment reference mismatch');
+
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from('live_spark_purchases')
+      .select('id,user_id,amount_minor,currency')
+      .eq('provider_reference', eventReference)
+      .maybeSingle();
+    if (orderError) throw orderError;
+    if (!order) return res.status(200).json({ received: true, ignored: true });
+    if (String(verified.metadata?.purchase_id || '') !== order.id
+        || Number(verified.amount) !== Number(order.amount_minor)
+        || String(verified.currency).toUpperCase() !== order.currency) {
+      throw new Error('Verified payment metadata, amount or currency does not match the purchase order');
+    }
+    const { data: account, error: accountError } = await supabaseAdmin.auth.admin.getUserById(order.user_id);
+    if (accountError) throw accountError;
+    const expectedEmail = String(account?.user?.email || '').trim().toLowerCase();
+    const paidEmail = String(verified.customer?.email || '').trim().toLowerCase();
+    if (!expectedEmail || !paidEmail || expectedEmail !== paidEmail) {
+      throw new Error('Verified payment customer does not match the ZannyChat account');
+    }
+
     const { data, error } = await supabaseAdmin.rpc('fulfill_live_spark_purchase', {
       p_provider_reference: String(verified.reference),
       p_provider_transaction_id: String(verified.id),
