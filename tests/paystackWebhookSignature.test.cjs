@@ -73,3 +73,9 @@ test('does not downgrade an invalid v2 header to a valid legacy signature', () =
     nowSeconds: now,
   }), false);
 });
+
+test('accepts the overlapping current and previous signing secrets during key rotation', () => {
+  const previousSecret = 'whsec_previous_secret';
+  const header = timestampedHeader(now, previousSecret, 'whk_previous_456');
+  assert.equal(validTimestampedSignature(body, header, [webhookSecret, previousSecret], now), true);
+});
