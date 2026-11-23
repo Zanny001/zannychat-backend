@@ -168,13 +168,15 @@ BEGIN
     RAISE EXCEPTION 'PK challenge cannot be accepted by this user' USING ERRCODE = '42501';
   END IF;
   IF v_battle.created_at < now() - interval '2 minutes' THEN
-    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now() WHERE id = p_battle_id;
-    RAISE EXCEPTION 'PK challenge has expired' USING ERRCODE = 'P0001';
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
   END IF;
   SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
   IF v_stream_status <> 'live' THEN
-    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now() WHERE id = p_battle_id;
-    RAISE EXCEPTION 'LIVE stream has ended' USING ERRCODE = 'P0001';
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
   END IF;
   PERFORM 1 FROM public.live_stream_participants
     WHERE stream_id = v_battle.stream_id AND user_id = p_creator_id
@@ -218,7 +220,19 @@ BEGIN
     RAISE EXCEPTION 'PK battle cannot be started by this user' USING ERRCODE = '42501';
   END IF;
   SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
-  IF v_stream_status <> 'live' THEN RAISE EXCEPTION 'LIVE stream has ended' USING ERRCODE = 'P0001'; END IF;
+  IF v_stream_status <> 'live' THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
+  END IF;
+  PERFORM 1 FROM public.live_stream_participants
+    WHERE stream_id = v_battle.stream_id AND user_id = v_battle.creator_b_id
+      AND role = 'guest' AND status = 'joined' AND left_at IS NULL;
+  IF NOT FOUND THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
+  END IF;
   UPDATE public.live_pk_battles
     SET status = 'live', started_at = now(),
         ends_at = now() + make_interval(secs => duration_seconds), updated_at = now()
