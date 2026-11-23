@@ -132,7 +132,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
       if (closeError) throw closeError;
     }
     const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
-      .select('user_id').eq('stream_id', streamId).eq('user_id', req.user.id)
+      .select('user_id,role').eq('stream_id', streamId).eq('user_id', req.user.id)
       .eq('status', 'joined').is('left_at', null).maybeSingle();
     if (participantError) throw participantError;
     const { data: battle, error } = await supabaseAdmin.from('live_pk_battles')
@@ -156,7 +156,7 @@ router.get('/stream/:streamId/current', async (req, res) => {
       if (refreshed.error) throw refreshed.error;
       if (refreshed.data) settled = refreshed.data;
     }
-    return res.json({ battle: { ...settled, canAccept: req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: req.user.id === settled.creator_a_id && settled.status === 'accepted' }, scoring: 'gift_points_only' });
+    return res.json({ battle: { ...settled, canAccept: participant?.role === 'guest' && req.user.id === settled.creator_b_id && settled.status === 'pending', canStart: participant?.role === 'creator' && req.user.id === settled.creator_a_id && settled.status === 'accepted' }, scoring: 'gift_points_only' });
   } catch (error) {
     console.error('[live-battles] current battle lookup failed:', error?.message || error);
     return res.status(503).json({ error: 'Could not load the current PK battle' });
@@ -172,7 +172,7 @@ router.get('/:battleId', async (req, res) => {
     if (error) throw error;
     if (!battle) return res.status(404).json({ error: 'PK battle not found' });
     const { data: participant, error: participantError } = await supabaseAdmin.from('live_stream_participants')
-      .select('user_id').eq('stream_id', battle.stream_id).eq('user_id', req.user.id)
+      .select('user_id,role').eq('stream_id', battle.stream_id).eq('user_id', req.user.id)
       .eq('status', 'joined').is('left_at', null).maybeSingle();
     if (participantError) throw participantError;
     if (!participant && ![battle.creator_a_id, battle.creator_b_id].includes(req.user.id)) {
