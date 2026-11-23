@@ -29,13 +29,16 @@ test('unified Paystack endpoint passes a signed unrelated event through every ra
   const request = require('supertest');
   const secret = 'sk_test_dispatch_only';
   process.env.PAYSTACK_SECRET_KEY = secret;
+  const { validPaystackWebhookSignature } = require('../src/utils/paystackWebhookSignature.cjs');
   const app = require('../src/index');
   const body = Buffer.from(JSON.stringify({ event: 'customeridentification.success', data: { id: 123 } }));
   const signature = crypto.createHmac('sha512', secret).update(body).digest('hex');
+  assert.equal(validPaystackWebhookSignature({ rawBody: body, headers: { 'x-paystack-signature': signature }, apiSecret: secret }), true);
   const response = await request(app)
     .post('/webhooks/paystack')
     .set('Content-Type', 'application/json')
     .set('x-paystack-signature', signature)
+    .set('Content-Length', String(body.length))
     .send(body.toString('utf8'));
   assert.equal(response.status, 200);
   assert.deepEqual(response.body, { received: true, ignored: true });
