@@ -40,8 +40,8 @@ test('LIVE gift catalogue is seeded deterministically and gifts debit Sparks ato
 
 test('PK gift attribution is derived from the active battle on the server, not from client input', () => {
   assert.match(migration, /Battle attribution is derived from locked server state/);
-  assert.match(migration, /p_recipient_id IN \\(creator_a_id, creator_b_id\\)/);
-  assert.match(migration, /v_effective_battle_id := v_battle\\.id/);
+  assert.match(migration, /p_recipient_id IN \(creator_a_id, creator_b_id\)/);
+  assert.match(migration, /v_effective_battle_id := v_battle\.id/);
   assert.match(migration, /score_a = score_a \\+ v_points/);
   assert.match(migration, /score_b = score_b \\+ v_points/);
   assert.doesNotMatch(route, /p_battle_id/);
