@@ -30,7 +30,7 @@ Configure both Production and Sandbox notification URLs to:
 
 `https://zannychat-backend-1.onrender.com/webhooks/apple/app-store-server`
 
-Use version 2 only. The backend verifies the outer `signedPayload` and nested `signedTransactionInfo`. It acknowledges verified sandbox notifications without crediting production Sparks. Verified Production REFUND/REVOKE notifications are idempotently reconciled; full refunds revoke unspent purchased Sparks, while partial refunds and accounts with creator payouts are held for manual review.
+Use version 2 only. The backend verifies the outer `signedPayload` and nested `signedTransactionInfo`. It acknowledges verified sandbox notifications without crediting production Sparks. Verified Production REFUND/REVOKE notifications are idempotently reconciled and ordered by Apple's signedDate so stale deliveries cannot overwrite newer refund state; full refunds revoke unspent purchased Sparks, while partial refunds and accounts with creator payouts are held for manual review.
 
 ## Acceptance matrix
 
@@ -44,6 +44,7 @@ Use version 2 only. The backend verifies the outer `signedPayload` and nested `s
 - [ ] Production REFUND and REVOKE notifications are verified, deduplicated and reconciled.
 - [ ] Partial refunds and creator payout exposure enter the risk hold/manual review path.
 - [ ] REFUND_REVERSED restores only revoked unspent Sparks; uncredited purchases return to pending verification.
+- [ ] Out-of-order Apple notifications are rejected when their signedDate is not newer than the last processed event for that transaction.
 - [ ] App Store Server Notifications V2 test notification is received and acknowledged.
 - [ ] App Store Connect financial reports are used for actual proceeds and fee reconciliation; signed transaction price is only a package-price check.
 - [ ] Apple-funded creator earnings remain withheld while `provider_fee_status='pending'`; an authorized service-role reconciliation records the actual provider fee and releases eligible gift earnings using the reward rule captured at gift time.
