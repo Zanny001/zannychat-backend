@@ -377,7 +377,9 @@ BEGIN
   SELECT * INTO v_existing FROM public.live_gift_ledger
     WHERE user_id = p_user_id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
-    IF v_existing.entry_type <> 'grant' OR v_existing.amount_sparks <> p_amount THEN
+    IF v_existing.entry_type <> 'grant' OR v_existing.amount_sparks <> p_amount
+       OR v_existing.reference_type <> p_reference_type
+       OR v_existing.reference_id IS DISTINCT FROM p_reference_id THEN
       RAISE EXCEPTION 'idempotency key already used for another ledger entry' USING ERRCODE = '23505';
     END IF;
     RETURN v_existing.balance_after;
