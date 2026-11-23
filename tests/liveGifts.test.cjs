@@ -146,3 +146,15 @@ test('LIVE gift audit history is anonymized safely instead of blocking Auth acco
   assert.match(accountDeletionMigration, /FK-driven anonymisation may null only references/);
   assert.match(accountDeletionMigration, /RAISE EXCEPTION 'LIVE gift audit records are append-only'/);
 });
+
+
+const privilegeHardeningMigration = fs.readFileSync(
+  path.join(__dirname, '../supabase/migrations/20261123140000_lock_live_economy_service_role_readonly.sql'),
+  'utf8',
+);
+
+test('LIVE economy service_role is read-only; all mutations remain RPC-owned', () => {
+  assert.match(privilegeHardeningMigration, /REVOKE ALL PRIVILEGES ON TABLE[\s\S]*FROM PUBLIC, anon, authenticated, service_role/);
+  assert.match(privilegeHardeningMigration, /GRANT SELECT ON TABLE[\s\S]*TO service_role/);
+  assert.doesNotMatch(privilegeHardeningMigration, /GRANT (?:INSERT|UPDATE|DELETE|ALL)/i);
+});
