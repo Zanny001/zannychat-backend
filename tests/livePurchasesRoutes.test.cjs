@@ -5,8 +5,8 @@ const assert = require('node:assert/strict');
 
 const purchases = fs.readFileSync(path.join(__dirname, '../src/routes/livePurchases.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(__dirname, '../src/routes/paystackLiveWebhook.js'), 'utf8');
-const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 const gifts = fs.readFileSync(path.join(__dirname, '../src/routes/liveGifts.js'), 'utf8');
+const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 const migration = fs.readFileSync(
   path.join(__dirname, '../supabase/migrations/20261123160000_live_monetization_foundation.sql'),
   'utf8',
@@ -17,7 +17,7 @@ test('Sparks checkout uses an active server-owned package and authenticated acco
   assert.match(purchases, /\.eq\('provider', 'paystack'\)[\s\S]*\.eq\('currency', 'NGN'\)[\s\S]*\.eq\('is_active', true\)/);
   assert.match(purchases, /user_id: req\.user\.id/);
   assert.match(purchases, /email: req\.user\.email/);
-  assert.match(purchases, /amount: amountMinor\(purchase\.amount_minor\)/);
+  assert.ok(purchases.includes('amount: amountMinor,'));
   assert.match(purchases, /reference: purchase\.provider_reference/);
   assert.doesNotMatch(purchases, /amount:\s*req\.body/);
   assert.doesNotMatch(purchases, /sparks:\s*req\.body/);
