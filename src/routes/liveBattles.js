@@ -51,8 +51,10 @@ router.post('/:battleId/accept', async (req, res) => {
       p_creator_id: req.user.id,
     });
     if (error) return respondRpcError(res, error) || res.status(503).json({ error: 'Could not accept PK challenge' });
-    void sendPushToUser(data.creator_a_id, { title: 'PK challenge accepted', body: 'Your LIVE PK challenge was accepted. You can start the battle.', data: { type: 'live_pk_accepted', battleId: data.id, streamId: data.stream_id } })
-      .catch((pushError) => console.error('[live-battles] acceptance notification failed:', pushError?.message || pushError));
+    if (data?.status === 'accepted') {
+      void sendPushToUser(data.creator_a_id, { title: 'PK challenge accepted', body: 'Your LIVE PK challenge was accepted. You can start the battle.', data: { type: 'live_pk_accepted', battleId: data.id, streamId: data.stream_id } })
+        .catch((pushError) => console.error('[live-battles] acceptance notification failed:', pushError?.message || pushError));
+    }
     return res.json({ battle: data });
   } catch (error) {
     console.error('[live-battles] accept failed:', error?.message || error);
