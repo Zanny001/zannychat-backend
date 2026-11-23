@@ -209,9 +209,6 @@ The backend StoreKit 2 implementation is merged in backend PR #230. Its two migr
 7. App Store Server Notifications V2 are received at `POST /webhooks/apple/app-store-server`. The backend verifies the outer signed payload and nested signed transaction, deduplicates by Apple's notification UUID, and reconciles REFUND/REVOKE events through the service-role-only `record_live_apple_refund` function.
 8. Full refunds revoke remaining purchased Sparks and hold related unpaid creator earnings. Partial refunds and accounts with requested, processing or paid creator payouts are held for manual reconciliation. A verified sandbox notification is acknowledged but never credits production Sparks.
 9. Sandbox purchase fulfilment is allowed only when `NODE_ENV` is not `production` and `APPLE_IAP_ALLOW_SANDBOX=true`. The production backend rejects sandbox purchase credit.
-6. App Store Server Notifications V2 are received at `POST /webhooks/apple/app-store-server`. The backend verifies the outer signed payload and nested signed transaction, deduplicates by Apple's notification UUID, and reconciles REFUND/REVOKE events through the service-role-only `record_live_apple_refund` function.
-7. Full refunds revoke remaining purchased Sparks and hold related unpaid creator earnings. Partial refunds and accounts with requested, processing or paid creator payouts are held for manual reconciliation. A verified sandbox notification is acknowledged but never credits production Sparks.
-8. Sandbox purchase fulfilment is allowed only when `NODE_ENV` is not `production` and `APPLE_IAP_ALLOW_SANDBOX=true`. The production backend rejects sandbox purchase credit.
 
 ### Required Apple / Render configuration (not enabled)
 
