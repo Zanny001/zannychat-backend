@@ -9,6 +9,7 @@ const route = fs.readFileSync(path.join(__dirname, '../src/routes/liveStreams.js
 const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261110070014_creator_live_streams.sql'), 'utf8');
 const experienceMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118221000_live_experience_modes.sql'), 'utf8');
 const removalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261118223000_block_removed_live_participants.sql'), 'utf8');
+const feedbackMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123090000_live_stream_feedback.sql'), 'utf8');
 
 test('LIVE creator follow, stream start, private invitations and guest decisions send push notifications', () => {
   assert.ok(route.includes("require('../config/pushClient')"));
@@ -268,6 +269,12 @@ test('LIVE discovery returns creator display names only after visibility and blo
   }
   assert.ok(publicRoute.includes(".eq('visibility', 'public')"));
   assert.ok(followingRoute.includes(".in('visibility', ['public','followers'])"));
+  for (const discoveryRoute of [publicRoute, followingRoute]) {
+    assert.ok(discoveryRoute.includes("from('live_stream_feedback')"));
+    assert.ok(discoveryRoute.includes("!notInterestedIds.has(stream.creator_id)"));
+  }
+  assert.ok(publicRoute.includes('.limit(100)'));
+  assert.ok(publicRoute.includes('.slice(0, 50)'));
 });
 
 
@@ -363,4 +370,19 @@ test('LIVE creator roster includes the host, participant identity, camera and mi
 test('LIVE roster reports actual media connection status without granting creator moderator controls', () => {
   assert.ok(route.includes('moderator: moderatorIds.has(userId)'));
   assert.ok(route.includes("connectionStatus: mediaByIdentity.has(userId) ? 'connected' : 'not_connected'"));
+});
+
+
+test('LIVE not-interested feedback is server-only and filters future discovery', () => {
+  assert.ok(feedbackMigration.includes('public.live_stream_feedback'));
+  assert.ok(feedbackMigration.includes('ENABLE ROW LEVEL SECURITY'));
+  assert.ok(feedbackMigration.includes('REVOKE ALL ON public.live_stream_feedback FROM PUBLIC, anon, authenticated'));
+  assert.ok(feedbackMigration.includes('GRANT ALL ON public.live_stream_feedback TO service_role'));
+  assert.ok(route.includes("router.post('/:streamId/not-interested'"));
+  assert.ok(route.includes("from('live_stream_feedback')"));
+  assert.ok(route.includes("feedback_type: 'not_interested'"));
+  assert.ok(route.includes("!notInterestedIds.has(stream.creator_id)"));
+  assert.ok(route.includes('.limit(100)'));
+  assert.ok(route.includes('.slice(0, 50)'));
+  assert.ok(route.includes('requireJoined(streamId, req.user.id)'));
 });
