@@ -15,7 +15,7 @@ const refundMigration = fs.readFileSync(
   'utf8',
 );
 const reversalMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123165000_apple_refund_reversal_reconciliation.sql'), 'utf8');
-const orderingMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123170000_apple_notification_signed_date_ordering.sql'), 'utf8');
+const orderingMigration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123173000_apple_notification_signed_date_ordering.sql'), 'utf8');
 const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
 
 test('Apple account binding is stable, UUID-backed and service-role-only', () => {
