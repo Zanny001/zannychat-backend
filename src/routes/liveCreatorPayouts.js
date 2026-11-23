@@ -44,15 +44,20 @@ router.get('/eligibility', async (req, res) => {
     ]);
     if (profileError) throw profileError;
     if (ruleError) throw ruleError;
+    const providerConfigured = Boolean(process.env.PAYSTACK_SECRET_KEY);
+    const withdrawalsEnabled = process.env.LIVE_PAYOUTS_ENABLED === 'true';
     const verified = profile?.verification_status === 'verified' && profile?.payout_hold !== true;
     return res.json({
-      enabled: payoutConfigured() && verified && Boolean(rule),
+      enabled: providerConfigured && withdrawalsEnabled && verified && Boolean(rule),
+      providerConfigured,
+      withdrawalsEnabled,
       verificationStatus: profile?.verification_status || 'unverified',
       payoutHold: profile?.payout_hold === true,
       minimumWithdrawalMinor: rule?.minimum_withdrawal_minor || null,
       currency: 'NGN',
-      reason: !payoutConfigured() ? 'PAYOUTS_NOT_CONFIGURED'
-        : !verified ? 'PAYOUT_KYC_REQUIRED'
+      reason: !providerConfigured ? 'PAYOUTS_NOT_CONFIGURED'
+        : !withdrawalsEnabled ? 'PAYOUTS_NOT_ENABLED'
+          : !verified ? 'PAYOUT_KYC_REQUIRED'
           : !rule ? 'CREATOR_REWARD_POLICY_NOT_CONFIGURED' : null,
     });
   } catch (error) {
@@ -86,7 +91,7 @@ router.get('/beneficiaries', async (req, res) => {
 });
 
 router.post('/beneficiaries', async (req, res) => {
-  if (!payoutConfigured()) return res.status(503).json({ error: 'Payout setup is not enabled yet' });
+  if (!process.env.PAYSTACK_SECRET_KEY) return res.status(503).json({ error: 'Bank verification is not configured yet' });
   const { bankCode, accountNumber } = req.body || {};
   if (typeof bankCode !== 'string' || !/^[a-zA-Z0-9_-]{2,20}$/.test(bankCode)
       || typeof accountNumber !== 'string' || !/^\d{10}$/.test(accountNumber)) {
