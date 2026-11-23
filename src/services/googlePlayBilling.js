@@ -183,10 +183,14 @@ function createGooglePlayBillingClient({
     };
   }
 
-  async function verifyVoidedPurchase({ packageName, purchaseToken, orderId, voidedTimeMillis }) {
+  async function verifyVoidedPurchase({ packageName, purchaseToken, orderId, voidedTimeMillis, refundType }) {
     if (!packageName || typeof purchaseToken !== 'string' || purchaseToken.length < 16
         || purchaseToken.length > 4096 || typeof orderId !== 'string' || !orderId) {
       throw new Error('Google Play voided purchase evidence is incomplete');
+    }
+    const normalizedRefundType = Number(refundType);
+    if (![1, 2].includes(normalizedRefundType)) {
+      throw new Error('Google Play voided notification has an unsupported refund type');
     }
     const eventTime = Number(voidedTimeMillis);
     const endTime = now();
@@ -210,18 +214,13 @@ function createGooglePlayBillingClient({
       const match = purchases.find((item) =>
         String(item.purchaseToken || '') === purchaseToken
         && String(item.orderId || '') === orderId
-        && Number(item.productType) === 2
       );
       if (match) {
-        const refundType = Number(match.refundType);
-        if (![1, 2].includes(refundType)) {
-          throw new Error('Google Play voided purchase has an unsupported refund type');
-        }
         return {
           purchaseToken,
           orderId,
           voidedTimeMillis: String(match.voidedTimeMillis || voidedTimeMillis || ''),
-          refundType,
+          refundType: normalizedRefundType,
           voidedQuantity: Number.isSafeInteger(Number(match.voidedQuantity))
             ? Number(match.voidedQuantity) : null,
           voidedSource: Number(match.voidedSource),
