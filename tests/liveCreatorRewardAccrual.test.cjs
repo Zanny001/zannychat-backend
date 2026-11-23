@@ -11,7 +11,7 @@ const migration = fs.readFileSync(
 test('creator reward rules are server-owned and inactive until commercial policy is configured', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.live_creator_reward_rules/);
   assert.match(migration, /creator_share_bps integer NOT NULL CHECK \(creator_share_bps BETWEEN 1 AND 10000\)/);
-  assert.match(migration, /clearance_hours integer NOT NULL DEFAULT 168/);
+  assert.match(migration, /clearance_hours integer NOT NULL CHECK/);
   assert.match(migration, /minimum_withdrawal_minor bigint NOT NULL/);
   assert.match(migration, /is_active boolean NOT NULL DEFAULT false/);
   assert.match(migration, /one_active_idx/);
