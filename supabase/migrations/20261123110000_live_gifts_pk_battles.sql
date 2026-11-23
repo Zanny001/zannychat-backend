@@ -244,6 +244,11 @@ BEGIN
   IF NOT FOUND OR v_battle.creator_a_id <> p_creator_id OR v_battle.status <> 'accepted' THEN
     RAISE EXCEPTION 'PK battle cannot be started by this user' USING ERRCODE = '42501';
   END IF;
+  IF v_battle.created_at < now() - interval '10 minutes' THEN
+    UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
+      WHERE id = p_battle_id RETURNING * INTO v_battle;
+    RETURN v_battle;
+  END IF;
   SELECT status INTO v_stream_status FROM public.live_streams WHERE id = v_battle.stream_id;
   IF v_stream_status <> 'live' THEN
     UPDATE public.live_pk_battles SET status = 'cancelled', updated_at = now()
