@@ -307,7 +307,7 @@ router.post('/native/verify', async (req, res) => {
       try {
         await billing.consumeProductPurchase({ packageName, productId: pack.package_id, purchaseToken });
       } catch (consumeError) {
-        console.error('[live-purchases] verified Sparks purchase awaits Google Play consumption:', consumeError?.message || consumeError);
+        console.error('[live-purchases] verified Sparks purchase awaits Google Play consumption:', consumeError?.code || 'provider_error');
         return res.status(503).json({
           error: 'Your Sparks were credited, but Google Play has not confirmed transaction completion. Refresh wallet status and retry verification.',
           code: 'STORE_TRANSACTION_FINALIZATION_PENDING',
@@ -325,7 +325,7 @@ router.post('/native/verify', async (req, res) => {
       replayed: Boolean(fulfilment?.replayed),
     });
   } catch (error) {
-    console.error('[live-purchases] Google Play verification failed:', error?.message || error);
+    console.error('[live-purchases] Google Play verification failed:', error?.code || 'provider_error');
     if (error?.code === 'PURCHASE_NOT_COMPLETED') {
       return res.status(409).json({ error: error.message, code: error.code });
     }
