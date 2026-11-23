@@ -1,16 +1,9 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const { supabaseAdmin } = require('../config/supabaseAdmin');
+const { validPaystackWebhookSignature } = require('../utils/paystackWebhookSignature.cjs');
 
 const router = express.Router();
-
-function validPaystackSignature(rawBody, signature, secret) {
-  if (!Buffer.isBuffer(rawBody) || typeof signature !== 'string' || !secret) return false;
-  const expected = crypto.createHmac('sha512', secret).update(rawBody).digest();
-  let received;
-  try { received = Buffer.from(signature, 'hex'); } catch (_) { return false; }
-  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
-}
 
 async function verifyPaystackTransaction(reference) {
   const response = await fetch('https://api.paystack.co/transaction/verify/' + encodeURIComponent(reference), {
@@ -27,7 +20,7 @@ async function verifyPaystackTransaction(reference) {
 router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res) => {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return res.status(503).json({ error: 'Payment webhook is not configured' });
-  if (!validPaystackSignature(req.body, req.headers['x-paystack-signature'], secret)) {
+  if (!validPaystackWebhookSignature({ rawBody: req.body, headers: req.headers, apiSecret: secret })) {
     return res.status(401).json({ error: 'Invalid payment webhook signature' });
   }
 
