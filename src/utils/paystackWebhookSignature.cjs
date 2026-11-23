@@ -14,7 +14,8 @@ function validLegacySignature(rawBody, signature, apiSecret) {
 }
 
 function validTimestampedSignature(rawBody, header, webhookSecret, nowSeconds = Math.floor(Date.now() / 1000)) {
-  if (!Buffer.isBuffer(rawBody) || typeof header !== 'string' || !webhookSecret) return false;
+  const secrets = (Array.isArray(webhookSecret) ? webhookSecret : [webhookSecret]).filter((value) => typeof value === 'string' && value.length > 0);
+  if (!Buffer.isBuffer(rawBody) || typeof header !== 'string' || !secrets.length) return false;
   const fields = header.split(',').map((part) => part.trim()).filter(Boolean);
   const timestamps = fields.filter((part) => part.startsWith('t='));
   const signatures = fields.filter((part) => part.startsWith('v1='));
@@ -25,10 +26,10 @@ function validTimestampedSignature(rawBody, header, webhookSecret, nowSeconds = 
   const timestamp = Number(timestampText);
   if (!Number.isSafeInteger(timestamp) || Math.abs(nowSeconds - timestamp) > 300) return false;
 
-  const expected = crypto.createHmac('sha512', webhookSecret)
+  const expected = secrets.map((secret) => crypto.createHmac('sha512', secret)
     .update(timestampText + '.')
     .update(rawBody)
-    .digest('hex');
+    .digest('hex'));
 
   return signatures.some((field) => {
     const value = field.slice(3);
@@ -37,7 +38,7 @@ function validTimestampedSignature(rawBody, header, webhookSecret, nowSeconds = 
     const keyId = value.slice(0, separator);
     const signature = value.slice(separator + 1);
     if (!/^whk_[a-zA-Z0-9_-]+$/.test(keyId)) return false;
-    return safeHexEqual(expected, signature);
+    return expected.some((digest) => safeHexEqual(digest, signature));
   });
 }
 
@@ -45,7 +46,7 @@ function validPaystackWebhookSignature({
   rawBody,
   headers = {},
   apiSecret = process.env.PAYSTACK_SECRET_KEY,
-  webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET,
+  webhookSecret = [process.env.PAYSTACK_WEBHOOK_SECRET, process.env.PAYSTACK_WEBHOOK_SECRET_PREVIOUS],
   nowSeconds = Math.floor(Date.now() / 1000),
 } = {}) {
   if (!Buffer.isBuffer(rawBody)) return false;
