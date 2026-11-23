@@ -255,6 +255,14 @@ BEGIN
             FROM public.live_spark_spend_allocations a
             JOIN public.live_spark_lots l ON l.id = a.lot_id
             WHERE l.purchase_id = v_purchase.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.live_spark_spend_allocations a2
+            JOIN public.live_spark_lots l2 ON l2.id = a2.lot_id
+            JOIN public.live_spark_purchases p2 ON p2.id = l2.purchase_id
+            WHERE a2.gift_transaction_id = e.gift_transaction_id
+              AND p2.status IN ('disputed', 'refunded')
           );
     END IF;
     RETURN jsonb_build_object('restored', v_open_events = 0, 'purchaseId', v_purchase.id, 'status', CASE WHEN v_open_events = 0 THEN 'paid' ELSE 'disputed' END);
