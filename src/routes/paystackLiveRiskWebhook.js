@@ -73,6 +73,8 @@ async function verifyDisputeResource(eventData, secret, fetchImpl = fetch) {
     throw new Error('Verified dispute record is missing or invalid');
   }
   const resolved = String(dispute.status).toLowerCase() === 'resolved';
+  const dueAt = dispute.dueAt ? new Date(dispute.dueAt) : null;
+  if (dueAt && !Number.isFinite(dueAt.getTime())) throw new Error('Verified dispute due date is invalid');
   if (resolved && !['merchant-accepted', 'declined'].includes(String(dispute.resolution))) {
     throw new Error('Resolved dispute has an unsupported resolution');
   }
@@ -87,6 +89,7 @@ async function verifyDisputeResource(eventData, secret, fetchImpl = fetch) {
     amountMinor: dispute.refund_amount == null ? null : Number(dispute.refund_amount),
     currency: String(dispute.currency || dispute.transaction.currency || '').toUpperCase(),
     resolution: dispute.resolution == null ? null : String(dispute.resolution),
+    providerDueAt: dueAt ? dueAt.toISOString() : null,
   };
 }
 
@@ -127,6 +130,12 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
       p_resolution: verified.resolution,
     });
     if (error) throw error;
+    if (verified.providerDueAt) {
+      const { error: dueAtError } = await supabaseAdmin.from('live_purchase_risk_events')
+        .update({ provider_due_at: verified.providerDueAt })
+        .eq('event_key', eventKey);
+      if (dueAtError) throw dueAtError;
+    }
     return res.status(200).json({ received: true, ...data });
   } catch (error) {
     console.error('[live-purchase-risk] webhook processing failed:', error?.message || error);

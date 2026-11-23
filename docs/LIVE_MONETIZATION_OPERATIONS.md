@@ -115,11 +115,11 @@ Never paste webhook signing secrets into chat, source control, client bundles or
 - A verified full refund revokes the remaining Sparks from that purchase and holds linked creator earnings.
 - Partial refunds remain frozen for manual reconciliation. ZannyChat does not invent proportional Spark reversals or creator clawbacks.
 - Already initiated or completed creator transfers are not automatically cancelled or clawed back by this handler. They require a documented finance reconciliation process.
-- The risk event ledger is idempotent and service-role-only; it does not expose payment or dispute records to client roles.
+- The risk event ledger is idempotent and service-role-only; it stores Paystack's verified `dueAt` for open disputes so operators can prioritize evidence responses. It does not expose payment or dispute records to client roles.
 
 **Still not production-ready:** the manual partial-refund and dispute-evidence operations, payout-in-flight reconciliation, creator KYC workflow and real provider end-to-end tests are not complete. Keep `LIVE_PURCHASES_RISK_WEBHOOKS_READY` unset and do not activate paid packages until these operational controls are tested.
 
-Webhook handlers validate raw request bytes, deduplicate provider events, independently verify provider state and retain an auditable reconciliation record. Paystack dispute deadlines must be tracked from the verified dispute's provider-supplied due date; do not assume a fixed response window.
+Webhook handlers validate raw request bytes, deduplicate provider events, independently verify provider state and retain an auditable reconciliation record. Paystack dispute deadlines are persisted from the verified dispute's provider-supplied `dueAt`; operators must act against that actual deadline and must not assume a fixed response window.
 
 ## 7. Feature activation gates
 
