@@ -471,6 +471,10 @@ router.post('/apple/verify', async (req, res) => {
           sparks: pack.sparks,
           amount_minor: amountMinor,
           currency: 'NGN',
+          provider_product_id: productId,
+          provider_environment: verifiedResult.environment,
+          provider_storefront: transaction.storefront || null,
+          provider_transaction_date: new Date(purchaseDate).toISOString(),
           status: 'pending',
         })
         .select('id,provider_reference,status')
