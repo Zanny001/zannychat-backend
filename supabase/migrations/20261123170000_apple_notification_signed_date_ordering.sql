@@ -22,7 +22,9 @@ CREATE OR REPLACE FUNCTION public.record_live_apple_refund(
   p_currency text,
   p_refund_type text,
   p_provider_resource_id text,
-  p_signed_date bigint
+  p_signed_date bigint,
+  p_notification_uuid text,
+  p_notification_type text
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -43,7 +45,9 @@ BEGIN
      OR p_currency IS NULL OR upper(p_currency) <> 'NGN'
      OR p_refund_type IS NULL OR p_refund_type NOT IN ('full', 'partial')
      OR p_provider_resource_id IS NULL OR length(p_provider_resource_id) NOT BETWEEN 3 AND 200
-     OR p_signed_date IS NULL OR p_signed_date <= 0 THEN
+     OR p_signed_date IS NULL OR p_signed_date <= 0
+     OR p_notification_uuid IS NULL OR length(p_notification_uuid) NOT BETWEEN 8 AND 128
+     OR p_notification_type IS NULL OR length(p_notification_type) NOT BETWEEN 1 AND 80 THEN
     RAISE EXCEPTION 'invalid Apple refund event' USING ERRCODE = '22023';
   END IF;
 
@@ -57,7 +61,7 @@ BEGIN
   END IF;
   INSERT INTO public.live_apple_transaction_notification_state(
     transaction_key, latest_signed_date, latest_notification_uuid, latest_notification_type
-  ) VALUES (p_provider_transaction_id, p_signed_date, p_event_key, 'REFUND')
+  ) VALUES (p_provider_transaction_id, p_signed_date, p_notification_uuid, p_notification_type)
   ON CONFLICT (transaction_key) DO UPDATE SET
     latest_signed_date = EXCLUDED.latest_signed_date,
     latest_notification_uuid = EXCLUDED.latest_notification_uuid,
@@ -197,7 +201,7 @@ END;
 $function$;
 
 
-REVOKE ALL ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint)
+REVOKE ALL ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint,text,text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.record_live_apple_refund(text,text,bigint,text,text,text,bigint)
   TO service_role;
@@ -237,7 +241,7 @@ BEGIN
   END IF;
   INSERT INTO public.live_apple_transaction_notification_state(
     transaction_key, latest_signed_date, latest_notification_uuid, latest_notification_type
-  ) VALUES (p_provider_transaction_id, p_signed_date, p_event_key, 'REFUND_REVERSED')
+  ) VALUES (p_provider_transaction_id, p_signed_date, p_notification_uuid, p_notification_type)
   ON CONFLICT (transaction_key) DO UPDATE SET
     latest_signed_date = EXCLUDED.latest_signed_date,
     latest_notification_uuid = EXCLUDED.latest_notification_uuid,
@@ -351,7 +355,7 @@ END;
 $function$;
 
 
-REVOKE ALL ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint)
+REVOKE ALL ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint,text,text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.record_live_apple_refund_reversal(text,text,text,bigint)
   TO service_role;
