@@ -26,3 +26,9 @@ test('partial refunds remain held for manual reconciliation rather than silently
   assert.match(migration, /IF NOT v_full_refund THEN[\s\S]*manualReviewRequired/);
   assert.match(migration, /Partial refunds require operator review/);
 });
+
+test('LIVE dispute risk ledger stores provider-supplied response deadlines', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261123131458_live_purchase_risk_due_at_20261123131500.sql'), 'utf8');
+  assert.match(migration, /provider_due_at timestamptz/);
+  assert.match(migration, /live_purchase_risk_events_open_dispute_due_idx/);
+});
