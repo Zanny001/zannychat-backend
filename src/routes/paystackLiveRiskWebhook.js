@@ -48,7 +48,7 @@ async function verifyRefundResource(eventData, secret, fetchImpl = fetch) {
 
   const refundReference = eventData?.refund_reference == null ? '' : String(eventData.refund_reference);
   let refunds;
-  if (/^\\d+$/.test(refundReference)) {
+  if (/^\d+$/.test(refundReference)) {
     const refund = await fetchPaystackData(
       'https://api.paystack.co/refund/' + encodeURIComponent(refundReference),
       secret,
