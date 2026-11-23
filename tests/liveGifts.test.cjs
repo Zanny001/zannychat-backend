@@ -85,6 +85,13 @@ test('PK battle routes require authentication and expose creator-controlled life
   assert.match(index, /app\.use\('\/live\/battles', liveBattlesRouter\)/);
 });
 
+test('PK expiry is performed by a privileged RPC, not direct service-role table writes', () => {
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.expire_live_pk_battle_challenges/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.expire_live_pk_battle_challenges\(uuid\) TO service_role/);
+  assert.match(battles, /rpc\('expire_live_pk_battle_challenges'/);
+  assert.doesNotMatch(battles, /\.from\('live_pk_battles'\)\.update/);
+});
+
 test('PK challenges require explicit guest consent before the host can start', () => {
   assert.match(migration, /status IN \('pending', 'accepted', 'live', 'ended', 'cancelled'\)/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.accept_live_pk_battle/);
