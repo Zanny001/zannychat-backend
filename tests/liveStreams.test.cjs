@@ -364,3 +364,21 @@ test('LIVE roster reports actual media connection status without granting creato
   assert.ok(route.includes('moderator: moderatorIds.has(userId)'));
   assert.ok(route.includes("connectionStatus: mediaByIdentity.has(userId) ? 'connected' : 'not_connected'"));
 });
+
+test('Direct LIVE guest invitations require recipient consent before stage publishing is granted', () => {
+  const inviteStart = route.indexOf("router.post('/:streamId/guests/invite'");
+  const inviteEnd = route.indexOf("\n});", inviteStart) + 4;
+  const inviteRoute = route.slice(inviteStart, inviteEnd);
+  assert.match(inviteRoute, /invitation_type: 'guest', status: 'pending'/);
+  assert.doesNotMatch(inviteRoute, /invitation_type: 'guest', status: 'accepted'/);
+  const decisionStart = route.indexOf("router.patch('/:streamId/guest-invitation'");
+  const decisionEnd = route.indexOf("\n});", decisionStart) + 4;
+  const decisionRoute = route.slice(decisionStart, decisionEnd);
+  assert.match(decisionRoute, /\['accepted', 'declined'\]/);
+  assert.match(decisionRoute, /\.eq\('user_id', req\.user\.id\)/);
+  assert.match(decisionRoute, /\.eq\('status', 'pending'\)/);
+  assert.match(decisionRoute, /\.eq\('invited_by', stream\.creator_id\)/);
+  assert.match(decisionRoute, /type: 'live_guest_decision'/);
+  assert.match(decisionRoute, /hasBlockBetween\(stream\.creator_id, req\.user\.id\)/);
+  assert.match(decisionRoute, /Guest participation is disabled/);
+});
