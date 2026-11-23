@@ -1,5 +1,7 @@
 # ZannyChat LIVE monetisation and payouts — operations runbook
 
+See [the LIVE economy integration map](./LIVE_ECONOMY_INTEGRATION_MAP_20261123.md) for the screen/API/database connections, PK scoring rules, current production gate counts, and official platform/provider requirements.
+
 Last reviewed: 2026-11-23
 
 ## 1. Product currencies and ledgers
