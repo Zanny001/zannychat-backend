@@ -898,7 +898,7 @@ router.get('/following/streams', async (req, res) => {
     const { data, error } = await supabaseAdmin.from('live_streams')
       .select('id,creator_id,title,description,visibility,allow_guests,started_at')
       .eq('status', 'live').in('visibility', ['public','followers'])
-      .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(50);
+      .in('creator_id', creatorIds).order('started_at', { ascending: false }).limit(100);
     if (error) throw error;
     const [blockedIds, feedbackResult] = await Promise.all([
       getBlockedUserIds(req.user.id, (data || []).map((stream) => stream.creator_id)),
@@ -908,6 +908,7 @@ router.get('/following/streams', async (req, res) => {
     if (feedbackResult.error) throw feedbackResult.error;
     const notInterestedIds = new Set((feedbackResult.data || []).map((row) => row.creator_id));
     const visible = (data || []).filter((stream) => !blockedIds.has(stream.creator_id) && !notInterestedIds.has(stream.creator_id))
+      .slice(0, 50)
       .map((stream) => ({ ...stream, is_creator: stream.creator_id === req.user.id }));
     const creatorNames = await getProfileNames(visible.map((stream) => stream.creator_id));
     return res.json({ streams: visible.map((stream) => ({
