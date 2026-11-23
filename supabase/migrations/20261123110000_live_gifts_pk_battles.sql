@@ -109,11 +109,31 @@ ALTER TABLE public.live_pk_battles ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.live_gift_catalog, public.live_gift_wallets,
   public.live_gift_ledger, public.live_gift_transactions, public.live_pk_battles
   FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.live_gift_catalog TO service_role;
-GRANT ALL ON public.live_gift_catalog, public.live_gift_wallets,
+GRANT SELECT ON public.live_gift_catalog, public.live_gift_wallets,
   public.live_gift_ledger, public.live_gift_transactions, public.live_pk_battles
   TO service_role;
 
+
+
+CREATE OR REPLACE FUNCTION public.prevent_live_gift_audit_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $
+BEGIN
+  RAISE EXCEPTION 'LIVE gift audit records are append-only' USING ERRCODE = '55000';
+END;
+$;
+
+DROP TRIGGER IF EXISTS live_gift_ledger_append_only ON public.live_gift_ledger;
+CREATE TRIGGER live_gift_ledger_append_only
+  BEFORE UPDATE OR DELETE ON public.live_gift_ledger
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_live_gift_audit_mutation();
+
+DROP TRIGGER IF EXISTS live_gift_transactions_append_only ON public.live_gift_transactions;
+CREATE TRIGGER live_gift_transactions_append_only
+  BEFORE UPDATE OR DELETE ON public.live_gift_transactions
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_live_gift_audit_mutation();
 
 CREATE OR REPLACE FUNCTION public.create_live_pk_battle(
   p_stream_id uuid, p_creator_a_id uuid, p_creator_b_id uuid, p_duration_seconds integer DEFAULT 300
@@ -269,6 +289,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.prevent_live_gift_audit_mutation() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.create_live_pk_battle(uuid, uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.accept_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.decline_live_pk_battle(uuid, uuid) FROM PUBLIC, anon, authenticated;
