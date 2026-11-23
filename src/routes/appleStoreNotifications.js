@@ -94,7 +94,7 @@ router.post('/', async (req, res) => {
           p_currency: transaction.currency,
           p_refund_type: refundType,
           p_provider_resource_id: 'transaction:' + sha256Hex(transaction.transactionId),
-          p_signed_date: Number(notification.signedDate),
+          p_signed_date: notificationSignedDate,
           p_notification_uuid: notificationUuid,
           p_notification_type: notificationType,
         });
