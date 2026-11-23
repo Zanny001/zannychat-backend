@@ -20,17 +20,16 @@ test('native Play verification requires auth, an active server-owned package and
   assert.doesNotMatch(route, /sparks:\s*req\.body/);
 });
 
-test('native Play verification fulfils through the existing atomic ledger RPC before consuming', () => {
+test('native Play verification fulfils through the existing atomic ledger RPC and leaves store finalization to the native client', () => {
   const fulfil = route.indexOf("rpc('fulfill_live_spark_purchase'");
-  const consume = route.indexOf('consumeProductPurchase', fulfil);
   assert.ok(fulfil > 0);
-  assert.ok(consume > fulfil);
+  assert.match(route, /storeAcknowledgementRequired: true/);
+  assert.doesNotMatch(route.slice(route.indexOf("router.post('/native/verify'"), route.indexOf('module.exports')), /consumeProductPurchase/);
   assert.match(route, /provider_transaction_id/);
   assert.match(route, /provider_fee_minor: verified\.providerFeeMinor/);
   assert.match(route, /amount_minor: verified\.amountMinor/);
   assert.match(route, /p_amount_minor: verified\.amountMinor/);
   assert.match(route, /gplay:' \+ sha256Hex\(purchaseToken\)/);
-  assert.match(route, /STORE_TRANSACTION_FINALIZATION_PENDING/);
   assert.match(route, /consumptionState === 1 && \(!existing \|\| existing\.status !== 'paid'\)/);
 });
 
