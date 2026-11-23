@@ -23,6 +23,7 @@ const callHistoryRouter = require('./routes/callHistory');
 const liveHistoryRouter = require('./routes/liveHistory');
 const groupCallsRouter = require('./routes/groupCalls');
 const liveStreamsRouter = require('./routes/liveStreams');
+const liveGiftsRouter = require('./routes/liveGifts');
 const liveEventsRouter = require('./routes/liveEvents');
 
 // Retry transient call-push failures while the API process is awake. The
@@ -238,6 +239,7 @@ app.use('/calls', callsRouter);
 app.use('/group-calls', groupCallsRouter);
 app.use('/live', liveEventsRouter);
 app.use('/live', liveStreamsRouter);
+app.use('/live/gifts', liveGiftsRouter);
 app.use('/live', liveHistoryRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
