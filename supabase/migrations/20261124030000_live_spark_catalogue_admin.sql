@@ -39,7 +39,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'public'
 AS $function$
 DECLARE v_package public.live_spark_packages%ROWTYPE;
 BEGIN
-  IF p_admin_id IS NULL OR p_provider NOT IN ('paystack', 'google_play', 'apple_iap')
+  IF p_admin_id IS NULL OR p_provider IS NULL OR p_provider NOT IN ('paystack', 'google_play', 'apple_iap')
      OR p_package_id IS NULL OR length(p_package_id) NOT BETWEEN 2 AND 150
      OR p_package_id !~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'
      OR p_sparks IS NULL OR p_sparks NOT BETWEEN 1 AND 10000000
