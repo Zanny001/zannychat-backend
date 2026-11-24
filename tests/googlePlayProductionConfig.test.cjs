@@ -20,12 +20,12 @@ test('Google Play production secrets are documented as backend-only configuratio
     assert.match(checklist, new RegExp(key));
   }
   assert.match(envExample, /^LIVE_GOOGLE_PLAY_BILLING_ENABLED=false$/m);
-  assert.match(renderBlueprint, /key: LIVE_GOOGLE_PLAY_BILLING_ENABLED\n\s+value: 'false'/);
-  assert.match(renderBlueprint, /key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON\n\s+sync: false/);
+  assert.match(renderBlueprint, /key: LIVE_GOOGLE_PLAY_BILLING_ENABLED\\n\\s+value: 'false'/);
+  assert.match(renderBlueprint, /key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON\\n\\s+sync: false/);
 });
 
 test('release checklist keeps product IDs and prices grounded in Play Console and gates enablement on tests', () => {
-  assert.match(checklist, /exact product ID and Nigerian price from Play Console/);
+  assert.match(checklist, /exact\\s+product ID and Nigerian price from Play Console/);
   assert.match(checklist, /Do not set `LIVE_GOOGLE_PLAY_BILLING_ENABLED=true` until/);
   assert.match(checklist, /repeated verification of the same purchase token does not credit twice/);
   assert.match(checklist, /Pending or declined payment does not credit Sparks/);
