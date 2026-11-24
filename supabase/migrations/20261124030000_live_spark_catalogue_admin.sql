@@ -74,7 +74,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'public'
 AS $function$
 DECLARE v_package public.live_spark_packages%ROWTYPE;
 BEGIN
-  IF p_admin_id IS NULL OR p_provider NOT IN ('paystack', 'google_play', 'apple_iap')
+  IF p_admin_id IS NULL OR p_provider IS NULL OR p_provider NOT IN ('paystack', 'google_play', 'apple_iap')
      OR p_package_id IS NULL OR length(p_package_id) NOT BETWEEN 2 AND 150
      OR p_is_active IS NULL THEN
     RAISE EXCEPTION 'invalid Sparks package activation request' USING ERRCODE = '22023';
