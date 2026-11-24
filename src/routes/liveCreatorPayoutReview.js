@@ -25,6 +25,10 @@ function requirePayoutReviewAdmin(req, res, next) {
   return next();
 }
 
+router.get('/access', (req, res) => {
+  return res.json({ isAdmin: payoutReviewAdminIds().has(String(req.user?.id || '').toLowerCase()) });
+});
+
 router.get('/queue', requirePayoutReviewAdmin, async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin.from('live_creator_payout_profiles')
