@@ -55,7 +55,7 @@ DECLARE
   v_profile public.live_creator_payout_profiles%ROWTYPE;
 BEGIN
   IF p_admin_id IS NULL OR p_creator_id IS NULL
-     OR p_verification_status NOT IN ('pending', 'verified', 'rejected')
+     OR p_verification_status IS NULL OR p_verification_status NOT IN ('pending', 'verified', 'rejected')
      OR p_payout_hold IS NULL
      OR (p_verification_status = 'verified' AND
        (length(trim(COALESCE(p_verification_provider, ''))) NOT BETWEEN 2 AND 80
