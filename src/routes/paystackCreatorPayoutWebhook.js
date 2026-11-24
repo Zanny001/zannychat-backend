@@ -35,15 +35,25 @@ router.post('/', express.raw({ type: 'application/json', limit: '100kb' }), asyn
     const reference = String(event.data.reference);
     const transfer = await verifyTransfer(reference);
     const { data: payout, error: payoutError } = await supabaseAdmin.from('live_creator_payouts')
-      .select('id,provider_reference,amount_minor,currency,status,provider')
+      .select('id,creator_id,beneficiary_id,provider_reference,amount_minor,currency,status,provider')
       .eq('provider_reference', reference).maybeSingle();
     if (payoutError) throw payoutError;
     if (!payout || payout.provider !== 'paystack'
         || !['requested', 'processing'].includes(payout.status)) {
       return res.status(200).json({ received: true, ignored: true });
     }
-    if (!transferMatchesPayout(transfer, payout)) {
-      throw new Error('Verified Paystack transfer does not match the reserved payout');
+
+    const { data: beneficiary, error: beneficiaryError } = await supabaseAdmin.from('live_payout_beneficiaries')
+      .select('provider_recipient_code')
+      .eq('id', payout.beneficiary_id)
+      .eq('creator_id', payout.creator_id)
+      .maybeSingle();
+    if (beneficiaryError) throw beneficiaryError;
+    if (!transferMatchesPayout(transfer, {
+      ...payout,
+      provider_recipient_code: beneficiary?.provider_recipient_code,
+    })) {
+      throw new Error('Verified Paystack transfer does not match the reserved payout and beneficiary');
     }
 
     const statusMap = { success: 'paid', failed: 'failed', reversed: 'reversed', pending: 'processing', otp: 'processing' };
