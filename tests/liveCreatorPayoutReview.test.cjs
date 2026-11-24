@@ -17,6 +17,11 @@ test('payout review administration is disabled without an explicit UUID allowlis
   assert.match(route, /allowed\.has\(String\(req\.user\?\.id/);
 });
 
+test('the access probe reveals only the current authenticated user allowlist result', () => {
+  assert.match(route, /router\.get\('\/access'/);
+  assert.match(route, /isAdmin: payoutReviewAdminIds\(\)\.has\(String\(req\.user\?\.id/);
+});
+
 test('only allowlisted admins can access the queue and submit verification decisions', () => {
   assert.match(route, /router\.get\('\/queue', requirePayoutReviewAdmin/);
   assert.match(route, /router\.post\('\/:creatorId', requirePayoutReviewAdmin/);
