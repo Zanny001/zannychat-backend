@@ -36,8 +36,8 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog', 'public'
 AS $function$
 DECLARE v_rule public.live_creator_reward_rules%ROWTYPE;
 BEGIN
-  IF p_admin_id IS NULL OR p_creator_share_bps NOT BETWEEN 1 AND 10000
-     OR p_clearance_hours NOT BETWEEN 0 AND 720
+  IF p_admin_id IS NULL OR p_creator_share_bps IS NULL OR p_creator_share_bps NOT BETWEEN 1 AND 10000
+     OR p_clearance_hours IS NULL OR p_clearance_hours NOT BETWEEN 0 AND 720
      OR p_minimum_withdrawal_minor IS NULL OR p_minimum_withdrawal_minor <= 0
      OR p_minimum_withdrawal_minor > 9007199254740991 THEN
     RAISE EXCEPTION 'invalid creator reward rule' USING ERRCODE = '22023';
