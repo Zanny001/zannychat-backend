@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   RECONCILIATION_INTERVAL_MS,
   STARTUP_DELAY_MS,
@@ -28,4 +30,10 @@ test('payout reconciliation worker fails closed when Supabase is unavailable', a
 test('payout reconciliation worker runs on a bounded interval with a short startup warmup', () => {
   assert.equal(RECONCILIATION_INTERVAL_MS, 60 * 1000);
   assert.equal(STARTUP_DELAY_MS, 10 * 1000);
+});
+
+test('backend startup wires the payout reconciliation worker into the production process', () => {
+  const index = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  assert.match(index, /require\('\.\/jobs\/livePayoutReconciliationWorker'\)/);
+  assert.match(index, /startLivePayoutReconciliationWorker\(\)/);
 });
