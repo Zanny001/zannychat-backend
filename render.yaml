@@ -28,3 +28,13 @@ services:
         sync: false
       - key: TURN_CREDENTIAL_TTL_SECONDS
         value: '3600'
+      - key: LIVE_GOOGLE_PLAY_BILLING_ENABLED
+        value: 'false'
+      - key: GOOGLE_PLAY_PACKAGE_NAME
+        value: com.zannychat.app
+      - key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_PLAY_PUBSUB_AUDIENCE
+        sync: false
+      - key: GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL
+        sync: false
