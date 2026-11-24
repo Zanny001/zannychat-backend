@@ -16,11 +16,15 @@ function transferMatchesPayout(transfer, payout) {
   if (!transfer || !payout) return false;
   const verifiedAmount = Number(transfer.amount);
   const expectedAmount = Number(payout.amount_minor);
+  const expectedRecipientCode = String(payout.provider_recipient_code || '');
+  const actualRecipientCode = String(transfer.recipient?.recipient_code || '');
   return String(transfer.reference || '') === String(payout.provider_reference || '')
     && Number.isSafeInteger(verifiedAmount)
     && Number.isSafeInteger(expectedAmount)
     && verifiedAmount === expectedAmount
-    && String(transfer.currency || '').toUpperCase() === String(payout.currency || '').toUpperCase();
+    && String(transfer.currency || '').toUpperCase() === String(payout.currency || '').toUpperCase()
+    && expectedRecipientCode.length > 0
+    && actualRecipientCode === expectedRecipientCode;
 }
 
 async function reconcilePendingCreatorPayouts({
@@ -38,7 +42,7 @@ async function reconcilePendingCreatorPayouts({
   const cutoff = new Date(now.getTime() - minimumAgeMs).toISOString();
   const { data: payouts, error: queryError } = await supabase
     .from('live_creator_payouts')
-    .select('id,provider_reference,amount_minor,currency,status,requested_at')
+    .select('id,creator_id,beneficiary_id,provider_reference,amount_minor,currency,status,requested_at')
     .in('status', ['requested', 'processing'])
     .lt('requested_at', cutoff)
     .order('requested_at', { ascending: true })
@@ -60,9 +64,20 @@ async function reconcilePendingCreatorPayouts({
         throw new Error('Paystack transfer verification was unavailable');
       }
 
+      const { data: beneficiary, error: beneficiaryError } = await supabase
+        .from('live_payout_beneficiaries')
+        .select('provider_recipient_code')
+        .eq('id', payout.beneficiary_id)
+        .eq('creator_id', payout.creator_id)
+        .maybeSingle();
+      if (beneficiaryError) throw beneficiaryError;
+
       const transfer = payload.data;
-      if (!transferMatchesPayout(transfer, payout)) {
-        throw new Error('Verified Paystack transfer does not match the reserved payout');
+      if (!transferMatchesPayout(transfer, {
+        ...payout,
+        provider_recipient_code: beneficiary?.provider_recipient_code,
+      })) {
+        throw new Error('Verified Paystack transfer does not match the reserved payout and beneficiary');
       }
 
       const status = mapPaystackTransferStatus(transfer.status);
