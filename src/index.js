@@ -13,6 +13,7 @@ const liveKitEgressWebhookRouter = require('./routes/livekitEgressWebhook');
 const { startLiveReplayWorker } = require('./jobs/liveReplayWorker');
 const { startLiveEventReminderWorker } = require('./jobs/liveEventReminders');
 const { startLiveStreamTimeoutWarningWorker } = require('./jobs/liveStreamTimeoutWorker');
+const { startLivePayoutReconciliationWorker } = require('./jobs/livePayoutReconciliationWorker');
 const linkPreviewRouter = require('./routes/linkPreview');
 const safetyRouter = require('./routes/safety');
 const accountRouter = require('./routes/account');
@@ -310,6 +311,7 @@ if (require.main === module) {
     startLiveReplayWorker();
     startLiveEventReminderWorker();
     startLiveStreamTimeoutWarningWorker();
+    startLivePayoutReconciliationWorker();
   });
 }
 
