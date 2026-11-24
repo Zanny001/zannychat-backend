@@ -31,6 +31,7 @@ const liveCaptionsRouter = require('./routes/liveCaptions');
 const livePurchasesRouter = require('./routes/livePurchases');
 const liveCreatorEarningsRouter = require('./routes/liveCreatorEarnings');
 const liveCreatorPayoutsRouter = require('./routes/liveCreatorPayouts');
+const liveCreatorPayoutReviewRouter = require('./routes/liveCreatorPayoutReview');
 const paystackCreatorPayoutWebhookRouter = require('./routes/paystackCreatorPayoutWebhook');
 const paystackLiveWebhookRouter = require('./routes/paystackLiveWebhook');
 const paystackLiveRiskWebhookRouter = require('./routes/paystackLiveRiskWebhook');
@@ -275,6 +276,7 @@ app.use('/live/captions', liveCaptionsRouter);
 app.use('/live/purchases', livePurchasesRouter);
 app.use('/live/creator-earnings', liveCreatorEarningsRouter);
 app.use('/live/creator-payouts', liveCreatorPayoutsRouter);
+app.use('/live/admin/payout-review', liveCreatorPayoutReviewRouter);
 app.use('/live', liveHistoryRouter);
 // Called by the Postgres trigger (see 0003_groups_voice_push.sql) on
 // every new message, not by an external provider — JSON body, shared-
