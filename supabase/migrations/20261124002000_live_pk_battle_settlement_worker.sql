@@ -33,8 +33,8 @@ BEGIN
         OR (b.status = 'live' AND b.ends_at IS NOT NULL AND b.ends_at <= now())
       )
     ORDER BY b.updated_at ASC, b.id ASC
-    FOR UPDATE OF b SKIP LOCKED
     LIMIT p_limit
+    FOR UPDATE OF b SKIP LOCKED
   )
   UPDATE public.live_pk_battles AS b
   SET
