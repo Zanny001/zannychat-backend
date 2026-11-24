@@ -50,9 +50,9 @@ test('transfer webhooks authenticate raw bytes and independently verify provider
   assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET/);
   assert.match(signatureVerifier, /PAYSTACK_WEBHOOK_SECRET_PREVIOUS/);
   assert.match(webhook, /\/transfer\/verify\//);
-  assert.match(webhook, /transferMatchesPayout\(transfer, payout\)/);
-  assert.match(webhook, /amount_minor,currency,status,provider/);
-  assert.match(webhook, /Verified Paystack transfer does not match the reserved payout/);
+  assert.match(webhook, /transferMatchesPayout\(transfer,\s*\{/);
+  assert.match(webhook, /beneficiary_id,provider_reference,amount_minor,currency,status,provider/);\n  assert.match(webhook, /provider_recipient_code: beneficiary\?\.provider_recipient_code/);\n  assert.match(webhook, /from\('live_payout_beneficiaries'\)/);
+  assert.match(webhook, /Verified Paystack transfer does not match the reserved payout and beneficiary/);
   assert.match(webhook, /transfer\.success/);
   assert.match(webhook, /transfer\.failed/);
   assert.match(webhook, /transfer\.reversed/);
